@@ -18,6 +18,10 @@ import { getPublicAppUrl } from "@/lib/app-url";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
+import {
+  getTransactionsByBankAccount,
+  getTransactionsSnapshotStatus,
+} from "@/lib/qbo/transactions-store";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +39,10 @@ type HouseRow = {
   balance: number;
   subtype: string | undefined;
   active: boolean | undefined;
+  transactionCount: number;
+  clearedCount: number;
+  knownClearedStatusCount: number;
+  totalChecksSeen: number;
 };
 
 type Bucket = {
@@ -105,9 +113,11 @@ function healthForBalance(balance: number) {
 
 export default async function Home() {
   const appUrl = getPublicAppUrl();
-  const [snapshot, qboConnection] = await Promise.all([
+  const [snapshot, qboConnection, transactionsStatus, transactionsByBankAccount] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getQboConnectionStatus(),
+    getTransactionsSnapshotStatus(),
+    getTransactionsByBankAccount(),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses: HouseRow[] = bankAccounts
@@ -118,6 +128,8 @@ export default async function Home() {
         return null;
       }
 
+      const transactions = transactionsByBankAccount.get(account.Id) ?? [];
+
       return {
         id: account.Id,
         house,
@@ -125,6 +137,16 @@ export default async function Home() {
         balance: bankBalance(account),
         subtype: account.AccountSubType,
         active: account.Active,
+        transactionCount: transactions.length,
+        clearedCount: transactions.filter((transaction) => transaction.clearedStatus === "cleared")
+          .length,
+        knownClearedStatusCount: transactions.filter(
+          (transaction) => transaction.clearedStatus !== "unknown",
+        ).length,
+        totalChecksSeen: transactions.reduce(
+          (total, transaction) => total + Math.abs(transaction.totalAmount),
+          0,
+        ),
       };
     })
     .filter((account): account is HouseRow => Boolean(account))
@@ -144,10 +166,13 @@ export default async function Home() {
     accountNameIncludes(account, "income clearing"),
   );
   const totalHouseCash = houses.reduce((total, house) => total + house.balance, 0);
-  const totalInternalCash = sumAccountBalances(internalAccounts);
   const negativeHouses = houses.filter((house) => house.balance < 0);
   const lowCashHouses = houses.filter((house) => house.balance >= 0 && house.balance < 1000);
   const lastSynced = snapshot ? new Date(snapshot.syncedAt).toLocaleString() : "Not synced";
+  const transactionsSyncedLabel = transactionsStatus.synced && transactionsStatus.syncedAt
+    ? new Date(transactionsStatus.syncedAt).toLocaleString()
+    : "Not synced yet";
+  const totalChecksSeen = houses.reduce((total, house) => total + house.totalChecksSeen, 0);
   const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
   const managementPerPhase = (AVERAGE_PROFIT_TARGET * MANAGEMENT_PERCENT) / PHASE_COUNT;
   const operationsAfterClose = AVERAGE_PROFIT_TARGET * OPERATIONS_PERCENT;
@@ -251,16 +276,19 @@ export default async function Home() {
                 />
                 <Metric
                   icon={CircleDollarSign}
-                  label="House Cash"
+                  label="QB Bank Balance"
                   value={currency(totalHouseCash)}
-                  detail="Sum of confirmed house accounts"
+                  detail="QuickBooks balance for house accounts"
                 />
                 <Metric
                   icon={WalletCards}
-                  label="Internal Buckets"
-                  value={currency(totalInternalCash)}
-                  detail={`${internalAccounts.length} internal bank accounts`}
-                  tone={totalInternalCash < 0 ? "warn" : "neutral"}
+                  label="Checks Seen"
+                  value={currency(totalChecksSeen)}
+                  detail={
+                    transactionsStatus.synced
+                      ? `${transactionsStatus.total} check/payment records`
+                      : "Run Sync QB to pull checks"
+                  }
                 />
                 <Metric
                   icon={AlertTriangle}
@@ -310,7 +338,8 @@ export default async function Home() {
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
                           <th className="px-4 py-3 font-medium">Cash Status</th>
-                          <th className="px-4 py-3 font-medium">Current Balance</th>
+                          <th className="px-4 py-3 font-medium">QB Bank Balance</th>
+                          <th className="px-4 py-3 font-medium">Checks Seen</th>
                           <th className="px-4 py-3 font-medium">Phase View</th>
                           <th className="px-4 py-3 font-medium">QB Bank Account</th>
                           <th className="px-4 py-3 font-medium">What The Agent Can Say</th>
@@ -339,6 +368,15 @@ export default async function Home() {
                                 }`}
                               >
                                 {currency(house.balance)}
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="font-semibold">{currency(house.totalChecksSeen)}</div>
+                                <div className="mt-1 text-xs text-[#69746f]">
+                                  {house.transactionCount} records
+                                  {house.knownClearedStatusCount > 0
+                                    ? `, ${house.clearedCount} cleared`
+                                    : ", cleared field pending"}
+                                </div>
                               </td>
                               <td className="px-4 py-4">
                                 <PhaseStrip />
@@ -379,6 +417,15 @@ export default async function Home() {
                 trust balances and account mapping. I will not score phase progress, margin, or
                 budget health until checks and budgets are synced.
               </p>
+
+              <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
+                <h3 className="text-sm font-semibold">Sync Status</h3>
+                <div className="mt-3 space-y-3 text-sm text-[#4f5b56]">
+                  <RuleRow label="Bank balances" value={lastSynced} />
+                  <RuleRow label="Checks/payments" value={transactionsSyncedLabel} />
+                  <RuleRow label="QB connection" value={qboConnection.connected ? "Connected" : "Needs reconnect"} />
+                </div>
+              </div>
 
               <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
                 <h3 className="text-sm font-semibold">Internal Draw Rules</h3>

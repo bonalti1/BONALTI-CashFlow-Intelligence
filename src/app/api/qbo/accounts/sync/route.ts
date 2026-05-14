@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { getPublicAppUrl } from "@/lib/app-url";
 import { syncQboAccounts } from "@/lib/qbo/accounts-sync";
+import { syncQboMoneyTransactions } from "@/lib/qbo/transactions-sync";
 import {
   getStoredQboConnection,
   getStoredQboConnectionFromCookie,
@@ -33,12 +34,26 @@ async function runAccountsSync(request: NextRequest) {
     }
 
     const snapshot = await syncQboAccounts(connection);
+    const transactionSnapshot = await syncQboMoneyTransactions(connection).catch((error) => ({
+      total: 0,
+      syncedAt: null,
+      warnings: [
+        `Transaction sync did not complete: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      ],
+    }));
     const responsePayload = {
       status: "ok",
       message: "Chart of Accounts synced from QuickBooks.",
       realmId: snapshot.realmId,
       syncedAt: snapshot.syncedAt,
       total: snapshot.total,
+      transactionsSynced: {
+        total: transactionSnapshot.total,
+        syncedAt: transactionSnapshot.syncedAt,
+        warnings: transactionSnapshot.warnings,
+      },
     };
 
     if (returnTo?.startsWith("/")) {

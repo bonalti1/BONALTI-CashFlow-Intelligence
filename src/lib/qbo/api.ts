@@ -1,12 +1,16 @@
 import { getStoredQboConnection } from "@/lib/qbo/token-store";
+import type { StoredQboConnectionWithTokens } from "@/lib/qbo/token-store";
 
 const baseUrls = {
   sandbox: "https://sandbox-quickbooks.api.intuit.com",
   production: "https://quickbooks.api.intuit.com",
 };
 
-export async function qboApiGet(path: string) {
-  const connection = await getStoredQboConnection();
+export async function qboApiGet(
+  path: string,
+  connectionOverride?: StoredQboConnectionWithTokens,
+) {
+  const connection = connectionOverride ?? await getStoredQboConnection();
   const baseUrl =
     baseUrls[connection.environment as keyof typeof baseUrls] ?? baseUrls.sandbox;
   const response = await fetch(`${baseUrl}${path}`, {

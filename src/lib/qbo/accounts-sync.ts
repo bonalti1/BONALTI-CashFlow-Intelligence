@@ -22,6 +22,7 @@ export async function syncQboAccounts(connectionOverride?: StoredQboConnectionWi
     const query = `select * from Account startposition ${startPosition} maxresults ${pageSize}`;
     const data = (await qboApiGet(
       getQboQueryPath(connection.realmId, query),
+      connection,
     )) as AccountQueryResponse;
     const page = data.QueryResponse?.Account ?? [];
 
