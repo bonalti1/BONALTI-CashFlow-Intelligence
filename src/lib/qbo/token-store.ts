@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { seal, unseal } from "@/lib/crypto/seal";
+import { hasDatabaseUrl, sql } from "@/lib/db/raw";
 
 type StoredQboConnection = {
   realmId: string;
@@ -34,6 +35,21 @@ function expiresAt(createdAt: number | undefined, seconds: number | undefined) {
   return new Date((createdAt ?? Date.now()) + (seconds ?? 0) * 1000).toISOString();
 }
 
+async function ensureQboConnectionTable() {
+  await sql()`
+    create table if not exists qbo_connections (
+      realm_id text primary key,
+      environment text not null,
+      access_token_encrypted text not null,
+      refresh_token_encrypted text not null,
+      access_token_expires_at timestamptz not null,
+      refresh_token_expires_at timestamptz not null,
+      connected_at timestamptz not null,
+      updated_at timestamptz not null default now()
+    )
+  `;
+}
+
 export async function saveQboConnection({
   realmId,
   environment,
@@ -57,6 +73,42 @@ export async function saveQboConnection({
     connectedAt: new Date().toISOString(),
   };
 
+  if (hasDatabaseUrl()) {
+    await ensureQboConnectionTable();
+    await sql()`
+      insert into qbo_connections (
+        realm_id,
+        environment,
+        access_token_encrypted,
+        refresh_token_encrypted,
+        access_token_expires_at,
+        refresh_token_expires_at,
+        connected_at,
+        updated_at
+      )
+      values (
+        ${stored.realmId},
+        ${stored.environment},
+        ${stored.accessTokenEncrypted},
+        ${stored.refreshTokenEncrypted},
+        ${stored.accessTokenExpiresAt},
+        ${stored.refreshTokenExpiresAt},
+        ${stored.connectedAt},
+        now()
+      )
+      on conflict (realm_id) do update set
+        environment = excluded.environment,
+        access_token_encrypted = excluded.access_token_encrypted,
+        refresh_token_encrypted = excluded.refresh_token_encrypted,
+        access_token_expires_at = excluded.access_token_expires_at,
+        refresh_token_expires_at = excluded.refresh_token_expires_at,
+        connected_at = excluded.connected_at,
+        updated_at = now()
+    `;
+
+    return stored;
+  }
+
   await mkdir(dataDir, { recursive: true });
   await writeFile(connectionPath, JSON.stringify(stored, null, 2), "utf8");
 
@@ -64,6 +116,51 @@ export async function saveQboConnection({
 }
 
 export async function getQboConnectionStatus() {
+  if (hasDatabaseUrl()) {
+    try {
+      await ensureQboConnectionTable();
+      const rows = await sql()<
+        Array<{
+          realm_id: string;
+          environment: string;
+          connected_at: Date;
+          access_token_expires_at: Date;
+          refresh_token_expires_at: Date;
+        }>
+      >`
+        select
+          realm_id,
+          environment,
+          connected_at,
+          access_token_expires_at,
+          refresh_token_expires_at
+        from qbo_connections
+        order by updated_at desc
+        limit 1
+      `;
+      const stored = rows[0];
+
+      if (!stored) {
+        return {
+          connected: false,
+        };
+      }
+
+      return {
+        connected: true,
+        realmId: stored.realm_id,
+        environment: stored.environment,
+        connectedAt: stored.connected_at.toISOString(),
+        accessTokenExpiresAt: stored.access_token_expires_at.toISOString(),
+        refreshTokenExpiresAt: stored.refresh_token_expires_at.toISOString(),
+      };
+    } catch {
+      return {
+        connected: false,
+      };
+    }
+  }
+
   try {
     const stored = JSON.parse(
       await readFile(connectionPath, "utf8"),
@@ -85,6 +182,48 @@ export async function getQboConnectionStatus() {
 }
 
 export async function getStoredQboConnection() {
+  if (hasDatabaseUrl()) {
+    await ensureQboConnectionTable();
+    const rows = await sql()<
+      Array<{
+        realm_id: string;
+        environment: string;
+        access_token_encrypted: string;
+        refresh_token_encrypted: string;
+        access_token_expires_at: Date;
+        refresh_token_expires_at: Date;
+        connected_at: Date;
+      }>
+    >`
+      select
+        realm_id,
+        environment,
+        access_token_encrypted,
+        refresh_token_encrypted,
+        access_token_expires_at,
+        refresh_token_expires_at,
+        connected_at
+      from qbo_connections
+      order by updated_at desc
+      limit 1
+    `;
+    const stored = rows[0];
+
+    if (!stored) {
+      throw new Error("QuickBooks connection is not saved yet.");
+    }
+
+    return unsealStoredQboConnection({
+      realmId: stored.realm_id,
+      environment: stored.environment,
+      accessTokenEncrypted: stored.access_token_encrypted,
+      refreshTokenEncrypted: stored.refresh_token_encrypted,
+      accessTokenExpiresAt: stored.access_token_expires_at.toISOString(),
+      refreshTokenExpiresAt: stored.refresh_token_expires_at.toISOString(),
+      connectedAt: stored.connected_at.toISOString(),
+    });
+  }
+
   const stored = JSON.parse(
     await readFile(connectionPath, "utf8"),
   ) as StoredQboConnection;
