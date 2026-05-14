@@ -1,13 +1,32 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 import { getQboQueryPath, qboApiGet } from "@/lib/qbo/api";
-import { getStoredQboConnection } from "@/lib/qbo/token-store";
+import {
+  getStoredQboConnection,
+  getStoredQboConnectionFromCookie,
+  qboConnectionCookieName,
+} from "@/lib/qbo/token-store";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const connection = await getStoredQboConnection();
+    const cookieStore = await cookies();
+    let connection;
+
+    try {
+      connection = await getStoredQboConnection();
+    } catch {
+      connection = getStoredQboConnectionFromCookie(
+        cookieStore.get(qboConnectionCookieName)?.value,
+      );
+    }
+
+    if (!connection) {
+      throw new Error("QuickBooks token was not found. Connect QuickBooks again.");
+    }
+
     const data = await qboApiGet(
       getQboQueryPath(connection.realmId, "select * from Account maxresults 5"),
     );

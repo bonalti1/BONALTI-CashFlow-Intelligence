@@ -1,6 +1,9 @@
 import { getQboQueryPath, qboApiGet } from "@/lib/qbo/api";
 import { saveAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
-import { getStoredQboConnection } from "@/lib/qbo/token-store";
+import {
+  getStoredQboConnection,
+  type StoredQboConnectionWithTokens,
+} from "@/lib/qbo/token-store";
 
 type AccountQueryResponse = {
   QueryResponse?: {
@@ -9,8 +12,8 @@ type AccountQueryResponse = {
   };
 };
 
-export async function syncQboAccounts() {
-  const connection = await getStoredQboConnection();
+export async function syncQboAccounts(connectionOverride?: StoredQboConnectionWithTokens) {
+  const connection = connectionOverride ?? await getStoredQboConnection();
   const pageSize = 1000;
   let startPosition = 1;
   const accounts: QboAccount[] = [];

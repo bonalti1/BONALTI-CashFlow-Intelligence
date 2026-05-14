@@ -13,6 +13,11 @@ type StoredQboConnection = {
   connectedAt: string;
 };
 
+export type StoredQboConnectionWithTokens = StoredQboConnection & {
+  accessToken: string;
+  refreshToken: string;
+};
+
 type TokenPayload = {
   access_token?: string;
   refresh_token?: string;
@@ -23,6 +28,7 @@ type TokenPayload = {
 
 const dataDir = path.join(process.cwd(), ".data");
 const connectionPath = path.join(dataDir, "qbo-connection.json");
+export const qboConnectionCookieName = "stb_qbo_connection";
 
 function expiresAt(createdAt: number | undefined, seconds: number | undefined) {
   return new Date((createdAt ?? Date.now()) + (seconds ?? 0) * 1000).toISOString();
@@ -83,6 +89,28 @@ export async function getStoredQboConnection() {
     await readFile(connectionPath, "utf8"),
   ) as StoredQboConnection;
 
+  return unsealStoredQboConnection(stored);
+}
+
+export function sealStoredQboConnectionForCookie(stored: StoredQboConnection) {
+  return seal(JSON.stringify(stored));
+}
+
+export function getStoredQboConnectionFromCookie(
+  cookieValue: string | undefined,
+): StoredQboConnectionWithTokens | null {
+  if (!cookieValue) {
+    return null;
+  }
+
+  const stored = JSON.parse(unseal(cookieValue)) as StoredQboConnection;
+
+  return unsealStoredQboConnection(stored);
+}
+
+function unsealStoredQboConnection(
+  stored: StoredQboConnection,
+): StoredQboConnectionWithTokens {
   return {
     ...stored,
     accessToken: unseal(stored.accessTokenEncrypted),

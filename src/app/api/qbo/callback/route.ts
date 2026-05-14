@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireEnv } from "@/lib/env";
 import { createQboOAuthClient } from "@/lib/qbo/oauth";
-import { saveQboConnection } from "@/lib/qbo/token-store";
+import {
+  qboConnectionCookieName,
+  saveQboConnection,
+  sealStoredQboConnectionForCookie,
+} from "@/lib/qbo/token-store";
 
 export const runtime = "nodejs";
 
@@ -31,14 +35,24 @@ export async function GET(request: NextRequest) {
       token,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       status: "connected",
-      message: "QuickBooks connected successfully. Tokens were saved encrypted for local development.",
+      message: "QuickBooks connected successfully. Tokens were saved encrypted.",
       realmId: connection.realmId,
       environment: connection.environment,
       connectedAt: connection.connectedAt,
       accessTokenExpiresAt: connection.accessTokenExpiresAt,
     });
+
+    response.cookies.set(qboConnectionCookieName, sealStoredQboConnectionForCookie(connection), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+
+    return response;
   } catch (error) {
     return NextResponse.json(
       {
