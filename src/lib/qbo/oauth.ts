@@ -61,7 +61,7 @@ export function createQboOAuthClient() {
   });
 }
 
-export function getQboAuthorizationUrl() {
+export function getQboAuthorizationUrl(state = crypto.randomUUID()) {
   const diagnostics = getQboSetupDiagnostics();
 
   if (!diagnostics.ready) {
@@ -72,6 +72,6 @@ export function getQboAuthorizationUrl() {
 
   return oauthClient.authorizeUri({
     scope: [OAuthClient.scopes.Accounting],
-    state: crypto.randomUUID(),
+    state,
   });
 }

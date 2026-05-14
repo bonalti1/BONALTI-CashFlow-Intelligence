@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { syncQboAccounts } from "@/lib/qbo/accounts-sync";
@@ -10,7 +10,7 @@ import {
 
 export const runtime = "nodejs";
 
-async function runAccountsSync() {
+async function runAccountsSync(request: NextRequest) {
   try {
     const cookieStore = await cookies();
     let connection;
@@ -24,7 +24,10 @@ async function runAccountsSync() {
     }
 
     if (!connection) {
-      throw new Error("QuickBooks token was not found. Connect QuickBooks again.");
+      const connectUrl = new URL("/api/qbo/connect", request.nextUrl.origin);
+      connectUrl.searchParams.set("next", "/api/qbo/accounts/sync");
+
+      return NextResponse.redirect(connectUrl);
     }
 
     const snapshot = await syncQboAccounts(connection);
@@ -48,10 +51,10 @@ async function runAccountsSync() {
   }
 }
 
-export async function POST() {
-  return runAccountsSync();
+export async function POST(request: NextRequest) {
+  return runAccountsSync(request);
 }
 
-export async function GET() {
-  return runAccountsSync();
+export async function GET(request: NextRequest) {
+  return runAccountsSync(request);
 }

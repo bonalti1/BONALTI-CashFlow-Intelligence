@@ -1,8 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { getQboAuthorizationUrl, getQboSetupDiagnostics } from "@/lib/qbo/oauth";
 
-export function GET() {
+function encodeState(nextPath: string | null) {
+  return Buffer.from(
+    JSON.stringify({
+      id: crypto.randomUUID(),
+      nextPath,
+    }),
+  ).toString("base64url");
+}
+
+export function GET(request: NextRequest) {
   const diagnostics = getQboSetupDiagnostics();
 
   if (!diagnostics.ready) {
@@ -16,7 +25,8 @@ export function GET() {
     );
   }
 
-  const authorizationUrl = getQboAuthorizationUrl();
+  const nextPath = request.nextUrl.searchParams.get("next");
+  const authorizationUrl = getQboAuthorizationUrl(encodeState(nextPath));
 
   return NextResponse.redirect(authorizationUrl);
 }
