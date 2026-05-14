@@ -10,7 +10,7 @@ import {
 
 export const runtime = "nodejs";
 
-export async function POST() {
+async function runAccountsSync() {
   try {
     const cookieStore = await cookies();
     let connection;
@@ -48,12 +48,10 @@ export async function POST() {
   }
 }
 
+export async function POST() {
+  return runAccountsSync();
+}
+
 export async function GET() {
-  return NextResponse.json(
-    {
-      status: "method_not_allowed",
-      message: "Use POST for sync so a browser refresh does not accidentally run it.",
-    },
-    { status: 405 },
-  );
+  return runAccountsSync();
 }
