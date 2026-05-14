@@ -75,7 +75,7 @@ export default async function HouseAccountsPage() {
           <div className="flex gap-2">
             <a
               className="inline-flex items-center gap-2 rounded-md bg-[#20745f] px-3 py-2 text-sm font-medium text-white"
-              href={`${appUrl}/api/qbo/connect?next=/house-accounts`}
+              href={`${appUrl}/api/qbo/accounts/sync?next=/house-accounts`}
             >
               <RefreshCw size={16} />
               Sync QB
