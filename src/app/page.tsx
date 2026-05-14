@@ -12,13 +12,12 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import { getPublicAppUrl } from "@/lib/app-url";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
 
 export const dynamic = "force-dynamic";
-
-const liveAppUrl = "https://bonalti-cashflow-intelligence.onrender.com";
 
 type HouseRow = {
   id: string;
@@ -65,11 +64,7 @@ function healthForBalance(balance: number) {
 }
 
 export default async function Home() {
-  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const appUrl =
-    configuredAppUrl && !configuredAppUrl.includes("YOUR-RENDER-URL")
-      ? configuredAppUrl
-      : liveAppUrl;
+  const appUrl = getPublicAppUrl();
   const [snapshot, qboConnection] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getQboConnectionStatus(),

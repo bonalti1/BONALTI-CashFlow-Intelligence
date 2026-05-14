@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Building2, RefreshCw, WalletCards } from "lucide-react";
 
+import { getPublicAppUrl } from "@/lib/app-url";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 
 export const dynamic = "force-dynamic";
-
-const liveAppUrl = "https://bonalti-cashflow-intelligence.onrender.com";
 
 type BankAccountView = {
   id: string;
@@ -36,11 +35,7 @@ function toBankView(account: QboAccount): BankAccountView {
 }
 
 export default async function HouseAccountsPage() {
-  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const appUrl =
-    configuredAppUrl && !configuredAppUrl.includes("YOUR-RENDER-URL")
-      ? configuredAppUrl
-      : liveAppUrl;
+  const appUrl = getPublicAppUrl();
   const snapshot = await getAccountsSnapshot().catch(() => null);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses = bankAccounts

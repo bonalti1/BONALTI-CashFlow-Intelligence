@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { getPublicAppUrl } from "@/lib/app-url";
 import { syncQboAccounts } from "@/lib/qbo/accounts-sync";
 import {
   getStoredQboConnection,
@@ -25,7 +26,7 @@ async function runAccountsSync(request: NextRequest) {
     }
 
     if (!connection) {
-      const connectUrl = new URL("/api/qbo/connect", request.nextUrl.origin);
+      const connectUrl = new URL("/api/qbo/connect", getPublicAppUrl());
       connectUrl.searchParams.set("next", returnTo?.startsWith("/") ? returnTo : "/house-accounts");
 
       return NextResponse.redirect(connectUrl);
@@ -41,7 +42,7 @@ async function runAccountsSync(request: NextRequest) {
     };
 
     if (returnTo?.startsWith("/")) {
-      return NextResponse.redirect(new URL(returnTo, request.nextUrl.origin));
+      return NextResponse.redirect(new URL(returnTo, getPublicAppUrl()));
     }
 
     return NextResponse.json(responsePayload);

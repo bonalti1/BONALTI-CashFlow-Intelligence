@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getPublicAppUrl } from "@/lib/app-url";
 import { requireEnv } from "@/lib/env";
 import { syncQboAccounts } from "@/lib/qbo/accounts-sync";
 import { createQboOAuthClient } from "@/lib/qbo/oauth";
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
       },
     };
     const response = nextPath
-      ? NextResponse.redirect(new URL(nextPath, request.nextUrl.origin))
+      ? NextResponse.redirect(new URL(nextPath, getPublicAppUrl()))
       : NextResponse.json(responsePayload);
 
     response.cookies.set(qboConnectionCookieName, sealStoredQboConnectionForCookie(connection), {
