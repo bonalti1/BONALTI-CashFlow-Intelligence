@@ -6,6 +6,8 @@ import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 
 export const dynamic = "force-dynamic";
 
+const liveAppUrl = "https://bonalti-cashflow-intelligence.onrender.com";
+
 type BankAccountView = {
   id: string;
   house?: string;
@@ -34,7 +36,11 @@ function toBankView(account: QboAccount): BankAccountView {
 }
 
 export default async function HouseAccountsPage() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const appUrl =
+    configuredAppUrl && !configuredAppUrl.includes("YOUR-RENDER-URL")
+      ? configuredAppUrl
+      : liveAppUrl;
   const snapshot = await getAccountsSnapshot().catch(() => null);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses = bankAccounts
