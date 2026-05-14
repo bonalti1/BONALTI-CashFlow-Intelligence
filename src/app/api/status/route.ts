@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getEnvStatus } from "@/lib/env";
 import { getAccountsSnapshotStatus } from "@/lib/qbo/accounts-store";
+import { getQboSetupDiagnostics } from "@/lib/qbo/oauth";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ export async function GET() {
       ai: Boolean(process.env.OPENAI_API_KEY),
     },
     qboConnection,
+    qboSetup: getQboSetupDiagnostics(),
     accountsSnapshot,
     env: getEnvStatus(),
   });
