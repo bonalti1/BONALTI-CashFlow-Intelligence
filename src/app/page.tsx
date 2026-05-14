@@ -14,7 +14,9 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import { saveHouseDetailsAction } from "@/app/actions/house-details";
 import { getPublicAppUrl } from "@/lib/app-url";
+import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
@@ -43,6 +45,10 @@ type HouseRow = {
   clearedCount: number;
   knownClearedStatusCount: number;
   totalChecksSeen: number;
+  soldPrice: number | null;
+  squareFootage: number | null;
+  city: string | null;
+  setupComplete: boolean;
 };
 
 type Bucket = {
@@ -113,11 +119,18 @@ function healthForBalance(balance: number) {
 
 export default async function Home() {
   const appUrl = getPublicAppUrl();
-  const [snapshot, qboConnection, transactionsStatus, transactionsByBankAccount] = await Promise.all([
+  const [
+    snapshot,
+    qboConnection,
+    transactionsStatus,
+    transactionsByBankAccount,
+    houseDetailsByBankAccount,
+  ] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getQboConnectionStatus(),
     getTransactionsSnapshotStatus(),
     getTransactionsByBankAccount(),
+    getHouseDetailsMap(),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses: HouseRow[] = bankAccounts
@@ -129,6 +142,7 @@ export default async function Home() {
       }
 
       const transactions = transactionsByBankAccount.get(account.Id) ?? [];
+      const details = houseDetailsByBankAccount.get(account.Id);
 
       return {
         id: account.Id,
@@ -147,6 +161,10 @@ export default async function Home() {
           (total, transaction) => total + Math.abs(transaction.totalAmount),
           0,
         ),
+        soldPrice: details?.soldPrice ?? null,
+        squareFootage: details?.squareFootage ?? null,
+        city: details?.city ?? null,
+        setupComplete: Boolean(details?.soldPrice && details?.squareFootage && details?.city),
       };
     })
     .filter((account): account is HouseRow => Boolean(account))
@@ -166,13 +184,12 @@ export default async function Home() {
     accountNameIncludes(account, "income clearing"),
   );
   const totalHouseCash = houses.reduce((total, house) => total + house.balance, 0);
-  const negativeHouses = houses.filter((house) => house.balance < 0);
-  const lowCashHouses = houses.filter((house) => house.balance >= 0 && house.balance < 1000);
   const lastSynced = snapshot ? new Date(snapshot.syncedAt).toLocaleString() : "Not synced";
   const transactionsSyncedLabel = transactionsStatus.synced && transactionsStatus.syncedAt
     ? new Date(transactionsStatus.syncedAt).toLocaleString()
     : "Not synced yet";
   const totalChecksSeen = houses.reduce((total, house) => total + house.totalChecksSeen, 0);
+  const completedHouseSetups = houses.filter((house) => house.setupComplete).length;
   const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
   const managementPerPhase = (AVERAGE_PROFIT_TARGET * MANAGEMENT_PERCENT) / PHASE_COUNT;
   const operationsAfterClose = AVERAGE_PROFIT_TARGET * OPERATIONS_PERCENT;
@@ -292,10 +309,10 @@ export default async function Home() {
                 />
                 <Metric
                   icon={AlertTriangle}
-                  label="Needs Review"
-                  value={String(negativeHouses.length + lowCashHouses.length)}
-                  detail={`${negativeHouses.length} negative, ${lowCashHouses.length} low cash`}
-                  tone={negativeHouses.length > 0 ? "warn" : "neutral"}
+                  label="House Setups"
+                  value={`${completedHouseSetups}/${houses.length}`}
+                  detail="Sale price, sqft, and city entered"
+                  tone={completedHouseSetups < houses.length ? "warn" : "neutral"}
                 />
               </section>
 
@@ -304,6 +321,88 @@ export default async function Home() {
                   <BucketCard bucket={bucket} key={bucket.label} />
                 ))}
               </section>
+
+              {snapshot ? (
+                <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white">
+                  <div className="border-b border-[#e6ebe3] px-4 py-3">
+                    <h2 className="text-sm font-semibold">House Setup Inputs</h2>
+                    <p className="mt-1 text-xs text-[#69746f]">
+                      These numbers are saved only in this dashboard database, not in QuickBooks.
+                    </p>
+                  </div>
+                  <div className="grid max-h-[420px] grid-cols-2 gap-3 overflow-auto p-4">
+                    {houses.map((house) => (
+                      <form
+                        action={saveHouseDetailsAction}
+                        className="rounded-lg border border-[#edf0eb] bg-[#fbfcfa] p-3"
+                        key={house.id}
+                      >
+                        <input name="qboBankAccountId" type="hidden" value={house.id} />
+                        <input name="houseName" type="hidden" value={house.house} />
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold">{house.house}</div>
+                            <div className="mt-1 text-xs text-[#69746f]">
+                              QB balance {currency(house.balance)}
+                            </div>
+                          </div>
+                          <span
+                            className={`rounded-md border px-2 py-1 text-xs ${
+                              house.setupComplete
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : "border-amber-200 bg-amber-50 text-amber-800"
+                            }`}
+                          >
+                            {house.setupComplete ? "Ready" : "Missing setup"}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[1fr_112px_96px_auto] gap-2">
+                          <label className="text-xs text-[#69746f]">
+                            Sold Price
+                            <input
+                              className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                              defaultValue={house.soldPrice ?? ""}
+                              inputMode="decimal"
+                              name="soldPrice"
+                              placeholder="450000"
+                            />
+                          </label>
+                          <label className="text-xs text-[#69746f]">
+                            Sq Ft
+                            <input
+                              className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                              defaultValue={house.squareFootage ?? ""}
+                              inputMode="numeric"
+                              name="squareFootage"
+                              placeholder="1850"
+                            />
+                          </label>
+                          <label className="text-xs text-[#69746f]">
+                            City
+                            <input
+                              className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                              defaultValue={house.city ?? ""}
+                              name="city"
+                              placeholder="Laredo"
+                            />
+                          </label>
+                          <button
+                            className="mt-5 h-9 rounded-md bg-[#20745f] px-3 text-sm font-medium text-white"
+                            type="submit"
+                          >
+                            Save
+                          </button>
+                        </div>
+                        <div className="mt-3 text-xs text-[#69746f]">
+                          {house.soldPrice && house.squareFootage
+                            ? `Sale price per sqft: ${currency(house.soldPrice / house.squareFootage)}`
+                            : "Enter sold price and square footage to calculate price per sqft."}
+                        </div>
+                      </form>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               {!snapshot ? (
                 <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
