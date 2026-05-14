@@ -73,6 +73,12 @@ export default function Home() {
               </Link>
               <Link
                 className="rounded-md border border-[#ccd6cf] px-3 py-1.5 text-[#33504a]"
+                href="/house-accounts"
+              >
+                Houses
+              </Link>
+              <Link
+                className="rounded-md border border-[#ccd6cf] px-3 py-1.5 text-[#33504a]"
                 href="/chart-of-accounts"
               >
                 CoA

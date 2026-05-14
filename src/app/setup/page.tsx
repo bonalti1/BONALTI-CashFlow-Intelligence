@@ -79,9 +79,9 @@ export default async function SetupPage() {
           </div>
           <Link
             className="rounded-md border border-[#ccd6cf] bg-white px-3 py-2 text-sm font-medium"
-            href="/"
+            href="/house-accounts"
           >
-            Back to dashboard
+            House accounts
           </Link>
         </div>
 
