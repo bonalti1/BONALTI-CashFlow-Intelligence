@@ -5,19 +5,28 @@ import {
   Building2,
   CircleDollarSign,
   HomeIcon,
+  Landmark,
   LayoutDashboard,
   ListTree,
+  Megaphone,
   RefreshCcw,
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
 
 import { getPublicAppUrl } from "@/lib/app-url";
-import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
+import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
 
 export const dynamic = "force-dynamic";
+
+const PHASE_COUNT = 6;
+const AVERAGE_PROFIT_TARGET = 60_000;
+const MARKETING_PERCENT = 0.15;
+const MANAGEMENT_PERCENT = 0.2;
+const OPERATIONS_PERCENT = 0.05;
+const MONTHLY_PHASE_ASSUMPTION = 10;
 
 type HouseRow = {
   id: string;
@@ -28,10 +37,29 @@ type HouseRow = {
   active: boolean | undefined;
 };
 
+type Bucket = {
+  label: string;
+  description: string;
+  balance: number;
+  monthlyTarget: number;
+  perPhase: number | null;
+  status: string;
+  icon: typeof Megaphone;
+};
+
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function shortCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
@@ -39,27 +67,39 @@ function bankBalance(account: QboAccount) {
   return account.CurrentBalance ?? 0;
 }
 
+function accountName(account: QboAccount) {
+  return account.FullyQualifiedName ?? account.Name;
+}
+
+function accountNameIncludes(account: QboAccount, matcher: string) {
+  return accountName(account).toLowerCase().includes(matcher);
+}
+
+function sumAccountBalances(accounts: QboAccount[]) {
+  return accounts.reduce((total, account) => total + bankBalance(account), 0);
+}
+
 function healthForBalance(balance: number) {
   if (balance < 0) {
     return {
       label: "Watch",
-      className: "border-amber-200 bg-amber-50 text-amber-700",
-      note: "Negative bank balance. Review funding or recent checks.",
+      className: "border-amber-200 bg-amber-50 text-amber-800",
+      note: "Negative bank balance. This house needs funding review before checks go out.",
     };
   }
 
   if (balance < 1000) {
     return {
       label: "Low Cash",
-      className: "border-blue-200 bg-blue-50 text-blue-700",
-      note: "Low available cash. Health math needs checks and budget next.",
+      className: "border-blue-200 bg-blue-50 text-blue-800",
+      note: "Cash is low. Budget health still needs check and phase sync.",
     };
   }
 
   return {
     label: "Cash OK",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    note: "Bank balance is positive. Full health requires transaction sync.",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    note: "Current bank cash is positive. Full health comes after transaction sync.",
   };
 }
 
@@ -81,7 +121,7 @@ export default async function Home() {
       return {
         id: account.Id,
         house,
-        bank: account.FullyQualifiedName ?? account.Name,
+        bank: accountName(account),
         balance: bankBalance(account),
         subtype: account.AccountSubType,
         active: account.Active,
@@ -89,15 +129,59 @@ export default async function Home() {
     })
     .filter((account): account is HouseRow => Boolean(account))
     .sort((a, b) => a.house.localeCompare(b.house));
+
   const internalAccounts = bankAccounts.filter((account) => isInternalBankAccount(account));
-  const totalHouseCash = houses.reduce((total, house) => total + house.balance, 0);
-  const totalInternalCash = internalAccounts.reduce(
-    (total, account) => total + bankBalance(account),
-    0,
+  const marketingAccounts = internalAccounts.filter((account) =>
+    accountNameIncludes(account, "marketing"),
   );
+  const managementAccounts = internalAccounts.filter((account) =>
+    accountNameIncludes(account, "payroll"),
+  );
+  const operationsAccounts = internalAccounts.filter((account) =>
+    accountNameIncludes(account, "operating"),
+  );
+  const incomeClearingAccounts = internalAccounts.filter((account) =>
+    accountNameIncludes(account, "income clearing"),
+  );
+  const totalHouseCash = houses.reduce((total, house) => total + house.balance, 0);
+  const totalInternalCash = sumAccountBalances(internalAccounts);
   const negativeHouses = houses.filter((house) => house.balance < 0);
   const lowCashHouses = houses.filter((house) => house.balance >= 0 && house.balance < 1000);
   const lastSynced = snapshot ? new Date(snapshot.syncedAt).toLocaleString() : "Not synced";
+  const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
+  const managementPerPhase = (AVERAGE_PROFIT_TARGET * MANAGEMENT_PERCENT) / PHASE_COUNT;
+  const operationsAfterClose = AVERAGE_PROFIT_TARGET * OPERATIONS_PERCENT;
+  const bucketMonthlyMarketing = marketingPerPhase * MONTHLY_PHASE_ASSUMPTION;
+  const bucketMonthlyManagement = managementPerPhase * MONTHLY_PHASE_ASSUMPTION;
+  const buckets: Bucket[] = [
+    {
+      label: "Marketing",
+      description: "15% of target profit, paid as phases complete",
+      balance: sumAccountBalances(marketingAccounts),
+      monthlyTarget: bucketMonthlyMarketing,
+      perPhase: marketingPerPhase,
+      status: "Active phase bucket",
+      icon: Megaphone,
+    },
+    {
+      label: "Management Payroll",
+      description: "20% of target profit, paid to the payroll bucket",
+      balance: sumAccountBalances(managementAccounts),
+      monthlyTarget: bucketMonthlyManagement,
+      perPhase: managementPerPhase,
+      status: "Active phase bucket",
+      icon: WalletCards,
+    },
+    {
+      label: "Operations",
+      description: "Planned 5% bucket after a house closes",
+      balance: sumAccountBalances(operationsAccounts),
+      monthlyTarget: operationsAfterClose,
+      perPhase: null,
+      status: "Later after close",
+      icon: Landmark,
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] text-[#18211f]">
@@ -125,9 +209,9 @@ export default async function Home() {
         <section className="flex min-w-0 flex-col">
           <header className="flex min-h-16 items-center justify-between border-b border-[#dfe5dc] bg-white px-6 py-3">
             <div>
-              <h1 className="text-lg font-semibold">Portfolio Health</h1>
+              <h1 className="text-lg font-semibold">Portfolio Cash Health</h1>
               <p className="text-xs text-[#69746f]">
-                Real QuickBooks bank accounts. Transaction health comes next.
+                Real QuickBooks balances today. Phase health comes after check sync.
               </p>
             </div>
             <div className="flex items-center gap-3 text-sm">
@@ -156,26 +240,27 @@ export default async function Home() {
             </div>
           </header>
 
-          <div className="grid flex-1 grid-cols-[minmax(0,1fr)_360px] gap-0">
+          <div className="grid flex-1 grid-cols-[minmax(0,1fr)_390px] gap-0">
             <div className="min-w-0 px-6 py-5">
               <section className="mb-5 grid grid-cols-4 gap-3">
                 <Metric
                   icon={Building2}
-                  label="Confirmed Houses"
+                  label="Active Houses"
                   value={String(houses.length)}
                   detail={`${bankAccounts.length} bank accounts from QB`}
                 />
                 <Metric
-                  icon={WalletCards}
+                  icon={CircleDollarSign}
                   label="House Cash"
                   value={currency(totalHouseCash)}
-                  detail="Current bank balances only"
+                  detail="Sum of confirmed house accounts"
                 />
                 <Metric
-                  icon={CircleDollarSign}
-                  label="Internal Cash"
+                  icon={WalletCards}
+                  label="Internal Buckets"
                   value={currency(totalInternalCash)}
-                  detail={`${internalAccounts.length} internal accounts`}
+                  detail={`${internalAccounts.length} internal bank accounts`}
+                  tone={totalInternalCash < 0 ? "warn" : "neutral"}
                 />
                 <Metric
                   icon={AlertTriangle}
@@ -186,22 +271,27 @@ export default async function Home() {
                 />
               </section>
 
+              <section className="mb-5 grid grid-cols-3 gap-3">
+                {buckets.map((bucket) => (
+                  <BucketCard bucket={bucket} key={bucket.label} />
+                ))}
+              </section>
+
               {!snapshot ? (
                 <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
                   <h2 className="text-sm font-semibold text-amber-900">
                     QuickBooks Snapshot Needed
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-amber-800">
-                    The dashboard is ready, but Render does not currently have a
-                    saved account snapshot. Click Sync QB to read the latest bank
-                    accounts from QuickBooks.
+                    The dashboard is ready, but Render does not currently have a saved account
+                    snapshot. Click Sync QB to read the latest bank accounts from QuickBooks.
                   </p>
                 </section>
               ) : (
                 <section className="rounded-lg border border-[#dfe5dc] bg-white">
                   <div className="flex items-center justify-between border-b border-[#e6ebe3] px-4 py-3">
                     <div>
-                      <h2 className="text-sm font-semibold">Active Houses</h2>
+                      <h2 className="text-sm font-semibold">Active House Bank Accounts</h2>
                       <p className="mt-1 text-xs text-[#69746f]">
                         Last synced {lastSynced}
                       </p>
@@ -214,16 +304,16 @@ export default async function Home() {
                     </Link>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] border-collapse text-sm">
-                      <thead className="bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
+                  <div className="max-h-[520px] overflow-auto">
+                    <table className="w-full min-w-[980px] border-collapse text-sm">
+                      <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
-                          <th className="px-4 py-3 font-medium">Status</th>
-                          <th className="px-4 py-3 font-medium">Bank Balance</th>
+                          <th className="px-4 py-3 font-medium">Cash Status</th>
+                          <th className="px-4 py-3 font-medium">Current Balance</th>
+                          <th className="px-4 py-3 font-medium">Phase View</th>
                           <th className="px-4 py-3 font-medium">QB Bank Account</th>
-                          <th className="px-4 py-3 font-medium">Progress</th>
-                          <th className="px-4 py-3 font-medium">Agent Note</th>
+                          <th className="px-4 py-3 font-medium">What The Agent Can Say</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -250,11 +340,16 @@ export default async function Home() {
                               >
                                 {currency(house.balance)}
                               </td>
+                              <td className="px-4 py-4">
+                                <PhaseStrip />
+                                <div className="mt-2 text-xs text-[#69746f]">
+                                  Waiting on checks by phase
+                                </div>
+                              </td>
                               <td className="max-w-[260px] px-4 py-4 text-[#4f5b56]">
                                 {house.bank}
                               </td>
-                              <td className="px-4 py-4 text-[#69746f]">Pending checks</td>
-                              <td className="max-w-[280px] px-4 py-4 text-[#4f5b56]">
+                              <td className="max-w-[300px] px-4 py-4 text-[#4f5b56]">
                                 {health.note}
                               </td>
                             </tr>
@@ -274,45 +369,69 @@ export default async function Home() {
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold">Agent Health Note</h2>
-                  <p className="text-xs text-[#69746f]">Real data, limited scope</p>
+                  <p className="text-xs text-[#69746f]">Connected, read-only, no guesses</p>
                 </div>
               </div>
 
               <p className="rounded-lg border border-[#dfe5dc] bg-[#fbfcfa] p-4 text-sm leading-6 text-[#384641]">
-                The app can see {houses.length} confirmed house bank accounts from
-                QuickBooks. Right now, this dashboard is reading bank balances and
-                account mapping only. I cannot honestly score budget, progress,
-                margin, stalls, or variance until we sync checks and add budgets.
+                The app can see {houses.length} confirmed house bank accounts and{" "}
+                {internalAccounts.length} internal bank accounts from QuickBooks. Today I can
+                trust balances and account mapping. I will not score phase progress, margin, or
+                budget health until checks and budgets are synced.
               </p>
 
               <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
-                <h3 className="text-sm font-semibold">What Is Real Here</h3>
+                <h3 className="text-sm font-semibold">Internal Draw Rules</h3>
                 <div className="mt-3 space-y-3 text-sm text-[#4f5b56]">
-                  <div className="flex justify-between gap-4">
-                    <span>QuickBooks company</span>
-                    <span className="font-mono text-xs">{snapshot?.realmId ?? "Missing"}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span>Account snapshot</span>
-                    <span>{snapshot ? "Synced" : "Missing"}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span>Autonomy</span>
-                    <span>Read-only</span>
-                  </div>
+                  <RuleRow
+                    label="Average profit target"
+                    value={shortCurrency(AVERAGE_PROFIT_TARGET)}
+                  />
+                  <RuleRow
+                    label="Marketing per phase"
+                    value={`${shortCurrency(marketingPerPhase)} x ${PHASE_COUNT}`}
+                  />
+                  <RuleRow
+                    label="Management per phase"
+                    value={`${shortCurrency(managementPerPhase)} x ${PHASE_COUNT}`}
+                  />
+                  <RuleRow label="Operations later" value={`${shortCurrency(operationsAfterClose)} after close`} />
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
+                <h3 className="text-sm font-semibold">Internal Accounts Seen</h3>
+                <div className="mt-3 space-y-3 text-sm text-[#4f5b56]">
+                  {internalAccounts.map((account) => (
+                    <RuleRow
+                      key={account.Id}
+                      label={accountName(account)}
+                      value={currency(bankBalance(account))}
+                    />
+                  ))}
+                  {internalAccounts.length === 0 ? (
+                    <p className="text-sm text-[#69746f]">No internal bank accounts found.</p>
+                  ) : null}
                 </div>
               </div>
 
               <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <h3 className="text-sm font-semibold text-amber-900">
-                  Next Data Layer
-                </h3>
+                <h3 className="text-sm font-semibold text-amber-900">Next Build Layer</h3>
                 <p className="mt-2 text-sm leading-6 text-amber-800">
-                  Next we should add durable database storage, then sync checks by
-                  house bank account. That is when the dashboard can stop showing
-                  placeholders for progress and health.
+                  Next we sync checks by house bank account. Then the six phase boxes can become
+                  real progress, and the agent can compare each house against budget.
                 </p>
               </div>
+
+              {incomeClearingAccounts.length > 0 ? (
+                <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
+                  <h3 className="text-sm font-semibold">Income Clearing</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#4f5b56]">
+                    Balance: {currency(sumAccountBalances(incomeClearingAccounts))}. I am showing
+                    it separately so it does not get mixed into house health.
+                  </p>
+                </div>
+              ) : null}
             </aside>
           </div>
         </section>
@@ -378,6 +497,65 @@ function Metric({
       </div>
       <div className={`text-2xl font-semibold ${toneClass}`}>{value}</div>
       <div className="mt-1 text-xs text-[#69746f]">{detail}</div>
+    </div>
+  );
+}
+
+function BucketCard({ bucket }: { bucket: Bucket }) {
+  const Icon = bucket.icon;
+  const balanceRatio = bucket.monthlyTarget > 0 ? bucket.balance / bucket.monthlyTarget : 0;
+  const width = `${Math.max(4, Math.min(Math.abs(balanceRatio) * 100, 100))}%`;
+  const barColor =
+    bucket.balance < 0 ? "bg-red-600" : balanceRatio >= 1 ? "bg-emerald-700" : "bg-[#20745f]";
+
+  return (
+    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium uppercase text-[#69746f]">{bucket.label}</div>
+          <div className={bucket.balance < 0 ? "mt-2 text-2xl font-semibold text-red-700" : "mt-2 text-2xl font-semibold"}>
+            {currency(bucket.balance)}
+          </div>
+        </div>
+        <div className="flex size-9 items-center justify-center rounded-lg bg-[#e7f1ec] text-[#20745f]">
+          <Icon size={18} />
+        </div>
+      </div>
+      <div className="mt-4 h-2 rounded-full bg-[#e7ece8]">
+        <div className={`h-2 rounded-full ${barColor}`} style={{ width }} />
+      </div>
+      <div className="mt-3 flex justify-between gap-3 text-xs text-[#69746f]">
+        <span>{bucket.status}</span>
+        <span>Target {shortCurrency(bucket.monthlyTarget)}</span>
+      </div>
+      <p className="mt-3 min-h-10 text-xs leading-5 text-[#4f5b56]">{bucket.description}</p>
+      <div className="mt-3 rounded-md border border-[#edf0eb] bg-[#fbfcfa] px-3 py-2 text-xs text-[#384641]">
+        {bucket.perPhase ? `${shortCurrency(bucket.perPhase)} per completed phase` : "Not drawn per phase yet"}
+      </div>
+    </div>
+  );
+}
+
+function PhaseStrip() {
+  return (
+    <div className="flex gap-1">
+      {Array.from({ length: PHASE_COUNT }, (_, index) => (
+        <div
+          className="flex h-7 w-8 items-center justify-center rounded border border-[#dfe5dc] bg-[#f7f8f5] text-[11px] font-medium text-[#69746f]"
+          key={index}
+        >
+          {index + 1}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RuleRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-[#edf0eb] pb-2 last:border-b-0 last:pb-0">
+      <span>{label}</span>
+      <span className="text-right font-medium text-[#18211f]">{value}</span>
     </div>
   );
 }
