@@ -1,8 +1,11 @@
 import type { QboAccount } from "@/lib/qbo/accounts-store";
+import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 
 export type AccountClassification = {
   account: QboAccount;
   role:
+    | "confirmed_house_bank"
+    | "internal_bank_account"
     | "house_bank_candidate"
     | "construction_cost_candidate"
     | "job_site_overhead_candidate"
@@ -51,11 +54,31 @@ export function classifyAccount(account: QboAccount): AccountClassification {
   const name = accountName(account);
 
   if (account.AccountType === "Bank") {
+    const houseName = getConfirmedHouseName(account);
+
+    if (houseName) {
+      return {
+        account,
+        role: "confirmed_house_bank",
+        confidence: "high",
+        reason: `Confirmed by user as house/project bank account: ${houseName}.`,
+      };
+    }
+
+    if (isInternalBankAccount(account)) {
+      return {
+        account,
+        role: "internal_bank_account",
+        confidence: "high",
+        reason: "Confirmed as company/internal bank account, not a house.",
+      };
+    }
+
     return {
       account,
       role: "house_bank_candidate",
-      confidence: "medium",
-      reason: "Bank accounts are the planned way to identify houses.",
+      confidence: "low",
+      reason: "Bank account was not in the confirmed house list or internal-account list.",
     };
   }
 
@@ -109,6 +132,8 @@ export function summarizeClassifications(classifications: AccountClassification[
       return summary;
     },
     {
+      confirmed_house_bank: 0,
+      internal_bank_account: 0,
       house_bank_candidate: 0,
       construction_cost_candidate: 0,
       job_site_overhead_candidate: 0,

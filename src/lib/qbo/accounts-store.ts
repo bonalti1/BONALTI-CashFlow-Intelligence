@@ -8,6 +8,7 @@ type QboAccount = {
   AccountType?: string;
   AccountSubType?: string;
   Classification?: string;
+  CurrentBalance?: number;
   Active?: boolean;
   ParentRef?: {
     value?: string;

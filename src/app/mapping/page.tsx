@@ -6,6 +6,8 @@ import { getAccountsSnapshot } from "@/lib/qbo/accounts-store";
 export const dynamic = "force-dynamic";
 
 const roleLabels = {
+  confirmed_house_bank: "Confirmed house banks",
+  internal_bank_account: "Internal bank accounts",
   house_bank_candidate: "House bank candidates",
   construction_cost_candidate: "Construction cost candidates",
   job_site_overhead_candidate: "Job site overhead candidates",
@@ -14,6 +16,8 @@ const roleLabels = {
 };
 
 const roleStyles = {
+  confirmed_house_bank: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  internal_bank_account: "border-slate-200 bg-slate-50 text-slate-700",
   house_bank_candidate: "border-emerald-200 bg-emerald-50 text-emerald-700",
   construction_cost_candidate: "border-blue-200 bg-blue-50 text-blue-700",
   job_site_overhead_candidate: "border-amber-200 bg-amber-50 text-amber-700",
@@ -61,7 +65,7 @@ export default async function MappingPage() {
           </div>
         </div>
 
-        <section className="mb-5 grid grid-cols-5 gap-3">
+        <section className="mb-5 grid grid-cols-4 gap-3">
           {(Object.keys(roleLabels) as Array<keyof typeof roleLabels>).map((role) => (
             <div className="rounded-lg border border-[#dfe5dc] bg-white p-4" key={role}>
               <div className="text-xs font-medium uppercase text-[#69746f]">
@@ -75,10 +79,10 @@ export default async function MappingPage() {
         <section className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <h2 className="text-sm font-semibold text-amber-900">How This Helps Now</h2>
           <p className="mt-2 text-sm leading-6 text-amber-800">
-            This does not change QuickBooks. It gives us a temporary lens so we can
-            keep building the substrate. Later, after you clean up the Chart of
-            Accounts, these guesses should become real synced phase and line-item
-            mappings.
+            This does not change QuickBooks. Your confirmed house bank list now
+            drives which bank accounts become houses in the dashboard. Internal
+            bank accounts stay visible for company health, but they are not treated
+            as houses.
           </p>
         </section>
 
