@@ -2,9 +2,7 @@ import Link from "next/link";
 import {
   Bot,
   ClipboardList,
-  HomeIcon,
   LayoutDashboard,
-  ListTree,
   NotebookText,
   ShieldCheck,
 } from "lucide-react";
@@ -80,11 +78,8 @@ export default async function AgentHealthPage() {
 
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/house-accounts" icon={HomeIcon} label="House Accounts" />
-            <NavItem href="/setup-inputs" icon={ClipboardList} label="How To Set Up Inputs" />
+            <NavItem href="/setup-inputs" icon={ClipboardList} label="Edit Price & Square Foot" />
             <NavItem active icon={NotebookText} label="Agent Health Notes" />
-            <NavItem href="/chart-of-accounts" icon={ListTree} label="Chart of Accounts" />
-            <NavItem href="/mapping" icon={ListTree} label="Mapping" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>

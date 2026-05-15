@@ -2,19 +2,21 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Building2,
+  CheckCircle2,
   CircleDollarSign,
   ClipboardList,
-  HomeIcon,
+  Edit3,
   Landmark,
   LayoutDashboard,
-  ListTree,
   Megaphone,
   NotebookText,
   RefreshCcw,
   ShieldCheck,
   WalletCards,
+  XCircle,
 } from "lucide-react";
 
+import { saveHouseDetailsAction } from "@/app/actions/house-details";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
@@ -33,6 +35,7 @@ const MARKETING_PERCENT = 0.15;
 const MANAGEMENT_PERCENT = 0.2;
 const OPERATIONS_PERCENT = 0.05;
 const MONTHLY_PHASE_ASSUMPTION = 10;
+const PHASE_ONE_BUDGET_PERCENT = 0.10778;
 
 type HouseRow = {
   id: string;
@@ -91,30 +94,6 @@ function accountNameIncludes(account: QboAccount, matcher: string) {
 
 function sumAccountBalances(accounts: QboAccount[]) {
   return accounts.reduce((total, account) => total + bankBalance(account), 0);
-}
-
-function healthForBalance(balance: number) {
-  if (balance < 0) {
-    return {
-      label: "Watch",
-      className: "border-amber-200 bg-amber-50 text-amber-800",
-      note: "Negative bank balance. This house needs funding review before checks go out.",
-    };
-  }
-
-  if (balance < 1000) {
-    return {
-      label: "Low Cash",
-      className: "border-blue-200 bg-blue-50 text-blue-800",
-      note: "Cash is low. Budget health still needs check and phase sync.",
-    };
-  }
-
-  return {
-    label: "Cash OK",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    note: "Current bank cash is positive. Full health comes after transaction sync.",
-  };
 }
 
 export default async function Home() {
@@ -235,11 +214,8 @@ export default async function Home() {
 
           <nav className="space-y-1">
             <NavItem active icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/house-accounts" icon={HomeIcon} label="House Accounts" />
-            <NavItem href="/setup-inputs" icon={ClipboardList} label="How To Set Up Inputs" />
+            <NavItem href="/setup-inputs" icon={ClipboardList} label="Edit Price & Square Foot" />
             <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
-            <NavItem href="/chart-of-accounts" icon={ListTree} label="Chart of Accounts" />
-            <NavItem href="/mapping" icon={ListTree} label="Mapping" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>
@@ -270,10 +246,11 @@ export default async function Home() {
                 Sync QB
               </a>
               <Link
-                className="rounded-md border border-[#ccd6cf] px-3 py-1.5 text-[#33504a]"
-                href="/house-accounts"
+                className="inline-flex items-center gap-2 rounded-md border border-[#ccd6cf] px-3 py-1.5 text-[#33504a]"
+                href="/setup-inputs"
               >
-                Houses
+                <Edit3 size={16} />
+                Edit Inputs
               </Link>
             </div>
           </header>
@@ -334,47 +311,36 @@ export default async function Home() {
                     <div>
                       <h2 className="text-sm font-semibold">Active House Bank Accounts</h2>
                       <p className="mt-1 text-xs text-[#69746f]">
-                        Last synced {lastSynced}
+                        Edit sale price and square footage here. Last synced {lastSynced}
                       </p>
                     </div>
-                    <Link
-                      className="rounded-md border border-[#ccd6cf] px-3 py-1.5 text-xs font-medium text-[#33504a]"
-                      href="/house-accounts"
-                    >
-                      Inspect accounts
-                    </Link>
                   </div>
 
                   <div className="max-h-[520px] overflow-auto">
-                    <table className="w-full min-w-[980px] border-collapse text-sm">
+                    <table className="w-full min-w-[1180px] border-collapse text-sm">
                       <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
-                          <th className="px-4 py-3 font-medium">Cash Status</th>
                           <th className="px-4 py-3 font-medium">QB Bank Balance</th>
                           <th className="px-4 py-3 font-medium">Checks Seen</th>
                           <th className="px-4 py-3 font-medium">Setup</th>
-                          <th className="px-4 py-3 font-medium">Phase View</th>
+                          <th className="px-4 py-3 font-medium">Phase Budget</th>
                           <th className="px-4 py-3 font-medium">QB Bank Account</th>
-                          <th className="px-4 py-3 font-medium">What The Agent Can Say</th>
                         </tr>
                       </thead>
                       <tbody>
                         {houses.map((house) => {
-                          const health = healthForBalance(house.balance);
+                          const phaseOneBudget = house.soldPrice
+                            ? house.soldPrice * PHASE_ONE_BUDGET_PERCENT
+                            : null;
+                          const phaseOneOverBudget =
+                            phaseOneBudget !== null && house.totalChecksSeen > phaseOneBudget;
 
                           return (
                             <tr className="border-t border-[#edf0eb]" key={house.id}>
                               <td className="px-4 py-4">
                                 <div className="font-medium">{house.house}</div>
                                 <div className="text-xs text-[#69746f]">QB ID {house.id}</div>
-                              </td>
-                              <td className="px-4 py-4">
-                                <span
-                                  className={`rounded-md border px-2.5 py-1 text-xs font-medium ${health.className}`}
-                                >
-                                  {health.label}
-                                </span>
                               </td>
                               <td
                                 className={`px-4 py-4 font-semibold ${
@@ -392,33 +358,69 @@ export default async function Home() {
                                     : ", cleared field pending"}
                                 </div>
                               </td>
-                              <td className="px-4 py-4">
-                                <div
-                                  className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-medium ${
-                                    house.setupComplete
-                                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                      : "border-amber-200 bg-amber-50 text-amber-800"
-                                  }`}
-                                >
-                                  {house.setupComplete ? "Ready" : "Missing"}
-                                </div>
-                                <div className="mt-2 text-xs text-[#69746f]">
-                                  {house.soldPrice && house.squareFootage
-                                    ? `${currency(house.soldPrice / house.squareFootage)}/sqft`
-                                    : "Add sale + sqft"}
+                              <td className="min-w-[390px] px-4 py-4">
+                                <form action={saveHouseDetailsAction}>
+                                  <input name="qboBankAccountId" type="hidden" value={house.id} />
+                                  <input name="houseName" type="hidden" value={house.house} />
+                                  <div className="grid grid-cols-[112px_88px_92px_auto] gap-2">
+                                    <label className="text-xs text-[#69746f]">
+                                      Sold Price
+                                      <input
+                                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                                        defaultValue={house.soldPrice ?? ""}
+                                        inputMode="decimal"
+                                        name="soldPrice"
+                                        placeholder="250000"
+                                      />
+                                    </label>
+                                    <label className="text-xs text-[#69746f]">
+                                      Sq Ft
+                                      <input
+                                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                                        defaultValue={house.squareFootage ?? ""}
+                                        inputMode="numeric"
+                                        name="squareFootage"
+                                        placeholder="2180"
+                                      />
+                                    </label>
+                                    <label className="text-xs text-[#69746f]">
+                                      City
+                                      <input
+                                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                                        defaultValue={house.city ?? ""}
+                                        name="city"
+                                        placeholder="Laredo"
+                                      />
+                                    </label>
+                                    <button
+                                      className="mt-5 h-9 rounded-md bg-[#20745f] px-3 text-sm font-medium text-white"
+                                      type="submit"
+                                    >
+                                      Save
+                                    </button>
+                                  </div>
+                                </form>
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#69746f]">
+                                  <span>
+                                    Sold: {house.soldPrice ? currency(house.soldPrice) : "Missing"}
+                                  </span>
+                                  <span>Spent: {currency(house.totalChecksSeen)}</span>
+                                  <span>
+                                    {house.soldPrice && house.squareFootage
+                                      ? `${currency(house.soldPrice / house.squareFootage)}/sqft`
+                                      : "Price per sqft missing"}
+                                  </span>
                                 </div>
                               </td>
                               <td className="px-4 py-4">
-                                <PhaseStrip />
-                                <div className="mt-2 text-xs text-[#69746f]">
-                                  Waiting on checks by phase
-                                </div>
+                                <PhaseBudgetStrip
+                                  phaseOneBudget={phaseOneBudget}
+                                  phaseOneOverBudget={phaseOneOverBudget}
+                                  spent={house.totalChecksSeen}
+                                />
                               </td>
                               <td className="max-w-[260px] px-4 py-4 text-[#4f5b56]">
                                 {house.bank}
-                              </td>
-                              <td className="max-w-[300px] px-4 py-4 text-[#4f5b56]">
-                                {health.note}
                               </td>
                             </tr>
                           );
@@ -532,17 +534,40 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
   );
 }
 
-function PhaseStrip() {
+function PhaseBudgetStrip({
+  phaseOneBudget,
+  phaseOneOverBudget,
+  spent,
+}: {
+  phaseOneBudget: number | null;
+  phaseOneOverBudget: boolean;
+  spent: number;
+}) {
   return (
-    <div className="flex gap-1">
-      {Array.from({ length: PHASE_COUNT }, (_, index) => (
-        <div
-          className="flex h-7 w-8 items-center justify-center rounded border border-[#dfe5dc] bg-[#f7f8f5] text-[11px] font-medium text-[#69746f]"
-          key={index}
-        >
-          {index + 1}
-        </div>
-      ))}
+    <div>
+      <div
+        className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium ${
+          !phaseOneBudget
+            ? "border-[#dfe5dc] bg-[#f7f8f5] text-[#69746f]"
+            : phaseOneOverBudget
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+        }`}
+      >
+        {!phaseOneBudget ? (
+          <AlertTriangle size={14} />
+        ) : phaseOneOverBudget ? (
+          <XCircle size={14} />
+        ) : (
+          <CheckCircle2 size={14} />
+        )}
+        Phase One
+      </div>
+      <div className="mt-2 text-xs leading-5 text-[#69746f]">
+        {phaseOneBudget
+          ? `${currency(spent)} spent / ${currency(phaseOneBudget)} budget`
+          : "Add sold price to calculate budget"}
+      </div>
     </div>
   );
 }

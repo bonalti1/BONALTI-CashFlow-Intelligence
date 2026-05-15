@@ -1,9 +1,7 @@
 import Link from "next/link";
 import {
   ClipboardList,
-  HomeIcon,
   LayoutDashboard,
-  ListTree,
   NotebookText,
   ShieldCheck,
 } from "lucide-react";
@@ -94,11 +92,8 @@ export default async function SetupInputsPage() {
 
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/house-accounts" icon={HomeIcon} label="House Accounts" />
-            <NavItem active icon={ClipboardList} label="How To Set Up Inputs" />
+            <NavItem active icon={ClipboardList} label="Edit Price & Square Foot" />
             <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
-            <NavItem href="/chart-of-accounts" icon={ListTree} label="Chart of Accounts" />
-            <NavItem href="/mapping" icon={ListTree} label="Mapping" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>
