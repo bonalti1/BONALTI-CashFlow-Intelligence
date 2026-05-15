@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   CheckCircle2,
   CircleAlert,
@@ -66,19 +67,30 @@ export default async function SetupPage() {
     configured.get("QBO_ENVIRONMENT");
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] px-6 py-6 text-[#18211f]">
+    <main className="min-h-screen bg-[#f7f8f5] px-6 py-6 text-[#121a36]">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase text-[#69746f]">Setup</p>
-            <h1 className="mt-1 text-2xl font-semibold">Connection Checklist</h1>
+          <div className="flex items-center gap-4">
+            <div className="w-28 rounded-lg border border-[#d9dee9] bg-white p-2">
+              <Image
+                alt="South Texas Builders"
+                className="h-auto w-full"
+                height={1080}
+                src="/south-texas-builders-logo.png"
+                width={1080}
+              />
+            </div>
+            <div>
+            <p className="brand-kicker text-xs font-bold uppercase text-[#ff332b]">Setup</p>
+            <h1 className="mt-1 text-3xl font-semibold text-[#121d49]">Connection Checklist</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5f6b66]">
               This page tells us what the app can see right now. It only shows
               yes or no. It does not show secret values.
             </p>
+            </div>
           </div>
           <Link
-            className="rounded-md border border-[#ccd6cf] bg-white px-3 py-2 text-sm font-medium"
+            className="rounded-md border border-[#121d49] bg-white px-3 py-2 text-sm font-bold text-[#121d49]"
             href="/house-accounts"
           >
             House accounts

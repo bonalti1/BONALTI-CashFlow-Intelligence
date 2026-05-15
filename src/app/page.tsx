@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   AlertTriangle,
   Building2,
@@ -211,16 +212,26 @@ export default async function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#18211f]">
+    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
       <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#dfe5dc] bg-white px-5 py-5">
-          <div className="mb-8 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-[#20745f] text-sm font-bold text-white">
-              STB
+        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
+          <div className="mb-8">
+            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+              <Image
+                alt="South Texas Builders"
+                className="h-auto w-full"
+                height={1080}
+                src="/south-texas-builders-logo.png"
+                width={1080}
+              />
             </div>
             <div>
-              <div className="text-sm font-semibold">South Texas Builders</div>
-              <div className="text-xs text-[#69746f]">Project Health Agent</div>
+              <div className="brand-heading text-base font-semibold text-[#121d49]">
+                South Texas Builders
+              </div>
+              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
+                Project Health Agent
+              </div>
             </div>
           </div>
 
@@ -233,9 +244,14 @@ export default async function Home() {
         </aside>
 
         <section className="flex min-w-0 flex-col">
-          <header className="flex min-h-16 items-center justify-between border-b border-[#dfe5dc] bg-white px-6 py-3">
+          <header className="flex min-h-16 items-center justify-between border-b border-[#d9dee9] bg-white px-6 py-3">
             <div>
-              <h1 className="text-lg font-semibold">Portfolio Cash Health</h1>
+              <p className="brand-kicker text-[10px] font-bold uppercase text-[#ff332b]">
+                Portfolio
+              </p>
+              <h1 className="mt-1 text-2xl font-semibold text-[#121d49]">
+                Portfolio Cash Health
+              </h1>
               <p className="text-xs text-[#69746f]">
                 Real QuickBooks balances today. Phase health comes after check sync.
               </p>
@@ -251,14 +267,14 @@ export default async function Home() {
                 QB {qboConnection.connected ? "connected" : "needs sync"}
               </span>
               <a
-                className="inline-flex items-center gap-2 rounded-md bg-[#20745f] px-3 py-1.5 text-white"
+                className="inline-flex items-center gap-2 rounded-md bg-[#ff332b] px-3 py-1.5 font-bold text-white"
                 href={`${appUrl}/api/qbo/accounts/sync?next=/`}
               >
                 <RefreshCcw size={16} />
                 Sync QB
               </a>
               <Link
-                className="inline-flex items-center gap-2 rounded-md border border-[#ccd6cf] px-3 py-1.5 text-[#33504a]"
+                className="inline-flex items-center gap-2 rounded-md border border-[#121d49] px-3 py-1.5 font-medium text-[#121d49]"
                 href="/setup-inputs"
               >
                 <Edit3 size={16} />
@@ -384,7 +400,7 @@ export default async function Home() {
                                   <SetupPill label="City" value={house.city ?? "Missing"} />
                                 </div>
                                 <Link
-                                  className="mt-2 inline-flex text-xs font-medium text-[#20745f]"
+                                  className="mt-2 inline-flex text-xs font-bold text-[#ff332b]"
                                   href="/setup-inputs"
                                 >
                                   Edit price & square foot
@@ -429,8 +445,8 @@ function NavItem({
 }) {
   const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
     active
-      ? "bg-[#e7f1ec] font-medium text-[#174f42]"
-      : "text-[#5f6b66] hover:bg-[#f1f4ef]"
+      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
+      : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
   }`;
 
   if (href) {
@@ -482,7 +498,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
   const balanceRatio = bucket.monthlyTarget > 0 ? bucket.balance / bucket.monthlyTarget : 0;
   const width = `${Math.max(4, Math.min(Math.abs(balanceRatio) * 100, 100))}%`;
   const barColor =
-    bucket.balance < 0 ? "bg-red-600" : balanceRatio >= 1 ? "bg-emerald-700" : "bg-[#20745f]";
+    bucket.balance < 0 ? "bg-red-600" : balanceRatio >= 1 ? "bg-[#121d49]" : "bg-[#ff332b]";
 
   return (
     <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
@@ -493,7 +509,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
             {currency(bucket.balance)}
           </div>
         </div>
-        <div className="flex size-9 items-center justify-center rounded-lg bg-[#e7f1ec] text-[#20745f]">
+        <div className="flex size-9 items-center justify-center rounded-lg bg-[#fff0ef] text-[#ff332b]">
           <Icon size={18} />
         </div>
       </div>

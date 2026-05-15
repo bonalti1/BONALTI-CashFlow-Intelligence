@@ -219,8 +219,8 @@ function NavItem({
 }) {
   const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
     active
-      ? "bg-[#e7f1ec] font-medium text-[#174f42]"
-      : "text-[#5f6b66] hover:bg-[#f1f4ef]"
+      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
+      : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
   }`;
 
   if (href) {

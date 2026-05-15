@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   Bot,
   ClipboardList,
@@ -63,16 +64,26 @@ export default async function AgentHealthPage() {
       : "Not synced yet";
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#18211f]">
+    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
       <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#dfe5dc] bg-white px-5 py-5">
-          <div className="mb-8 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-[#20745f] text-sm font-bold text-white">
-              STB
+        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
+          <div className="mb-8">
+            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+              <Image
+                alt="South Texas Builders"
+                className="h-auto w-full"
+                height={1080}
+                src="/south-texas-builders-logo.png"
+                width={1080}
+              />
             </div>
             <div>
-              <div className="text-sm font-semibold">South Texas Builders</div>
-              <div className="text-xs text-[#69746f]">Project Health Agent</div>
+              <div className="brand-heading text-base font-semibold text-[#121d49]">
+                South Texas Builders
+              </div>
+              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
+                Project Health Agent
+              </div>
             </div>
           </div>
 
@@ -86,8 +97,12 @@ export default async function AgentHealthPage() {
 
         <section className="min-w-0 px-6 py-5">
           <header className="mb-5">
-            <p className="text-xs font-medium uppercase text-[#69746f]">Agent health notes</p>
-            <h1 className="mt-1 text-2xl font-semibold">What The Agent Can Trust Today</h1>
+            <p className="brand-kicker text-xs font-bold uppercase text-[#ff332b]">
+              Agent health notes
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold text-[#121d49]">
+              What The Agent Can Trust Today
+            </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5f6b66]">
               This page keeps the agent explanation out of the way of the main dashboard. It shows
               what is real data today and what still needs the next data layer.
@@ -108,7 +123,7 @@ export default async function AgentHealthPage() {
             <div className="space-y-4">
               <section className="rounded-lg border border-[#dfe5dc] bg-white p-4">
                 <div className="mb-4 flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-[#e7f1ec] text-[#20745f]">
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-[#fff0ef] text-[#ff332b]">
                     <Bot size={20} />
                   </div>
                   <div>
@@ -215,8 +230,8 @@ function NavItem({
 }) {
   const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
     active
-      ? "bg-[#e7f1ec] font-medium text-[#174f42]"
-      : "text-[#5f6b66] hover:bg-[#f1f4ef]"
+      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
+      : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
   }`;
 
   if (href) {
