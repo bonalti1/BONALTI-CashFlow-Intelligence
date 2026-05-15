@@ -10,118 +10,9 @@ import { saveHouseDetailsAction } from "@/app/actions/house-details";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
+import { PhaseBudgetCalculator } from "./phase-budget-calculator";
 
 export const dynamic = "force-dynamic";
-
-type BudgetLine = {
-  item: string;
-  percent: number | null;
-};
-
-type BudgetPhase = {
-  key: string;
-  label: string;
-  draw: string;
-  status: "locked" | "draft";
-  lines: BudgetLine[];
-};
-
-const budgetPhases: BudgetPhase[] = [
-  {
-    key: "pre",
-    label: "Pre",
-    draw: "Before construction",
-    status: "draft",
-    lines: [
-      { item: "Architect", percent: null },
-      { item: "Risk / Liability Insurance", percent: null },
-      { item: "Building Permits", percent: null },
-      { item: "Change Order (Pre Phase)", percent: null },
-    ],
-  },
-  {
-    key: "p1",
-    label: "P1",
-    draw: "Draw 1",
-    status: "locked",
-    lines: [
-      { item: "Fill Dirt", percent: 0.0075 },
-      { item: "Plumbing Rough-in", percent: 0.01278 },
-      { item: "Pre-form Survey", percent: 0.0022 },
-      { item: "Termite Treatment", percent: 0.0011 },
-      { item: "Foundation Rebar Materials", percent: 0.018 },
-      { item: "Foundation Concrete Materials", percent: 0.0444 },
-      { item: "Foundation Labor", percent: 0.0218 },
-    ],
-  },
-  {
-    key: "p2",
-    label: "P2",
-    draw: "Draw 2",
-    status: "draft",
-    lines: [
-      { item: "Wall Framing Materials", percent: null },
-      { item: "Wall Framing Labor", percent: null },
-      { item: "Roof Framing Materials", percent: null },
-      { item: "Roof Framing Labor", percent: null },
-      { item: "Roof Shingles Materials", percent: null },
-      { item: "Roof Shingles Labor", percent: null },
-      { item: "Windows", percent: null },
-    ],
-  },
-  {
-    key: "p3",
-    label: "P3",
-    draw: "Draw 3",
-    status: "draft",
-    lines: [
-      { item: "Plumbing Top-out", percent: null },
-      { item: "A/C Duct Work", percent: null },
-      { item: "Electrical Rough-in", percent: null },
-      { item: "Wall Insulation", percent: null },
-      { item: "Exterior Painting", percent: null },
-      { item: "Sheetrock", percent: null },
-    ],
-  },
-  {
-    key: "p4",
-    label: "P4",
-    draw: "Draw 4",
-    status: "draft",
-    lines: [
-      { item: "Tape & Float", percent: null },
-      { item: "Texture", percent: null },
-      { item: "Exterior Materials", percent: null },
-      { item: "Exterior Material Labor", percent: null },
-      { item: "Flooring", percent: null },
-    ],
-  },
-  {
-    key: "p5",
-    label: "P5",
-    draw: "Draw 5",
-    status: "draft",
-    lines: [
-      { item: "Cabinets and Vanities", percent: null },
-      { item: "Trim, Doors, Shelving", percent: null },
-      { item: "Interior Paint / Stain", percent: null },
-      { item: "Counter Tops", percent: null },
-      { item: "Front Doors", percent: null },
-    ],
-  },
-  {
-    key: "p6",
-    label: "P6",
-    draw: "Draw 6",
-    status: "draft",
-    lines: [
-      { item: "Electrical Final / Fixtures", percent: null },
-      { item: "Plumbing Final / Fixtures", percent: null },
-      { item: "Hardware / Mirrors", percent: null },
-      { item: "Clean-up", percent: null },
-    ],
-  },
-];
 
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -129,10 +20,6 @@ function currency(value: number) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(value);
-}
-
-function percent(value: number) {
-  return `${(value * 100).toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}%`;
 }
 
 function accountName(account: QboAccount) {
@@ -173,8 +60,6 @@ export default async function SetupInputsPage() {
     .filter((house): house is NonNullable<typeof house> => Boolean(house))
     .sort((a, b) => a.house.localeCompare(b.house));
   const completed = houses.filter((house) => house.setupComplete).length;
-  const exampleSoldPrice = 250_000;
-  const exampleSquareFootage = 2_180;
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] text-[#18211f]">
@@ -299,121 +184,10 @@ export default async function SetupInputsPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-[#dfe5dc] bg-white">
-            <div className="border-b border-[#e6ebe3] px-4 py-3">
-              <h2 className="text-sm font-semibold">Phase Budget Calculator</h2>
-              <p className="mt-1 text-xs text-[#69746f]">
-                Example based on a {currency(exampleSoldPrice)} sold price and{" "}
-                {exampleSquareFootage.toLocaleString()} sqft. Phase 1 is using your real numbers.
-                The other phases are ready for the final percentages.
-              </p>
-            </div>
-            <div className="grid gap-3 p-4">
-              {budgetPhases.map((phase) => (
-                <BudgetPhaseCalculator
-                  exampleSoldPrice={exampleSoldPrice}
-                  exampleSquareFootage={exampleSquareFootage}
-                  key={phase.key}
-                  phase={phase}
-                />
-              ))}
-            </div>
-          </section>
+          <PhaseBudgetCalculator />
         </section>
       </div>
     </main>
-  );
-}
-
-function BudgetPhaseCalculator({
-  phase,
-  exampleSoldPrice,
-  exampleSquareFootage,
-}: {
-  phase: BudgetPhase;
-  exampleSoldPrice: number;
-  exampleSquareFootage: number;
-}) {
-  const totalPercent = phase.lines.reduce((total, line) => total + (line.percent ?? 0), 0);
-  const hasPercentRules = phase.lines.some((line) => line.percent !== null);
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-[#edf0eb]">
-      <div className="flex items-center justify-between gap-3 border-b border-[#edf0eb] bg-[#fbfcfa] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-md bg-[#e7f1ec] text-sm font-bold text-[#174f42]">
-            {phase.label}
-          </div>
-          <div>
-            <div className="text-sm font-semibold">{phase.draw}</div>
-            <div className="text-xs text-[#69746f]">
-              {hasPercentRules ? "Calculator active" : "Waiting for final budget percentages"}
-            </div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div
-            className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${
-              phase.status === "locked"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-amber-200 bg-amber-50 text-amber-800"
-            }`}
-          >
-            {phase.status === "locked" ? "Real %" : "Draft"}
-          </div>
-          <div className="mt-1 text-xs text-[#69746f]">
-            Total {hasPercentRules ? percent(totalPercent) : "Set %"}
-          </div>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-sm">
-          <thead className="bg-white text-left text-xs uppercase text-[#69746f]">
-            <tr>
-              <th className="px-4 py-3 font-medium">Line Item</th>
-              <th className="px-4 py-3 font-medium">Budget %</th>
-              <th className="px-4 py-3 font-medium">Budget $</th>
-              <th className="px-4 py-3 font-medium">Sqft Check</th>
-            </tr>
-          </thead>
-          <tbody>
-            {phase.lines.map((line) => {
-              const budgetAmount = line.percent === null ? null : exampleSoldPrice * line.percent;
-              const sqftAmount = budgetAmount === null ? null : budgetAmount / exampleSquareFootage;
-
-              return (
-                <tr className="border-t border-[#edf0eb]" key={line.item}>
-                  <td className="px-4 py-3 font-medium">{line.item}</td>
-                  <td className="px-4 py-3 text-[#4f5b56]">
-                    {line.percent === null ? "Set %" : percent(line.percent)}
-                  </td>
-                  <td className="px-4 py-3 font-semibold">
-                    {budgetAmount === null ? "Waiting" : currency(budgetAmount)}
-                  </td>
-                  <td className="px-4 py-3 text-[#4f5b56]">
-                    {sqftAmount === null ? "Waiting" : `${currency(sqftAmount)} / sqft`}
-                  </td>
-                </tr>
-              );
-            })}
-            <tr className="border-t border-[#dfe5dc] bg-[#fbfcfa]">
-              <td className="px-4 py-3 font-semibold">{phase.label} Total</td>
-              <td className="px-4 py-3 font-semibold">
-                {hasPercentRules ? percent(totalPercent) : "Set %"}
-              </td>
-              <td className="px-4 py-3 font-semibold">
-                {hasPercentRules ? currency(exampleSoldPrice * totalPercent) : "Waiting"}
-              </td>
-              <td className="px-4 py-3 font-semibold">
-                {hasPercentRules
-                  ? `${currency((exampleSoldPrice * totalPercent) / exampleSquareFootage)} / sqft`
-                  : "Waiting"}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }
 
