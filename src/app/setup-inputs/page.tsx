@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ClipboardList,
   LayoutDashboard,
@@ -62,16 +63,26 @@ export default async function SetupInputsPage() {
   const completed = houses.filter((house) => house.setupComplete).length;
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#18211f]">
+    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
       <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#dfe5dc] bg-white px-5 py-5">
-          <div className="mb-8 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-[#20745f] text-sm font-bold text-white">
-              STB
+        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
+          <div className="mb-8">
+            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+              <Image
+                alt="South Texas Builders"
+                className="h-auto w-full"
+                height={1080}
+                src="/south-texas-builders-logo.png"
+                width={1080}
+              />
             </div>
             <div>
-              <div className="text-sm font-semibold">South Texas Builders</div>
-              <div className="text-xs text-[#69746f]">Project Health Agent</div>
+              <div className="brand-heading text-base font-semibold text-[#121d49]">
+                South Texas Builders
+              </div>
+              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
+                Project Health Agent
+              </div>
             </div>
           </div>
 
@@ -86,36 +97,40 @@ export default async function SetupInputsPage() {
         <section className="min-w-0 px-6 py-5">
           <header className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-medium uppercase text-[#69746f]">
+              <p className="brand-kicker text-xs font-bold uppercase text-[#ff332b]">
                 How to set up inputs
               </p>
-              <h1 className="mt-1 text-2xl font-semibold">House Setup Inputs</h1>
+              <h1 className="mt-1 text-3xl font-semibold text-[#121d49]">
+                House Setup Inputs
+              </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5f6b66]">
                 Add the sale price, square footage, and city for each house. These are saved only
                 in this dashboard database. QuickBooks stays read-only.
               </p>
             </div>
-            <div className="rounded-lg border border-[#dfe5dc] bg-white px-4 py-3 text-sm">
-              <div className="text-xs uppercase text-[#69746f]">Ready for budget math</div>
-              <div className="mt-1 text-2xl font-semibold">
+            <div className="rounded-lg border border-[#121d49] bg-[#121d49] px-4 py-3 text-sm text-white">
+              <div className="brand-kicker text-[10px] uppercase text-white/70">
+                Ready for budget math
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-white">
                 {completed}/{houses.length}
               </div>
             </div>
           </header>
 
-          <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white">
-            <div className="border-b border-[#e6ebe3] px-4 py-3">
-              <h2 className="text-sm font-semibold">Inputs By House</h2>
-              <p className="mt-1 text-xs text-[#69746f]">
+          <section className="mb-5 overflow-hidden rounded-lg border border-[#121d49] bg-white">
+            <div className="border-b border-[#121d49] bg-[#121d49] px-4 py-4 text-white">
+              <h2 className="text-lg font-semibold">Inputs By House</h2>
+              <p className="mt-1 text-xs text-white/75">
                 Once these are filled in, the app can calculate price per sqft and budget percent
                 against the sold price.
               </p>
             </div>
-            <div className="grid max-h-[620px] grid-cols-2 gap-3 overflow-auto p-4">
+            <div className="grid max-h-[620px] grid-cols-2 gap-3 overflow-auto bg-[#fbfaf7] p-4">
               {houses.map((house) => (
                 <form
                   action={saveHouseDetailsAction}
-                  className="rounded-lg border border-[#edf0eb] bg-[#fbfcfa] p-3"
+                  className="rounded-lg border border-[#d9dee9] bg-white p-3 shadow-sm"
                   key={house.id}
                 >
                   <input name="qboBankAccountId" type="hidden" value={house.id} />
@@ -141,7 +156,7 @@ export default async function SetupInputsPage() {
                     <label className="text-xs text-[#69746f]">
                       Sold Price
                       <input
-                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                        className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
                         defaultValue={house.soldPrice ?? ""}
                         inputMode="decimal"
                         name="soldPrice"
@@ -151,7 +166,7 @@ export default async function SetupInputsPage() {
                     <label className="text-xs text-[#69746f]">
                       Sq Ft
                       <input
-                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                        className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
                         defaultValue={house.squareFootage ?? ""}
                         inputMode="numeric"
                         name="squareFootage"
@@ -161,14 +176,14 @@ export default async function SetupInputsPage() {
                     <label className="text-xs text-[#69746f]">
                       City
                       <input
-                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
+                        className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
                         defaultValue={house.city ?? ""}
                         name="city"
                         placeholder="Laredo"
                       />
                     </label>
                     <button
-                      className="mt-5 h-9 rounded-md bg-[#20745f] px-3 text-sm font-medium text-white"
+                      className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white"
                       type="submit"
                     >
                       Save
