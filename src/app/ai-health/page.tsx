@@ -6,13 +6,13 @@ import {
   CheckCircle2,
   ClipboardList,
   LayoutDashboard,
-  MessageSquareText,
   NotebookText,
   ShieldCheck,
   TrendingDown,
   WalletCards,
 } from "lucide-react";
 
+import { AiHealthChat } from "@/app/ai-health/ai-health-chat";
 import { getEnvStatus } from "@/lib/env";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
@@ -459,28 +459,9 @@ export default async function AiHealthPage() {
 
               <Panel
                 title="Ask AI"
-                subtitle="This box is ready for the OpenAI key. For now it shows exactly what it will be used for."
+                subtitle="This reads the same QuickBooks and house setup data shown on the dashboard."
               >
-                <div className="rounded-lg border border-dashed border-[#d9dee9] bg-[#f7f8f5] p-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-[#121a36]">
-                    <MessageSquareText className="h-4 w-4 text-[#ff332b]" />
-                    Read-only construction analyst
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-[#5f6b66]">
-                    Once the key is added, you can ask questions like: Which house is most at risk?
-                    Why did projected profit drop? Which phase needs review? The AI will explain
-                    the numbers and point back to QuickBooks checks. It will not change QuickBooks.
-                  </p>
-                  <div className="mt-4 rounded-md border border-[#d9dee9] bg-white p-3 text-sm text-[#6c746f]">
-                    Example: “Tell me which houses are over budget and why.”
-                  </div>
-                  <button
-                    className="mt-4 w-full rounded-md bg-[#121a36] px-4 py-2 text-sm font-bold text-white opacity-60"
-                    disabled
-                  >
-                    {openAiReady ? "AI key detected, chat wiring next" : "Add OpenAI key to activate"}
-                  </button>
-                </div>
+                <AiHealthChat openAiReady={openAiReady} />
               </Panel>
             </div>
           </section>
