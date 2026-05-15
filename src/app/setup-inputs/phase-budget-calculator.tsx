@@ -333,7 +333,9 @@ function BudgetPhaseSection({
   const tone = phaseStyles[phase.key];
 
   return (
-    <div className={`overflow-hidden rounded-lg border-2 bg-white shadow-sm ${tone.shell}`}>
+    <div
+      className={`print-phase-card overflow-hidden rounded-lg border-2 bg-white shadow-sm ${tone.shell}`}
+    >
       <div className={`flex items-center justify-between gap-3 px-4 py-3 ${tone.header}`}>
         <div className="flex items-center gap-3">
           <div className={`flex size-10 items-center justify-center rounded-md text-sm font-bold ${tone.badge}`}>
@@ -361,7 +363,7 @@ function BudgetPhaseSection({
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="print-table-wrap overflow-x-auto">
         <table className="w-full min-w-[820px] border-collapse text-sm">
           <thead className={`text-left text-xs uppercase ${tone.tableHead}`}>
             <tr>

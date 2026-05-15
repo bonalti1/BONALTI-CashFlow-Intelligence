@@ -40,8 +40,16 @@ h2,
 }
 
 @media print {
+  @page {
+    margin: 0.35in;
+    size: letter;
+  }
+
+  html,
   body {
     background: #ffffff;
+    height: auto;
+    overflow: visible;
   }
 
   body * {
@@ -55,7 +63,11 @@ h2,
 
   .print-area {
     position: absolute;
-    inset: 0;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: auto !important;
+    overflow: visible !important;
     border: 0 !important;
     box-shadow: none !important;
   }
@@ -66,5 +78,41 @@ h2,
 
   .print-area {
     background: #ffffff !important;
+  }
+
+  .print-area,
+  .print-area div,
+  .print-table-wrap {
+    overflow: visible !important;
+  }
+
+  .print-area {
+    font-size: 10px;
+  }
+
+  .print-area h2 {
+    font-size: 18px !important;
+  }
+
+  .print-area table {
+    min-width: 0 !important;
+    width: 100% !important;
+    page-break-inside: auto;
+  }
+
+  .print-area th,
+  .print-area td {
+    padding: 5px 7px !important;
+  }
+
+  .print-phase-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 10px;
+  }
+
+  .print-phase-card tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
