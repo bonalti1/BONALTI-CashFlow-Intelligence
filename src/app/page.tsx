@@ -35,6 +35,15 @@ const MANAGEMENT_PERCENT = 0.2;
 const OPERATIONS_PERCENT = 0.05;
 const MONTHLY_PHASE_ASSUMPTION = 10;
 const PHASE_ONE_BUDGET_PERCENT = 0.10778;
+const PHASE_BUDGET_RULES = [
+  { key: "pre", label: "Pre", budgetPercent: null },
+  { key: "p1", label: "P1", budgetPercent: PHASE_ONE_BUDGET_PERCENT },
+  { key: "p2", label: "P2", budgetPercent: null },
+  { key: "p3", label: "P3", budgetPercent: null },
+  { key: "p4", label: "P4", budgetPercent: null },
+  { key: "p5", label: "P5", budgetPercent: null },
+  { key: "p6", label: "P6", budgetPercent: null },
+] as const;
 
 type HouseRow = {
   id: string;
@@ -77,6 +86,10 @@ function shortCurrency(value: number) {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function percent(value: number) {
+  return `${(value * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
 }
 
 function bankBalance(account: QboAccount) {
@@ -509,29 +522,47 @@ function PhaseBudgetStrip({
   spent: number;
 }) {
   return (
-    <div>
-      <div
-        className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium ${
-          !phaseOneBudget
-            ? "border-[#dfe5dc] bg-[#f7f8f5] text-[#69746f]"
-            : phaseOneOverBudget
-              ? "border-red-200 bg-red-50 text-red-800"
-              : "border-emerald-200 bg-emerald-50 text-emerald-800"
-        }`}
-      >
-        {!phaseOneBudget ? (
-          <AlertTriangle size={14} />
-        ) : phaseOneOverBudget ? (
-          <XCircle size={14} />
-        ) : (
-          <CheckCircle2 size={14} />
-        )}
-        Phase One
+    <div className="min-w-[250px]">
+      <div className="flex flex-wrap gap-1.5">
+        {PHASE_BUDGET_RULES.map((phase) => {
+          const isPhaseOne = phase.key === "p1";
+          const needsSoldPrice = isPhaseOne && !phaseOneBudget;
+          const overBudget = isPhaseOne && phaseOneOverBudget;
+          const ready = isPhaseOne && phaseOneBudget && !phaseOneOverBudget;
+          const Icon = overBudget ? XCircle : ready ? CheckCircle2 : AlertTriangle;
+          const className = overBudget
+            ? "border-red-200 bg-red-50 text-red-800"
+            : ready
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : needsSoldPrice
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-[#dfe5dc] bg-[#fbfcfa] text-[#69746f]";
+
+          return (
+            <div
+              className={`grid min-h-12 min-w-12 place-items-center rounded-md border px-2 py-1 text-center text-[11px] ${className}`}
+              key={phase.key}
+              title={
+                phase.budgetPercent
+                  ? `${phase.label} budget is ${percent(phase.budgetPercent)} of sold price`
+                  : `${phase.label} budget percentage still needs to be set`
+              }
+            >
+              <div className="flex items-center gap-1 font-semibold">
+                <Icon size={12} />
+                {phase.label}
+              </div>
+              <div className="mt-0.5 whitespace-nowrap">
+                {phase.budgetPercent ? percent(phase.budgetPercent) : "Set %"}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div className="mt-2 text-xs leading-5 text-[#69746f]">
         {phaseOneBudget
-          ? `${currency(spent)} spent / ${currency(phaseOneBudget)} budget`
-          : "Add sold price to calculate budget"}
+          ? `P1: ${currency(spent)} spent / ${currency(phaseOneBudget)} budget`
+          : "Add sold price to calculate P1 budget"}
       </div>
     </div>
   );
