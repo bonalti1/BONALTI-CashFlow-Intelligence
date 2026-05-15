@@ -1,20 +1,20 @@
 import Link from "next/link";
 import {
   AlertTriangle,
-  Bot,
   Building2,
   CircleDollarSign,
+  ClipboardList,
   HomeIcon,
   Landmark,
   LayoutDashboard,
   ListTree,
   Megaphone,
+  NotebookText,
   RefreshCcw,
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
 
-import { saveHouseDetailsAction } from "@/app/actions/house-details";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
@@ -180,14 +180,8 @@ export default async function Home() {
   const operationsAccounts = internalAccounts.filter((account) =>
     accountNameIncludes(account, "operating"),
   );
-  const incomeClearingAccounts = internalAccounts.filter((account) =>
-    accountNameIncludes(account, "income clearing"),
-  );
   const totalHouseCash = houses.reduce((total, house) => total + house.balance, 0);
   const lastSynced = snapshot ? new Date(snapshot.syncedAt).toLocaleString() : "Not synced";
-  const transactionsSyncedLabel = transactionsStatus.synced && transactionsStatus.syncedAt
-    ? new Date(transactionsStatus.syncedAt).toLocaleString()
-    : "Not synced yet";
   const totalChecksSeen = houses.reduce((total, house) => total + house.totalChecksSeen, 0);
   const completedHouseSetups = houses.filter((house) => house.setupComplete).length;
   const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
@@ -242,6 +236,8 @@ export default async function Home() {
           <nav className="space-y-1">
             <NavItem active icon={LayoutDashboard} label="Portfolio" />
             <NavItem href="/house-accounts" icon={HomeIcon} label="House Accounts" />
+            <NavItem href="/setup-inputs" icon={ClipboardList} label="How To Set Up Inputs" />
+            <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
             <NavItem href="/chart-of-accounts" icon={ListTree} label="Chart of Accounts" />
             <NavItem href="/mapping" icon={ListTree} label="Mapping" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
@@ -282,8 +278,8 @@ export default async function Home() {
             </div>
           </header>
 
-          <div className="grid flex-1 grid-cols-[minmax(0,1fr)_390px] gap-0">
-            <div className="min-w-0 px-6 py-5">
+          <div className="flex-1 px-6 py-5">
+            <div className="min-w-0">
               <section className="mb-5 grid grid-cols-4 gap-3">
                 <Metric
                   icon={Building2}
@@ -322,88 +318,6 @@ export default async function Home() {
                 ))}
               </section>
 
-              {snapshot ? (
-                <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white">
-                  <div className="border-b border-[#e6ebe3] px-4 py-3">
-                    <h2 className="text-sm font-semibold">House Setup Inputs</h2>
-                    <p className="mt-1 text-xs text-[#69746f]">
-                      These numbers are saved only in this dashboard database, not in QuickBooks.
-                    </p>
-                  </div>
-                  <div className="grid max-h-[420px] grid-cols-2 gap-3 overflow-auto p-4">
-                    {houses.map((house) => (
-                      <form
-                        action={saveHouseDetailsAction}
-                        className="rounded-lg border border-[#edf0eb] bg-[#fbfcfa] p-3"
-                        key={house.id}
-                      >
-                        <input name="qboBankAccountId" type="hidden" value={house.id} />
-                        <input name="houseName" type="hidden" value={house.house} />
-                        <div className="mb-3 flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold">{house.house}</div>
-                            <div className="mt-1 text-xs text-[#69746f]">
-                              QB balance {currency(house.balance)}
-                            </div>
-                          </div>
-                          <span
-                            className={`rounded-md border px-2 py-1 text-xs ${
-                              house.setupComplete
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                : "border-amber-200 bg-amber-50 text-amber-800"
-                            }`}
-                          >
-                            {house.setupComplete ? "Ready" : "Missing setup"}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-[1fr_112px_96px_auto] gap-2">
-                          <label className="text-xs text-[#69746f]">
-                            Sold Price
-                            <input
-                              className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
-                              defaultValue={house.soldPrice ?? ""}
-                              inputMode="decimal"
-                              name="soldPrice"
-                              placeholder="450000"
-                            />
-                          </label>
-                          <label className="text-xs text-[#69746f]">
-                            Sq Ft
-                            <input
-                              className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
-                              defaultValue={house.squareFootage ?? ""}
-                              inputMode="numeric"
-                              name="squareFootage"
-                              placeholder="1850"
-                            />
-                          </label>
-                          <label className="text-xs text-[#69746f]">
-                            City
-                            <input
-                              className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
-                              defaultValue={house.city ?? ""}
-                              name="city"
-                              placeholder="Laredo"
-                            />
-                          </label>
-                          <button
-                            className="mt-5 h-9 rounded-md bg-[#20745f] px-3 text-sm font-medium text-white"
-                            type="submit"
-                          >
-                            Save
-                          </button>
-                        </div>
-                        <div className="mt-3 text-xs text-[#69746f]">
-                          {house.soldPrice && house.squareFootage
-                            ? `Sale price per sqft: ${currency(house.soldPrice / house.squareFootage)}`
-                            : "Enter sold price and square footage to calculate price per sqft."}
-                        </div>
-                      </form>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
               {!snapshot ? (
                 <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
                   <h2 className="text-sm font-semibold text-amber-900">
@@ -439,6 +353,7 @@ export default async function Home() {
                           <th className="px-4 py-3 font-medium">Cash Status</th>
                           <th className="px-4 py-3 font-medium">QB Bank Balance</th>
                           <th className="px-4 py-3 font-medium">Checks Seen</th>
+                          <th className="px-4 py-3 font-medium">Setup</th>
                           <th className="px-4 py-3 font-medium">Phase View</th>
                           <th className="px-4 py-3 font-medium">QB Bank Account</th>
                           <th className="px-4 py-3 font-medium">What The Agent Can Say</th>
@@ -478,6 +393,22 @@ export default async function Home() {
                                 </div>
                               </td>
                               <td className="px-4 py-4">
+                                <div
+                                  className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-medium ${
+                                    house.setupComplete
+                                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                      : "border-amber-200 bg-amber-50 text-amber-800"
+                                  }`}
+                                >
+                                  {house.setupComplete ? "Ready" : "Missing"}
+                                </div>
+                                <div className="mt-2 text-xs text-[#69746f]">
+                                  {house.soldPrice && house.squareFootage
+                                    ? `${currency(house.soldPrice / house.squareFootage)}/sqft`
+                                    : "Add sale + sqft"}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
                                 <PhaseStrip />
                                 <div className="mt-2 text-xs text-[#69746f]">
                                   Waiting on checks by phase
@@ -498,87 +429,6 @@ export default async function Home() {
                 </section>
               )}
             </div>
-
-            <aside className="border-l border-[#dfe5dc] bg-white p-5">
-              <div className="mb-5 flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-[#e7f1ec] text-[#20745f]">
-                  <Bot size={20} />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold">Agent Health Note</h2>
-                  <p className="text-xs text-[#69746f]">Connected, read-only, no guesses</p>
-                </div>
-              </div>
-
-              <p className="rounded-lg border border-[#dfe5dc] bg-[#fbfcfa] p-4 text-sm leading-6 text-[#384641]">
-                The app can see {houses.length} confirmed house bank accounts and{" "}
-                {internalAccounts.length} internal bank accounts from QuickBooks. Today I can
-                trust balances and account mapping. I will not score phase progress, margin, or
-                budget health until checks and budgets are synced.
-              </p>
-
-              <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
-                <h3 className="text-sm font-semibold">Sync Status</h3>
-                <div className="mt-3 space-y-3 text-sm text-[#4f5b56]">
-                  <RuleRow label="Bank balances" value={lastSynced} />
-                  <RuleRow label="Checks/payments" value={transactionsSyncedLabel} />
-                  <RuleRow label="QB connection" value={qboConnection.connected ? "Connected" : "Needs reconnect"} />
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
-                <h3 className="text-sm font-semibold">Internal Draw Rules</h3>
-                <div className="mt-3 space-y-3 text-sm text-[#4f5b56]">
-                  <RuleRow
-                    label="Average profit target"
-                    value={shortCurrency(AVERAGE_PROFIT_TARGET)}
-                  />
-                  <RuleRow
-                    label="Marketing per phase"
-                    value={`${shortCurrency(marketingPerPhase)} x ${PHASE_COUNT}`}
-                  />
-                  <RuleRow
-                    label="Management per phase"
-                    value={`${shortCurrency(managementPerPhase)} x ${PHASE_COUNT}`}
-                  />
-                  <RuleRow label="Operations later" value={`${shortCurrency(operationsAfterClose)} after close`} />
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
-                <h3 className="text-sm font-semibold">Internal Accounts Seen</h3>
-                <div className="mt-3 space-y-3 text-sm text-[#4f5b56]">
-                  {internalAccounts.map((account) => (
-                    <RuleRow
-                      key={account.Id}
-                      label={accountName(account)}
-                      value={currency(bankBalance(account))}
-                    />
-                  ))}
-                  {internalAccounts.length === 0 ? (
-                    <p className="text-sm text-[#69746f]">No internal bank accounts found.</p>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <h3 className="text-sm font-semibold text-amber-900">Next Build Layer</h3>
-                <p className="mt-2 text-sm leading-6 text-amber-800">
-                  Next we sync checks by house bank account. Then the six phase boxes can become
-                  real progress, and the agent can compare each house against budget.
-                </p>
-              </div>
-
-              {incomeClearingAccounts.length > 0 ? (
-                <div className="mt-5 rounded-lg border border-[#dfe5dc] p-4">
-                  <h3 className="text-sm font-semibold">Income Clearing</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#4f5b56]">
-                    Balance: {currency(sumAccountBalances(incomeClearingAccounts))}. I am showing
-                    it separately so it does not get mixed into house health.
-                  </p>
-                </div>
-              ) : null}
-            </aside>
           </div>
         </section>
       </div>
@@ -693,15 +543,6 @@ function PhaseStrip() {
           {index + 1}
         </div>
       ))}
-    </div>
-  );
-}
-
-function RuleRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4 border-b border-[#edf0eb] pb-2 last:border-b-0 last:pb-0">
-      <span>{label}</span>
-      <span className="text-right font-medium text-[#18211f]">{value}</span>
     </div>
   );
 }

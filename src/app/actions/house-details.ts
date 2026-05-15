@@ -59,5 +59,6 @@ export async function saveHouseDetailsAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/setup-inputs");
   revalidatePath("/house-accounts");
 }
