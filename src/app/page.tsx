@@ -16,7 +16,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { saveHouseDetailsAction } from "@/app/actions/house-details";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
@@ -311,13 +310,14 @@ export default async function Home() {
                     <div>
                       <h2 className="text-sm font-semibold">Active House Bank Accounts</h2>
                       <p className="mt-1 text-xs text-[#69746f]">
-                        Edit sale price and square footage here. Last synced {lastSynced}
+                        Showing only the key setup numbers here. Edit details in the sidebar tab.
+                        Last synced {lastSynced}
                       </p>
                     </div>
                   </div>
 
                   <div className="max-h-[520px] overflow-auto">
-                    <table className="w-full min-w-[1180px] border-collapse text-sm">
+                    <table className="w-full min-w-[980px] border-collapse text-sm">
                       <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
@@ -359,58 +359,23 @@ export default async function Home() {
                                 </div>
                               </td>
                               <td className="min-w-[390px] px-4 py-4">
-                                <form action={saveHouseDetailsAction}>
-                                  <input name="qboBankAccountId" type="hidden" value={house.id} />
-                                  <input name="houseName" type="hidden" value={house.house} />
-                                  <div className="grid grid-cols-[112px_88px_92px_auto] gap-2">
-                                    <label className="text-xs text-[#69746f]">
-                                      Sold Price
-                                      <input
-                                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
-                                        defaultValue={house.soldPrice ?? ""}
-                                        inputMode="decimal"
-                                        name="soldPrice"
-                                        placeholder="250000"
-                                      />
-                                    </label>
-                                    <label className="text-xs text-[#69746f]">
-                                      Sq Ft
-                                      <input
-                                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
-                                        defaultValue={house.squareFootage ?? ""}
-                                        inputMode="numeric"
-                                        name="squareFootage"
-                                        placeholder="2180"
-                                      />
-                                    </label>
-                                    <label className="text-xs text-[#69746f]">
-                                      City
-                                      <input
-                                        className="mt-1 h-9 w-full rounded-md border border-[#ccd6cf] bg-white px-2 text-sm text-[#18211f]"
-                                        defaultValue={house.city ?? ""}
-                                        name="city"
-                                        placeholder="Laredo"
-                                      />
-                                    </label>
-                                    <button
-                                      className="mt-5 h-9 rounded-md bg-[#20745f] px-3 text-sm font-medium text-white"
-                                      type="submit"
-                                    >
-                                      Save
-                                    </button>
-                                  </div>
-                                </form>
-                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#69746f]">
-                                  <span>
-                                    Sold: {house.soldPrice ? currency(house.soldPrice) : "Missing"}
-                                  </span>
-                                  <span>Spent: {currency(house.totalChecksSeen)}</span>
-                                  <span>
-                                    {house.soldPrice && house.squareFootage
-                                      ? `${currency(house.soldPrice / house.squareFootage)}/sqft`
-                                      : "Price per sqft missing"}
-                                  </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  <SetupPill
+                                    label="Sold"
+                                    value={house.soldPrice ? currency(house.soldPrice) : "Missing"}
+                                  />
+                                  <SetupPill
+                                    label="Sqft"
+                                    value={house.squareFootage ? String(house.squareFootage) : "Missing"}
+                                  />
+                                  <SetupPill label="City" value={house.city ?? "Missing"} />
                                 </div>
+                                <Link
+                                  className="mt-2 inline-flex text-xs font-medium text-[#20745f]"
+                                  href="/setup-inputs"
+                                >
+                                  Edit price & square foot
+                                </Link>
                               </td>
                               <td className="px-4 py-4">
                                 <PhaseBudgetStrip
@@ -569,5 +534,22 @@ function PhaseBudgetStrip({
           : "Add sold price to calculate budget"}
       </div>
     </div>
+  );
+}
+
+function SetupPill({ label, value }: { label: string; value: string }) {
+  const missing = value === "Missing";
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${
+        missing
+          ? "border-amber-200 bg-amber-50 text-amber-800"
+          : "border-[#dfe5dc] bg-[#fbfcfa] text-[#4f5b56]"
+      }`}
+    >
+      <span className="text-[#69746f]">{label}</span>
+      <span className="font-medium">{value}</span>
+    </span>
   );
 }
