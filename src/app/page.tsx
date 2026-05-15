@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   AlertTriangle,
+  Brain,
   Building2,
   CheckCircle2,
   CircleDollarSign,
@@ -238,6 +239,7 @@ export default async function Home() {
           <nav className="space-y-1">
             <NavItem active icon={LayoutDashboard} label="Portfolio" />
             <NavItem href="/setup-inputs" icon={ClipboardList} label="Edit Price & Square Foot" />
+            <NavItem href="/ai-health" icon={Brain} label="AI Health Center" />
             <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>

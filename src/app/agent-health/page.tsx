@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   Bot,
+  Brain,
   ClipboardList,
   LayoutDashboard,
   NotebookText,
@@ -90,6 +91,7 @@ export default async function AgentHealthPage() {
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
             <NavItem href="/setup-inputs" icon={ClipboardList} label="Edit Price & Square Foot" />
+            <NavItem href="/ai-health" icon={Brain} label="AI Health Center" />
             <NavItem active icon={NotebookText} label="Agent Health Notes" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
