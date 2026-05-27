@@ -61,6 +61,7 @@ type HouseRow = {
 
 type Bucket = {
   label: string;
+  slug: string;
   description: string;
   balance: number;
   monthlyTarget: number;
@@ -177,6 +178,7 @@ export default async function Home() {
   const buckets: Bucket[] = [
     {
       label: "Marketing",
+      slug: "marketing",
       description: "15% of target profit, paid as phases complete",
       balance: sumAccountBalances(marketingAccounts),
       monthlyTarget: bucketMonthlyMarketing,
@@ -186,6 +188,7 @@ export default async function Home() {
     },
     {
       label: "Management Payroll",
+      slug: "management-payroll",
       description: "20% of target profit, paid to the payroll bucket",
       balance: sumAccountBalances(managementAccounts),
       monthlyTarget: bucketMonthlyManagement,
@@ -195,6 +198,7 @@ export default async function Home() {
     },
     {
       label: "Operations",
+      slug: "operations",
       description: "Planned 5% bucket after a house closes",
       balance: sumAccountBalances(operationsAccounts),
       monthlyTarget: operationsAfterClose,
@@ -470,7 +474,10 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
     bucket.balance < 0 ? "bg-red-600" : balanceRatio >= 1 ? "bg-[#121d49]" : "bg-[#ff332b]";
 
   return (
-    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
+    <Link
+      className="block rounded-lg border border-[#dfe5dc] bg-white p-4 transition hover:border-[#ff332b] hover:shadow-sm"
+      href={`/buckets/${bucket.slug}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-medium uppercase text-[#69746f]">{bucket.label}</div>
@@ -493,7 +500,8 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
       <div className="mt-3 rounded-md border border-[#edf0eb] bg-[#fbfcfa] px-3 py-2 text-xs text-[#384641]">
         {bucket.perPhase ? `${shortCurrency(bucket.perPhase)} per completed phase` : "Not drawn per phase yet"}
       </div>
-    </div>
+      <div className="mt-3 text-xs font-bold text-[#ff332b]">View monthly charges</div>
+    </Link>
   );
 }
 
