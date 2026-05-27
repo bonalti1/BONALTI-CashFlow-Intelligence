@@ -35,7 +35,7 @@ export function AiHealthChat({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          question,
+          question: `${question}\n\nWrite this answer at an 8th grade reading level. Use short sentences, plain words, and clear bullets if helpful.`,
         }),
       });
       const data = (await response.json()) as { answer?: string; message?: string };
@@ -60,7 +60,7 @@ export function AiHealthChat({
       </div>
       <p className="mt-2 text-sm leading-6 text-[#5f6b66]">
         Ask questions about house risk, profit, budget health, and what needs attention. The AI
-        reads the dashboard data and explains it. It does not change QuickBooks.
+        reads the dashboard data and explains it in simple language. It does not change QuickBooks.
       </p>
       {hideInput ? null : (
         <textarea

@@ -39,7 +39,10 @@ Return ONLY valid JSON with these exact keys:
 }
 
 The summary should answer: what matters most today across houses, spending, checks, payees, and internal buckets?
-Use simple 8th grade language.
+Every field must be written at an 8th grade reading level.
+Use short sentences and plain words.
+Avoid accounting and finance jargon. If a hard word is needed, explain it in simple words.
+Do not sound like a bank report. Sound like a clear owner update.
 Do not invent missing data.
 If Chart of Accounts or phase mapping is provisional, say so clearly.
 `;

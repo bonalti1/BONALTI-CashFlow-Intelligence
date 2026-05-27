@@ -15,6 +15,16 @@ export const dynamic = "force-dynamic";
 const TARGET_PROFIT_PER_HOME = 60_000;
 const DRAFT_TOTAL_BUDGET_PERCENT = 0.75578;
 const PHASE_ONE_BUDGET_PERCENT = 0.10778;
+const SIMPLE_REPORTING_RULES = [
+  "Every report, summary, and answer must be written at an 8th grade reading level.",
+  "Use short sentences and plain words.",
+  "Avoid accounting, finance, and software jargon. If a hard word is needed, explain it in simple words.",
+  "Use clear bullets when it makes the answer easier to read.",
+  "Say what matters, why it matters, and what to check next.",
+  "If the data is missing, old, or not fully mapped, say that clearly.",
+  "Never invent reasons, vendors, checks, or project facts.",
+  "This app is read-only. Never claim you changed QuickBooks, moved money, sent messages, or edited data.",
+].join(" ");
 
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -151,8 +161,7 @@ export async function POST(request: Request) {
     input: [
       {
         role: "system",
-        content:
-          "You are the South Texas Builders read-only project health analyst. Explain in plain English at an 8th grade level. Be direct, practical, and careful. Never claim you changed QuickBooks. Never invent reasons. If the data is missing or provisional, say so clearly.",
+        content: `You are the South Texas Builders read-only project health analyst. ${SIMPLE_REPORTING_RULES}`,
       },
       {
         role: "user",
