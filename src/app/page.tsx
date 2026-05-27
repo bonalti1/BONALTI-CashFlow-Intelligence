@@ -168,16 +168,6 @@ export default async function Home() {
   const lastSynced = snapshot ? new Date(snapshot.syncedAt).toLocaleString() : "Not synced";
   const completedHouseSetups = houses.filter((house) => house.setupComplete).length;
   const setupNeededCount = houses.length - completedHouseSetups;
-  const totalSoldPrice = houses.reduce((total, house) => total + (house.soldPrice ?? 0), 0);
-  const totalSpentSeen = houses.reduce((total, house) => total + house.totalChecksSeen, 0);
-  const averageSpentPercent = totalSoldPrice > 0 ? totalSpentSeen / totalSoldPrice : 0;
-  const phaseOneRiskCount = houses.filter((house) => {
-    if (!house.soldPrice) {
-      return false;
-    }
-
-    return house.totalChecksSeen > house.soldPrice * PHASE_ONE_BUDGET_PERCENT;
-  }).length;
   const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
   const managementPerPhase = (AVERAGE_PROFIT_TARGET * MANAGEMENT_PERCENT) / PHASE_COUNT;
   const operationsAfterClose = AVERAGE_PROFIT_TARGET * OPERATIONS_PERCENT;
@@ -212,11 +202,11 @@ export default async function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#eef1f4] text-[#121a36]">
-      <div className="grid min-h-screen grid-cols-[264px_1fr]">
-        <aside className="border-r border-[#0d1637] bg-[#121d49] px-5 py-5 text-white">
+    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
+      <div className="grid min-h-screen grid-cols-[248px_1fr]">
+        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
           <div className="mb-8">
-            <div className="mb-4 rounded-lg border border-white/15 bg-white p-3 shadow-sm">
+            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
               <Image
                 alt="South Texas Builders"
                 className="h-auto w-full"
@@ -226,10 +216,10 @@ export default async function Home() {
               />
             </div>
             <div>
-              <div className="brand-heading text-base font-semibold text-white">
+              <div className="brand-heading text-base font-semibold text-[#121d49]">
                 South Texas Builders
               </div>
-              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff6b65]">
+              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
                 Project Health Agent
               </div>
             </div>
@@ -245,16 +235,16 @@ export default async function Home() {
         </aside>
 
         <section className="flex min-w-0 flex-col">
-          <header className="flex min-h-16 items-center justify-between border-b border-[#d9dee9] bg-white/90 px-7 py-4 backdrop-blur">
+          <header className="flex min-h-16 items-center justify-between border-b border-[#d9dee9] bg-white px-6 py-3">
             <div>
               <p className="brand-kicker text-[10px] font-bold uppercase text-[#ff332b]">
-                AI Command Center
+                Portfolio
               </p>
               <h1 className="mt-1 text-2xl font-semibold text-[#121d49]">
-                Executive House Health Dashboard
+                House Health Dashboard
               </h1>
               <p className="text-xs text-[#69746f]">
-                Live QuickBooks data, house setup, spending, and clear next-step signals.
+                Simple view of active houses, setup status, spending, and remaining balance.
               </p>
             </div>
             <div className="flex items-center gap-3 text-sm">
@@ -268,7 +258,7 @@ export default async function Home() {
                 QB {qboConnection.connected ? "connected" : "needs sync"}
               </span>
               <a
-                className="inline-flex items-center gap-2 rounded-md bg-[#121d49] px-4 py-2 font-bold text-white shadow-sm transition hover:bg-[#ff332b]"
+                className="inline-flex items-center gap-2 rounded-md bg-[#ff332b] px-3 py-1.5 font-bold text-white"
                 href={`${appUrl}/api/qbo/accounts/sync?next=/`}
               >
                 <RefreshCcw size={16} />
@@ -277,66 +267,24 @@ export default async function Home() {
             </div>
           </header>
 
-          <div className="flex-1 px-7 py-6">
+          <div className="flex-1 px-6 py-5">
             <div className="min-w-0">
-              <section className="mb-5 rounded-lg border border-[#d9dee9] bg-[#121d49] p-5 text-white shadow-sm">
-                <div className="grid gap-5 lg:grid-cols-[1.25fr_2fr]">
-                  <div>
-                    <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold text-white">
-                      <Brain size={14} />
-                      AI-ready finance view
-                    </div>
-                    <h2 className="mt-4 text-2xl font-semibold text-white">
-                      See which houses are healthy, which need setup, and where money is moving.
-                    </h2>
-                    <p className="mt-3 max-w-xl text-sm leading-6 text-white/75">
-                      This page is built to stay simple. The accountant keeps QuickBooks clean.
-                      The dashboard turns that data into owner-level decisions.
-                    </p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <ExecutiveSignal
-                      label="Active Houses"
-                      value={String(houses.length)}
-                      detail="Confirmed projects"
-                    />
-                    <ExecutiveSignal
-                      label="Setup Complete"
-                      value={`${completedHouseSetups}/${houses.length}`}
-                      detail={
-                        setupNeededCount > 0
-                          ? `${setupNeededCount} need inputs`
-                          : "All inputs ready"
-                      }
-                      tone={setupNeededCount > 0 ? "warn" : "good"}
-                    />
-                    <ExecutiveSignal
-                      label="Spend Read"
-                      value={percent(averageSpentPercent)}
-                      detail="Spent vs sold price"
-                    />
-                    <ExecutiveSignal
-                      label="P1 Risk"
-                      value={String(phaseOneRiskCount)}
-                      detail="Need review"
-                      tone={phaseOneRiskCount > 0 ? "warn" : "good"}
-                    />
-                  </div>
-                </div>
-              </section>
-
               <section className="mb-5 grid grid-cols-2 gap-3">
                 <Metric
                   icon={Building2}
-                  label="Portfolio Sold Price"
-                  value={totalSoldPrice > 0 ? shortCurrency(totalSoldPrice) : "Missing"}
-                  detail="Only houses with sold price entered"
+                  label="Active Houses"
+                  value={String(houses.length)}
+                  detail="Confirmed active house projects"
                 />
                 <Metric
                   icon={ClipboardList}
-                  label="QuickBooks Spend Read"
-                  value={shortCurrency(totalSpentSeen)}
-                  detail="Checks/payments currently synced from QuickBooks"
+                  label="House Setup"
+                  value={`${completedHouseSetups}/${houses.length}`}
+                  detail={
+                    setupNeededCount > 0
+                      ? `${setupNeededCount} houses still need price, sqft, or city`
+                      : "All houses have setup inputs"
+                  }
                   tone={setupNeededCount > 0 ? "warn" : "neutral"}
                 />
               </section>
@@ -348,7 +296,7 @@ export default async function Home() {
               </section>
 
               {!snapshot ? (
-                <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
                   <h2 className="text-sm font-semibold text-amber-900">
                     QuickBooks Snapshot Needed
                   </h2>
@@ -358,26 +306,20 @@ export default async function Home() {
                   </p>
                 </section>
               ) : (
-                <section className="overflow-hidden rounded-lg border border-[#d9dee9] bg-white shadow-sm">
-                  <div className="flex items-center justify-between border-b border-[#e6ebe3] bg-[#fbfcfa] px-5 py-4">
+                <section className="rounded-lg border border-[#dfe5dc] bg-white">
+                  <div className="flex items-center justify-between border-b border-[#e6ebe3] px-4 py-3">
                     <div>
-                      <h2 className="text-base font-semibold text-[#121d49]">Active House Health</h2>
+                      <h2 className="text-sm font-semibold">Active House Health</h2>
                       <p className="mt-1 text-xs text-[#69746f]">
                         Main view stays simple. House details and manual inputs live in House Setup.
                         Last synced {lastSynced}
                       </p>
                     </div>
-                    <Link
-                      className="rounded-md border border-[#d9dee9] bg-white px-3 py-2 text-xs font-bold text-[#121d49] transition hover:border-[#ff332b] hover:text-[#ff332b]"
-                      href="/setup-inputs"
-                    >
-                      Edit House Inputs
-                    </Link>
                   </div>
 
                   <div className="max-h-[520px] overflow-auto">
                     <table className="w-full min-w-[920px] border-collapse text-sm">
-                      <thead className="sticky top-0 bg-white text-left text-xs uppercase text-[#69746f] shadow-[0_1px_0_#edf0eb]">
+                      <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
                           <th className="px-4 py-3 font-medium">House Setup</th>
@@ -395,17 +337,10 @@ export default async function Home() {
                             phaseOneBudget !== null && house.totalChecksSeen > phaseOneBudget;
 
                           return (
-                            <tr className="border-t border-[#edf0eb] transition hover:bg-[#fbfcfa]" key={house.id}>
+                            <tr className="border-t border-[#edf0eb]" key={house.id}>
                               <td className="px-4 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div className="grid size-9 place-items-center rounded-lg bg-[#121d49] text-xs font-bold text-white">
-                                    {house.house.slice(0, 2).toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <div className="font-semibold text-[#121d49]">{house.house}</div>
-                                    <div className="text-xs text-[#69746f]">{house.city ?? "City missing"}</div>
-                                  </div>
-                                </div>
+                                <div className="font-medium">{house.house}</div>
+                                <div className="text-xs text-[#69746f]">{house.city ?? "City missing"}</div>
                               </td>
                               <td className="min-w-[390px] px-4 py-4">
                                 <div className="flex flex-wrap gap-1.5">
@@ -429,7 +364,7 @@ export default async function Home() {
                                 </div>
                               </td>
                               <td className="px-4 py-4">
-                                <div className="font-semibold text-[#121d49]">{currency(house.totalChecksSeen)}</div>
+                                <div className="font-semibold">{currency(house.totalChecksSeen)}</div>
                                 <div className="mt-1 text-xs text-[#69746f]">
                                   Read from QuickBooks checks/payments
                                 </div>
@@ -476,8 +411,8 @@ function NavItem({
 }) {
   const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
     active
-      ? "bg-white font-bold text-[#121d49] shadow-sm"
-      : "text-white/75 hover:bg-white/10 hover:text-white"
+      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
+      : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
   }`;
 
   if (href) {
@@ -493,29 +428,6 @@ function NavItem({
     <div className={className}>
       <Icon size={17} />
       {label}
-    </div>
-  );
-}
-
-function ExecutiveSignal({
-  label,
-  value,
-  detail,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: "neutral" | "good" | "warn";
-}) {
-  const toneClass =
-    tone === "good" ? "text-emerald-200" : tone === "warn" ? "text-amber-200" : "text-white";
-
-  return (
-    <div className="rounded-lg border border-white/15 bg-white/10 p-4 backdrop-blur">
-      <div className="text-[10px] font-bold uppercase text-white/60">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${toneClass}`}>{value}</div>
-      <div className="mt-1 text-xs leading-5 text-white/65">{detail}</div>
     </div>
   );
 }
@@ -536,12 +448,10 @@ function Metric({
   const toneClass = tone === "warn" ? "text-amber-700" : "text-[#18211f]";
 
   return (
-    <div className="rounded-lg border border-[#d9dee9] bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
       <div className="mb-4 flex items-center justify-between">
         <span className="text-xs font-medium uppercase text-[#69746f]">{label}</span>
-        <div className="grid size-9 place-items-center rounded-lg bg-[#eef3fb]">
-          <Icon className={toneClass} size={18} />
-        </div>
+        <Icon className={toneClass} size={18} />
       </div>
       <div className={`text-2xl font-semibold ${toneClass}`}>{value}</div>
       <div className="mt-1 text-xs text-[#69746f]">{detail}</div>
@@ -555,7 +465,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
 
   return (
     <Link
-      className="block rounded-lg border border-[#d9dee9] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#ff332b] hover:shadow-md"
+      className="block rounded-lg border border-[#dfe5dc] bg-white p-4 transition hover:border-[#ff332b] hover:shadow-sm"
       href={`/buckets/${bucket.slug}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -573,7 +483,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
         <span>{bucket.status}</span>
       </div>
       <p className="mt-3 min-h-10 text-xs leading-5 text-[#4f5b56]">{bucket.description}</p>
-      <div className="mt-3 rounded-md border border-[#d9dee9] bg-[#eef3fb] px-3 py-2 text-xs font-medium text-[#121d49]">
+      <div className="mt-3 rounded-md border border-[#edf0eb] bg-[#fbfcfa] px-3 py-2 text-xs text-[#384641]">
         {bucket.drawRule}
       </div>
       <div className="mt-3 text-xs font-bold text-[#ff332b]">View monthly charges</div>
