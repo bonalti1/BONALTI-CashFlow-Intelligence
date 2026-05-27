@@ -3,8 +3,16 @@
 import { useState } from "react";
 import { Loader2, MessageSquareText, Send } from "lucide-react";
 
-export function AiHealthChat({ openAiReady }: { openAiReady: boolean }) {
-  const [question, setQuestion] = useState("Tell me which houses need attention first.");
+export function AiHealthChat({
+  buttonLabel = "Ask AI",
+  initialQuestion = "Tell me which houses need attention first.",
+  openAiReady,
+}: {
+  buttonLabel?: string;
+  initialQuestion?: string;
+  openAiReady: boolean;
+}) {
+  const [question, setQuestion] = useState(initialQuestion);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,7 +73,7 @@ export function AiHealthChat({ openAiReady }: { openAiReady: boolean }) {
         onClick={askAi}
       >
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        {openAiReady ? "Ask AI" : "Add OpenAI key to activate"}
+        {openAiReady ? buttonLabel : "Add OpenAI key to activate"}
       </button>
       {error ? (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-[#ff332b]">

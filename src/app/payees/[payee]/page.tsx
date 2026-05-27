@@ -127,7 +127,7 @@ export default async function PayeeDetailPage({
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem href="/ai-health" icon={Brain} label="AI Health Center" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
-            <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
+            <NavItem href="/agent-health" icon={NotebookText} label="Intelligent Center" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>

@@ -263,7 +263,7 @@ export default async function AiHealthPage() {
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem href="/ai-health" icon={Brain} label="AI Health Center" active />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
-            <NavItem href="/agent-health" icon={NotebookText} label="Agent health notes" />
+            <NavItem href="/agent-health" icon={NotebookText} label="Intelligent Center" />
           </nav>
         </aside>
 

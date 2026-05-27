@@ -202,7 +202,7 @@ export default async function PayeesPage() {
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem href="/ai-health" icon={Brain} label="AI Health Center" />
             <NavItem active icon={HandCoins} label="Payees" />
-            <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
+            <NavItem href="/agent-health" icon={NotebookText} label="Intelligent Center" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>
