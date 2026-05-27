@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { seal, unseal } from "@/lib/crypto/seal";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { createQboOAuthClient } from "@/lib/qbo/oauth";
 
 type StoredQboConnection = {
   realmId: string;
@@ -50,29 +51,7 @@ async function ensureQboConnectionTable() {
   `;
 }
 
-export async function saveQboConnection({
-  realmId,
-  environment,
-  token,
-}: {
-  realmId: string;
-  environment: string;
-  token: TokenPayload;
-}) {
-  if (!token.access_token || !token.refresh_token) {
-    throw new Error("QuickBooks did not return the expected tokens.");
-  }
-
-  const stored: StoredQboConnection = {
-    realmId,
-    environment,
-    accessTokenEncrypted: seal(token.access_token),
-    refreshTokenEncrypted: seal(token.refresh_token),
-    accessTokenExpiresAt: expiresAt(token.createdAt, token.expires_in),
-    refreshTokenExpiresAt: expiresAt(token.createdAt, token.x_refresh_token_expires_in),
-    connectedAt: new Date().toISOString(),
-  };
-
+async function persistQboConnection(stored: StoredQboConnection) {
   if (hasDatabaseUrl()) {
     await ensureQboConnectionTable();
     await sql()`
@@ -113,6 +92,44 @@ export async function saveQboConnection({
   await writeFile(connectionPath, JSON.stringify(stored, null, 2), "utf8");
 
   return stored;
+}
+
+function buildStoredQboConnection({
+  realmId,
+  environment,
+  token,
+  connectedAt = new Date().toISOString(),
+}: {
+  realmId: string;
+  environment: string;
+  token: TokenPayload;
+  connectedAt?: string;
+}) {
+  if (!token.access_token || !token.refresh_token) {
+    throw new Error("QuickBooks did not return the expected tokens.");
+  }
+
+  return {
+    realmId,
+    environment,
+    accessTokenEncrypted: seal(token.access_token),
+    refreshTokenEncrypted: seal(token.refresh_token),
+    accessTokenExpiresAt: expiresAt(token.createdAt, token.expires_in),
+    refreshTokenExpiresAt: expiresAt(token.createdAt, token.x_refresh_token_expires_in),
+    connectedAt,
+  };
+}
+
+export async function saveQboConnection({
+  realmId,
+  environment,
+  token,
+}: {
+  realmId: string;
+  environment: string;
+  token: TokenPayload;
+}) {
+  return persistQboConnection(buildStoredQboConnection({ realmId, environment, token }));
 }
 
 export async function getQboConnectionStatus() {
@@ -229,6 +246,46 @@ export async function getStoredQboConnection() {
   ) as StoredQboConnection;
 
   return unsealStoredQboConnection(stored);
+}
+
+function shouldRefreshAccessToken(connection: StoredQboConnectionWithTokens) {
+  const refreshBufferMs = 2 * 60 * 1000;
+
+  return new Date(connection.accessTokenExpiresAt).getTime() <= Date.now() + refreshBufferMs;
+}
+
+export async function refreshQboConnection(
+  connection: StoredQboConnectionWithTokens,
+) {
+  if (new Date(connection.refreshTokenExpiresAt).getTime() <= Date.now()) {
+    throw new Error("QuickBooks refresh token expired. Connect QuickBooks again.");
+  }
+
+  const oauthClient = createQboOAuthClient();
+  const authResponse = await oauthClient.refreshUsingToken(connection.refreshToken);
+  const token = authResponse.getToken();
+  const stored = buildStoredQboConnection({
+    realmId: connection.realmId,
+    environment: connection.environment,
+    token,
+    connectedAt: connection.connectedAt,
+  });
+
+  await persistQboConnection(stored);
+
+  return unsealStoredQboConnection(stored);
+}
+
+export async function getFreshQboConnection(
+  connectionOverride?: StoredQboConnectionWithTokens,
+) {
+  const connection = connectionOverride ?? await getStoredQboConnection();
+
+  if (!shouldRefreshAccessToken(connection)) {
+    return connection;
+  }
+
+  return refreshQboConnection(connection);
 }
 
 export function sealStoredQboConnectionForCookie(stored: StoredQboConnection) {

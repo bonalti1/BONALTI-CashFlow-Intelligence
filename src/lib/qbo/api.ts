@@ -1,4 +1,4 @@
-import { getStoredQboConnection } from "@/lib/qbo/token-store";
+import { getFreshQboConnection, refreshQboConnection } from "@/lib/qbo/token-store";
 import type { StoredQboConnectionWithTokens } from "@/lib/qbo/token-store";
 
 const baseUrls = {
@@ -10,10 +10,11 @@ export async function qboApiGet(
   path: string,
   connectionOverride?: StoredQboConnectionWithTokens,
 ) {
-  const connection = connectionOverride ?? await getStoredQboConnection();
+  const connection = await getFreshQboConnection(connectionOverride);
   const baseUrl =
     baseUrls[connection.environment as keyof typeof baseUrls] ?? baseUrls.sandbox;
-  const response = await fetch(`${baseUrl}${path}`, {
+  const url = `${baseUrl}${path}`;
+  const response = await fetch(url, {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${connection.accessToken}`,
@@ -23,6 +24,23 @@ export async function qboApiGet(
 
   if (!response.ok) {
     const body = await response.text();
+
+    if (response.status === 401) {
+      const refreshedConnection = await refreshQboConnection(connection);
+      const retryResponse = await fetch(url, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${refreshedConnection.accessToken}`,
+        },
+        cache: "no-store",
+      });
+
+      if (retryResponse.ok) {
+        return retryResponse.json() as Promise<unknown>;
+      }
+
+      throw new Error(`QuickBooks API error ${retryResponse.status}: ${await retryResponse.text()}`);
+    }
 
     throw new Error(`QuickBooks API error ${response.status}: ${body}`);
   }
