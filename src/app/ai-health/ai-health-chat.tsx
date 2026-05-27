@@ -5,10 +5,12 @@ import { Loader2, MessageSquareText, Send } from "lucide-react";
 
 export function AiHealthChat({
   buttonLabel = "Ask AI",
+  hideInput = false,
   initialQuestion = "Tell me which houses need attention first.",
   openAiReady,
 }: {
   buttonLabel?: string;
+  hideInput?: boolean;
   initialQuestion?: string;
   openAiReady: boolean;
 }) {
@@ -60,15 +62,17 @@ export function AiHealthChat({
         Ask questions about house risk, profit, budget health, and what needs attention. The AI
         reads the dashboard data and explains it. It does not change QuickBooks.
       </p>
-      <textarea
-        className="mt-4 min-h-28 w-full rounded-md border border-[#d9dee9] bg-white p-3 text-sm text-[#121a36] outline-none transition focus:border-[#ff332b]"
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
-        placeholder="Ask about a house, budget, profit, or risk..."
-        disabled={!openAiReady || isLoading}
-      />
+      {hideInput ? null : (
+        <textarea
+          className="mt-4 min-h-28 w-full rounded-md border border-[#d9dee9] bg-white p-3 text-sm text-[#121a36] outline-none transition focus:border-[#ff332b]"
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="Ask about a house, budget, profit, or risk..."
+          disabled={!openAiReady || isLoading}
+        />
+      )}
       <button
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-[#121a36] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#ff332b] disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${hideInput ? "mt-4" : "mt-3"} flex w-full items-center justify-center gap-2 rounded-md bg-[#121a36] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#ff332b] disabled:cursor-not-allowed disabled:opacity-60`}
         disabled={!openAiReady || isLoading || !question.trim()}
         onClick={askAi}
       >
