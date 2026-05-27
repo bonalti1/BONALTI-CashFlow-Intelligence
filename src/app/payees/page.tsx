@@ -46,6 +46,10 @@ function normalizePayeeName(transaction: SavedQboTransaction) {
   return transaction.payeeName?.trim() || "No payee listed";
 }
 
+function payeeHref(name: string) {
+  return `/payees/${encodeURIComponent(name)}`;
+}
+
 function buildPayeeSummaries(transactions: SavedQboTransaction[]) {
   const summaries = new Map<string, PayeeSummary>();
 
@@ -326,7 +330,12 @@ function PayeeSection({
                               {rankLabel ? `${rankLabel} ${index + 1}` : index + 1}
                             </div>
                             <div>
-                              <div className="font-semibold">{payee.name}</div>
+                              <Link
+                                className="font-semibold text-[#121d49] hover:text-[#ff332b]"
+                                href={payeeHref(payee.name)}
+                              >
+                                {payee.name}
+                              </Link>
                               <div className="text-xs text-[#69746f]">
                                 First seen {payee.firstPaymentDate ?? "No date"}
                               </div>
