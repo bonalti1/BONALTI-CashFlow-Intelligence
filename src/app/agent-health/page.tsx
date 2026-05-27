@@ -5,7 +5,6 @@ import {
   ClipboardList,
   HandCoins,
   LayoutDashboard,
-  NotebookText,
   ShieldCheck,
 } from "lucide-react";
 
@@ -45,9 +44,8 @@ export default async function AgentHealthPage() {
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
-            <NavItem href="/ai-health" icon={Brain} label="AI Health Center" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
-            <NavItem active icon={NotebookText} label="Intelligent Center" />
+            <NavItem active icon={Brain} label="Intelligent Center" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>
