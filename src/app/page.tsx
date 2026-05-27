@@ -12,7 +12,6 @@ import {
   NotebookText,
   RefreshCcw,
   ShieldCheck,
-  TrendingUp,
   WalletCards,
   XCircle,
 } from "lucide-react";
@@ -22,10 +21,7 @@ import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
-import {
-  getTransactionsByBankAccount,
-  getTransactionsSnapshotStatus,
-} from "@/lib/qbo/transactions-store";
+import { getTransactionsByBankAccount } from "@/lib/qbo/transactions-store";
 
 export const dynamic = "force-dynamic";
 
@@ -114,13 +110,11 @@ export default async function Home() {
   const [
     snapshot,
     qboConnection,
-    transactionsStatus,
     transactionsByBankAccount,
     houseDetailsByBankAccount,
   ] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getQboConnectionStatus(),
-    getTransactionsSnapshotStatus(),
     getTransactionsByBankAccount(),
     getHouseDetailsMap(),
   ]);
@@ -175,15 +169,6 @@ export default async function Home() {
   const lastSynced = snapshot ? new Date(snapshot.syncedAt).toLocaleString() : "Not synced";
   const completedHouseSetups = houses.filter((house) => house.setupComplete).length;
   const setupNeededCount = houses.length - completedHouseSetups;
-  const phaseOneOverBudgetCount = houses.filter(
-    (house) =>
-      house.soldPrice !== null &&
-      house.totalChecksSeen > house.soldPrice * PHASE_ONE_BUDGET_PERCENT,
-  ).length;
-  const forecastProfit = houses.reduce(
-    (total, house) => total + (house.soldPrice ? house.soldPrice - house.totalChecksSeen : 0),
-    0,
-  );
   const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
   const managementPerPhase = (AVERAGE_PROFIT_TARGET * MANAGEMENT_PERCENT) / PHASE_COUNT;
   const operationsAfterClose = AVERAGE_PROFIT_TARGET * OPERATIONS_PERCENT;
@@ -262,7 +247,7 @@ export default async function Home() {
                 House Health Dashboard
               </h1>
               <p className="text-xs text-[#69746f]">
-                Simple view of active houses, setup status, budget health, and projected profit.
+                Simple view of active houses, setup status, spending, and remaining balance.
               </p>
             </div>
             <div className="flex items-center gap-3 text-sm">
@@ -287,7 +272,7 @@ export default async function Home() {
 
           <div className="flex-1 px-6 py-5">
             <div className="min-w-0">
-              <section className="mb-5 grid grid-cols-4 gap-3">
+              <section className="mb-5 grid grid-cols-2 gap-3">
                 <Metric
                   icon={Building2}
                   label="Active Houses"
@@ -304,23 +289,6 @@ export default async function Home() {
                       : "All houses have setup inputs"
                   }
                   tone={setupNeededCount > 0 ? "warn" : "neutral"}
-                />
-                <Metric
-                  icon={AlertTriangle}
-                  label="Budget Alerts"
-                  value={String(phaseOneOverBudgetCount)}
-                  detail={
-                    transactionsStatus.synced
-                      ? "Houses currently over the P1 draft budget"
-                      : "Sync QB to refresh budget health"
-                  }
-                  tone={phaseOneOverBudgetCount > 0 ? "warn" : "neutral"}
-                />
-                <Metric
-                  icon={TrendingUp}
-                  label="Profit View"
-                  value={shortCurrency(forecastProfit)}
-                  detail="Sold price minus spend seen so far"
                 />
               </section>
 
@@ -360,7 +328,7 @@ export default async function Home() {
                           <th className="px-4 py-3 font-medium">House Setup</th>
                           <th className="px-4 py-3 font-medium">Total Spent</th>
                           <th className="px-4 py-3 font-medium">Phase Health</th>
-                          <th className="px-4 py-3 font-medium">Profit View</th>
+                          <th className="px-4 py-3 font-medium">Remaining Balance</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -388,6 +356,14 @@ export default async function Home() {
                                     value={house.squareFootage ? String(house.squareFootage) : "Missing"}
                                   />
                                   <SetupPill label="City" value={house.city ?? "Missing"} />
+                                  <SetupPill
+                                    label="Sold / Sqft"
+                                    value={
+                                      house.soldPrice && house.squareFootage
+                                        ? currency(house.soldPrice / house.squareFootage)
+                                        : "Missing"
+                                    }
+                                  />
                                 </div>
                               </td>
                               <td className="px-4 py-4">
@@ -404,7 +380,10 @@ export default async function Home() {
                                 />
                               </td>
                               <td className="px-4 py-4">
-                                <ProfitView soldPrice={house.soldPrice} spent={house.totalChecksSeen} />
+                                <RemainingBalance
+                                  soldPrice={house.soldPrice}
+                                  spent={house.totalChecksSeen}
+                                />
                               </td>
                             </tr>
                           );
@@ -574,30 +553,30 @@ function PhaseBudgetStrip({
   );
 }
 
-function ProfitView({ soldPrice, spent }: { soldPrice: number | null; spent: number }) {
+function RemainingBalance({ soldPrice, spent }: { soldPrice: number | null; spent: number }) {
   if (!soldPrice) {
     return (
       <div className="min-w-36 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-        Add sold price to calculate profit.
+        Add sold price to calculate remaining balance.
       </div>
     );
   }
 
-  const currentProfit = soldPrice - spent;
-  const margin = currentProfit / soldPrice;
-  const overRisk = margin < 0.2;
+  const remaining = soldPrice - spent;
+  const spentPercent = spent / soldPrice;
+  const overRisk = spentPercent > 0.8;
 
   return (
     <div
       className={`min-w-36 rounded-md border px-3 py-2 ${
         overRisk
-          ? "border-amber-200 bg-amber-50 text-amber-900"
+          ? "border-red-200 bg-red-50 text-red-900"
           : "border-emerald-200 bg-emerald-50 text-emerald-900"
       }`}
     >
-      <div className="text-sm font-semibold">{currency(currentProfit)}</div>
+      <div className="text-sm font-semibold">{currency(remaining)}</div>
       <div className="mt-1 text-xs">
-        {percent(margin)} margin so far
+        {percent(spentPercent)} spent so far
       </div>
     </div>
   );
