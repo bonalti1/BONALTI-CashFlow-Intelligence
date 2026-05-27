@@ -5,15 +5,14 @@ import {
   Brain,
   Building2,
   CheckCircle2,
-  CircleDollarSign,
   ClipboardList,
-  Edit3,
   Landmark,
   LayoutDashboard,
   Megaphone,
   NotebookText,
   RefreshCcw,
   ShieldCheck,
+  TrendingUp,
   WalletCards,
   XCircle,
 } from "lucide-react";
@@ -173,10 +172,18 @@ export default async function Home() {
   const operationsAccounts = internalAccounts.filter((account) =>
     accountNameIncludes(account, "operating"),
   );
-  const totalHouseCash = houses.reduce((total, house) => total + house.balance, 0);
   const lastSynced = snapshot ? new Date(snapshot.syncedAt).toLocaleString() : "Not synced";
-  const totalChecksSeen = houses.reduce((total, house) => total + house.totalChecksSeen, 0);
   const completedHouseSetups = houses.filter((house) => house.setupComplete).length;
+  const setupNeededCount = houses.length - completedHouseSetups;
+  const phaseOneOverBudgetCount = houses.filter(
+    (house) =>
+      house.soldPrice !== null &&
+      house.totalChecksSeen > house.soldPrice * PHASE_ONE_BUDGET_PERCENT,
+  ).length;
+  const forecastProfit = houses.reduce(
+    (total, house) => total + (house.soldPrice ? house.soldPrice - house.totalChecksSeen : 0),
+    0,
+  );
   const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
   const managementPerPhase = (AVERAGE_PROFIT_TARGET * MANAGEMENT_PERCENT) / PHASE_COUNT;
   const operationsAfterClose = AVERAGE_PROFIT_TARGET * OPERATIONS_PERCENT;
@@ -238,7 +245,7 @@ export default async function Home() {
 
           <nav className="space-y-1">
             <NavItem active icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/setup-inputs" icon={ClipboardList} label="Edit Price & Square Foot" />
+            <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem href="/ai-health" icon={Brain} label="AI Health Center" />
             <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
@@ -252,10 +259,10 @@ export default async function Home() {
                 Portfolio
               </p>
               <h1 className="mt-1 text-2xl font-semibold text-[#121d49]">
-                Portfolio Cash Health
+                House Health Dashboard
               </h1>
               <p className="text-xs text-[#69746f]">
-                Real QuickBooks balances today. Phase health comes after check sync.
+                Simple view of active houses, setup status, budget health, and projected profit.
               </p>
             </div>
             <div className="flex items-center gap-3 text-sm">
@@ -275,13 +282,6 @@ export default async function Home() {
                 <RefreshCcw size={16} />
                 Sync QB
               </a>
-              <Link
-                className="inline-flex items-center gap-2 rounded-md border border-[#121d49] px-3 py-1.5 font-medium text-[#121d49]"
-                href="/setup-inputs"
-              >
-                <Edit3 size={16} />
-                Edit Inputs
-              </Link>
             </div>
           </header>
 
@@ -292,30 +292,35 @@ export default async function Home() {
                   icon={Building2}
                   label="Active Houses"
                   value={String(houses.length)}
-                  detail={`${bankAccounts.length} bank accounts from QB`}
+                  detail="Confirmed active house projects"
                 />
                 <Metric
-                  icon={CircleDollarSign}
-                  label="QB Bank Balance"
-                  value={currency(totalHouseCash)}
-                  detail="QuickBooks balance for house accounts"
-                />
-                <Metric
-                  icon={WalletCards}
-                  label="Checks Seen"
-                  value={currency(totalChecksSeen)}
+                  icon={ClipboardList}
+                  label="House Setup"
+                  value={`${completedHouseSetups}/${houses.length}`}
                   detail={
-                    transactionsStatus.synced
-                      ? `${transactionsStatus.total} check/payment records`
-                      : "Run Sync QB to pull checks"
+                    setupNeededCount > 0
+                      ? `${setupNeededCount} houses still need price, sqft, or city`
+                      : "All houses have setup inputs"
                   }
+                  tone={setupNeededCount > 0 ? "warn" : "neutral"}
                 />
                 <Metric
                   icon={AlertTriangle}
-                  label="House Setups"
-                  value={`${completedHouseSetups}/${houses.length}`}
-                  detail="Sale price, sqft, and city entered"
-                  tone={completedHouseSetups < houses.length ? "warn" : "neutral"}
+                  label="Budget Alerts"
+                  value={String(phaseOneOverBudgetCount)}
+                  detail={
+                    transactionsStatus.synced
+                      ? "Houses currently over the P1 draft budget"
+                      : "Sync QB to refresh budget health"
+                  }
+                  tone={phaseOneOverBudgetCount > 0 ? "warn" : "neutral"}
+                />
+                <Metric
+                  icon={TrendingUp}
+                  label="Profit View"
+                  value={shortCurrency(forecastProfit)}
+                  detail="Sold price minus spend seen so far"
                 />
               </section>
 
@@ -339,24 +344,23 @@ export default async function Home() {
                 <section className="rounded-lg border border-[#dfe5dc] bg-white">
                   <div className="flex items-center justify-between border-b border-[#e6ebe3] px-4 py-3">
                     <div>
-                      <h2 className="text-sm font-semibold">Active House Bank Accounts</h2>
+                      <h2 className="text-sm font-semibold">Active House Health</h2>
                       <p className="mt-1 text-xs text-[#69746f]">
-                        Showing only the key setup numbers here. Edit details in the sidebar tab.
+                        Main view stays simple. House details and manual inputs live in House Setup.
                         Last synced {lastSynced}
                       </p>
                     </div>
                   </div>
 
                   <div className="max-h-[520px] overflow-auto">
-                    <table className="w-full min-w-[980px] border-collapse text-sm">
+                    <table className="w-full min-w-[920px] border-collapse text-sm">
                       <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
-                          <th className="px-4 py-3 font-medium">QB Bank Balance</th>
-                          <th className="px-4 py-3 font-medium">Checks Seen</th>
-                          <th className="px-4 py-3 font-medium">Setup</th>
-                          <th className="px-4 py-3 font-medium">Phase Budget</th>
-                          <th className="px-4 py-3 font-medium">QB Bank Account</th>
+                          <th className="px-4 py-3 font-medium">House Setup</th>
+                          <th className="px-4 py-3 font-medium">Total Spent</th>
+                          <th className="px-4 py-3 font-medium">Phase Health</th>
+                          <th className="px-4 py-3 font-medium">Profit View</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -371,23 +375,7 @@ export default async function Home() {
                             <tr className="border-t border-[#edf0eb]" key={house.id}>
                               <td className="px-4 py-4">
                                 <div className="font-medium">{house.house}</div>
-                                <div className="text-xs text-[#69746f]">QB ID {house.id}</div>
-                              </td>
-                              <td
-                                className={`px-4 py-4 font-semibold ${
-                                  house.balance < 0 ? "text-red-700" : "text-[#18211f]"
-                                }`}
-                              >
-                                {currency(house.balance)}
-                              </td>
-                              <td className="px-4 py-4">
-                                <div className="font-semibold">{currency(house.totalChecksSeen)}</div>
-                                <div className="mt-1 text-xs text-[#69746f]">
-                                  {house.transactionCount} records
-                                  {house.knownClearedStatusCount > 0
-                                    ? `, ${house.clearedCount} cleared`
-                                    : ", cleared field pending"}
-                                </div>
+                                <div className="text-xs text-[#69746f]">{house.city ?? "City missing"}</div>
                               </td>
                               <td className="min-w-[390px] px-4 py-4">
                                 <div className="flex flex-wrap gap-1.5">
@@ -401,12 +389,12 @@ export default async function Home() {
                                   />
                                   <SetupPill label="City" value={house.city ?? "Missing"} />
                                 </div>
-                                <Link
-                                  className="mt-2 inline-flex text-xs font-bold text-[#ff332b]"
-                                  href="/setup-inputs"
-                                >
-                                  Edit price & square foot
-                                </Link>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="font-semibold">{currency(house.totalChecksSeen)}</div>
+                                <div className="mt-1 text-xs text-[#69746f]">
+                                  Read from QuickBooks checks/payments
+                                </div>
                               </td>
                               <td className="px-4 py-4">
                                 <PhaseBudgetStrip
@@ -415,8 +403,8 @@ export default async function Home() {
                                   spent={house.totalChecksSeen}
                                 />
                               </td>
-                              <td className="max-w-[260px] px-4 py-4 text-[#4f5b56]">
-                                {house.bank}
+                              <td className="px-4 py-4">
+                                <ProfitView soldPrice={house.soldPrice} spent={house.totalChecksSeen} />
                               </td>
                             </tr>
                           );
@@ -581,6 +569,35 @@ function PhaseBudgetStrip({
         {phaseOneBudget
           ? `P1: ${currency(spent)} spent / ${currency(phaseOneBudget)} budget`
           : "Add sold price to calculate P1 budget"}
+      </div>
+    </div>
+  );
+}
+
+function ProfitView({ soldPrice, spent }: { soldPrice: number | null; spent: number }) {
+  if (!soldPrice) {
+    return (
+      <div className="min-w-36 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        Add sold price to calculate profit.
+      </div>
+    );
+  }
+
+  const currentProfit = soldPrice - spent;
+  const margin = currentProfit / soldPrice;
+  const overRisk = margin < 0.2;
+
+  return (
+    <div
+      className={`min-w-36 rounded-md border px-3 py-2 ${
+        overRisk
+          ? "border-amber-200 bg-amber-50 text-amber-900"
+          : "border-emerald-200 bg-emerald-50 text-emerald-900"
+      }`}
+    >
+      <div className="text-sm font-semibold">{currency(currentProfit)}</div>
+      <div className="mt-1 text-xs">
+        {percent(margin)} margin so far
       </div>
     </div>
   );
