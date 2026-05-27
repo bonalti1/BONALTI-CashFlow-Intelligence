@@ -204,9 +204,9 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
       <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
+        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5 shadow-sm">
           <div className="mb-8">
-            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3 shadow-sm">
               <Image
                 alt="South Texas Builders"
                 className="h-auto w-full"
@@ -235,12 +235,12 @@ export default async function Home() {
         </aside>
 
         <section className="flex min-w-0 flex-col">
-          <header className="flex min-h-16 items-center justify-between border-b border-[#d9dee9] bg-white px-6 py-3">
+          <header className="flex min-h-16 items-center justify-between border-b border-[#d9dee9] bg-white px-6 py-3 shadow-sm">
             <div>
               <p className="brand-kicker text-[10px] font-bold uppercase text-[#ff332b]">
                 Portfolio
               </p>
-              <h1 className="mt-1 text-2xl font-semibold text-[#121d49]">
+              <h1 className="mt-1 text-2xl font-bold text-[#121d49]">
                 House Health Dashboard
               </h1>
               <p className="text-xs text-[#69746f]">
@@ -258,7 +258,7 @@ export default async function Home() {
                 QB {qboConnection.connected ? "connected" : "needs sync"}
               </span>
               <a
-                className="inline-flex items-center gap-2 rounded-md bg-[#ff332b] px-3 py-1.5 font-bold text-white"
+                className="inline-flex items-center gap-2 rounded-md bg-[#121d49] px-3 py-1.5 font-bold text-white shadow-sm transition hover:bg-[#ff332b]"
                 href={`${appUrl}/api/qbo/accounts/sync?next=/`}
               >
                 <RefreshCcw size={16} />
@@ -306,10 +306,10 @@ export default async function Home() {
                   </p>
                 </section>
               ) : (
-                <section className="rounded-lg border border-[#dfe5dc] bg-white">
-                  <div className="flex items-center justify-between border-b border-[#e6ebe3] px-4 py-3">
+                <section className="rounded-lg border border-[#dfe5dc] bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-[#e6ebe3] bg-[#fbfcfa] px-4 py-3">
                     <div>
-                      <h2 className="text-sm font-semibold">Active House Health</h2>
+                      <h2 className="text-sm font-bold text-[#121d49]">Active House Health</h2>
                       <p className="mt-1 text-xs text-[#69746f]">
                         Main view stays simple. House details and manual inputs live in House Setup.
                         Last synced {lastSynced}
@@ -319,7 +319,7 @@ export default async function Home() {
 
                   <div className="max-h-[520px] overflow-auto">
                     <table className="w-full min-w-[920px] border-collapse text-sm">
-                      <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
+                      <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#121d49]">
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
                           <th className="px-4 py-3 font-medium">House Setup</th>
@@ -337,9 +337,9 @@ export default async function Home() {
                             phaseOneBudget !== null && house.totalChecksSeen > phaseOneBudget;
 
                           return (
-                            <tr className="border-t border-[#edf0eb]" key={house.id}>
+                            <tr className="border-t border-[#edf0eb] transition hover:bg-[#fbfcfa]" key={house.id}>
                               <td className="px-4 py-4">
-                                <div className="font-medium">{house.house}</div>
+                                <div className="font-bold text-[#121d49]">{house.house}</div>
                                 <div className="text-xs text-[#69746f]">{house.city ?? "City missing"}</div>
                               </td>
                               <td className="min-w-[390px] px-4 py-4">
@@ -364,7 +364,7 @@ export default async function Home() {
                                 </div>
                               </td>
                               <td className="px-4 py-4">
-                                <div className="font-semibold">{currency(house.totalChecksSeen)}</div>
+                                <div className="font-bold text-[#121d49]">{currency(house.totalChecksSeen)}</div>
                                 <div className="mt-1 text-xs text-[#69746f]">
                                   Read from QuickBooks checks/payments
                                 </div>
@@ -411,7 +411,7 @@ function NavItem({
 }) {
   const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
     active
-      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
+      ? "border-l-4 border-[#ff332b] bg-[#fff0ef] font-bold text-[#ff332b]"
       : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
   }`;
 
@@ -448,12 +448,14 @@ function Metric({
   const toneClass = tone === "warn" ? "text-amber-700" : "text-[#18211f]";
 
   return (
-    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
+    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <span className="text-xs font-medium uppercase text-[#69746f]">{label}</span>
-        <Icon className={toneClass} size={18} />
+        <span className="text-xs font-bold uppercase text-[#69746f]">{label}</span>
+        <div className="flex size-9 items-center justify-center rounded-lg bg-[#fff0ef]">
+          <Icon className={tone === "warn" ? toneClass : "text-[#ff332b]"} size={18} />
+        </div>
       </div>
-      <div className={`text-2xl font-semibold ${toneClass}`}>{value}</div>
+      <div className={`text-2xl font-bold ${toneClass}`}>{value}</div>
       <div className="mt-1 text-xs text-[#69746f]">{detail}</div>
     </div>
   );
@@ -465,13 +467,13 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
 
   return (
     <Link
-      className="block rounded-lg border border-[#dfe5dc] bg-white p-4 transition hover:border-[#ff332b] hover:shadow-sm"
+      className="block rounded-lg border border-[#dfe5dc] bg-white p-4 shadow-sm transition hover:border-[#ff332b] hover:shadow-md"
       href={`/buckets/${bucket.slug}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-medium uppercase text-[#69746f]">{bucket.label}</div>
-          <div className={`mt-2 text-2xl font-semibold ${balanceTone}`}>
+          <div className="text-xs font-bold uppercase text-[#69746f]">{bucket.label}</div>
+          <div className={`mt-2 text-2xl font-bold ${balanceTone}`}>
             {currency(bucket.balance)}
           </div>
         </div>
@@ -483,7 +485,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
         <span>{bucket.status}</span>
       </div>
       <p className="mt-3 min-h-10 text-xs leading-5 text-[#4f5b56]">{bucket.description}</p>
-      <div className="mt-3 rounded-md border border-[#edf0eb] bg-[#fbfcfa] px-3 py-2 text-xs text-[#384641]">
+      <div className="mt-3 rounded-md border border-[#d9dee9] bg-[#eef3fb] px-3 py-2 text-xs font-semibold text-[#121d49]">
         {bucket.drawRule}
       </div>
       <div className="mt-3 text-xs font-bold text-[#ff332b]">View monthly charges</div>
