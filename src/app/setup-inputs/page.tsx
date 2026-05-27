@@ -3,6 +3,7 @@ import Image from "next/image";
 import {
   Brain,
   ClipboardList,
+  HandCoins,
   LayoutDashboard,
   NotebookText,
   ShieldCheck,
@@ -89,8 +90,9 @@ export default async function SetupInputsPage() {
 
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
-            <NavItem active icon={ClipboardList} label="Edit Price & Square Foot" />
+            <NavItem active icon={ClipboardList} label="House Setup" />
             <NavItem href="/ai-health" icon={Brain} label="AI Health Center" />
+            <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem href="/agent-health" icon={NotebookText} label="Agent Health Notes" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>

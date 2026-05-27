@@ -5,6 +5,7 @@ import {
   Brain,
   CheckCircle2,
   ClipboardList,
+  HandCoins,
   LayoutDashboard,
   NotebookText,
   ShieldCheck,
@@ -259,8 +260,9 @@ export default async function AiHealthPage() {
           </div>
           <nav className="space-y-2">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/setup-inputs" icon={ClipboardList} label="Edit price & square foot" />
+            <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem href="/ai-health" icon={Brain} label="AI Health Center" active />
+            <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem href="/agent-health" icon={NotebookText} label="Agent health notes" />
           </nav>
         </aside>
