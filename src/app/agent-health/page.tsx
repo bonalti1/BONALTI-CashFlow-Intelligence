@@ -9,16 +9,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { AiHealthChat } from "@/app/ai-health/ai-health-chat";
+import { IntelligentSummary } from "@/app/agent-health/intelligent-summary";
 import { getEnvStatus } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
-
-const bestQuestion =
-  "What matters most today across houses, spending, checks, payees, and internal buckets?";
-
-const summaryPrompt =
-  "Generate a simple executive summary for South Texas Builders using the latest dashboard data. Answer this main question: what matters most today across houses, spending, checks, payees, and internal buckets? Keep it short, practical, and tell me what to check next.";
 
 export default async function AgentHealthPage() {
   const env = await getEnvStatus();
@@ -67,34 +61,12 @@ export default async function AgentHealthPage() {
               Intelligent Center
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5f6b66]">
-              Simple AI command center. One question, one button, one clean summary.
+              Generate a clean executive summary, then ask a specific follow-up question when
+              needed.
             </p>
           </header>
 
-          <section className="mx-auto max-w-3xl rounded-lg border border-[#dfe5dc] bg-white p-5">
-            <section className="mb-4 rounded-lg bg-[#121a36] p-5 text-white">
-              <div className="flex gap-3">
-                <Brain className="mt-1 text-[#ff332b]" size={22} />
-                <div>
-                  <p className="brand-kicker text-xs font-bold uppercase text-[#ffb8b4]">
-                    Best Question
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold">{bestQuestion}</h2>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
-                    This is the question that gives the best executive summary without making the
-                    page complicated.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <AiHealthChat
-              buttonLabel="Generate Summary With AI"
-              hideInput
-              initialQuestion={summaryPrompt}
-              openAiReady={openAiReady}
-            />
-          </section>
+          <IntelligentSummary openAiReady={openAiReady} />
         </section>
       </div>
     </main>
