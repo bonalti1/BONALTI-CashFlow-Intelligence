@@ -1,19 +1,31 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
+  AlertTriangle,
   Bot,
   Brain,
   ClipboardList,
+  Clock3,
   HandCoins,
   LayoutDashboard,
   NotebookText,
+  ReceiptText,
   ShieldCheck,
+  TrendingDown,
+  WalletCards,
 } from "lucide-react";
 
+import { AiHealthChat } from "@/app/ai-health/ai-health-chat";
+import { getEnvStatus } from "@/lib/env";
+import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
-import { getTransactionsSnapshotStatus } from "@/lib/qbo/transactions-store";
+import {
+  getTransactionsByBankAccount,
+  getTransactionsSnapshotStatus,
+  type SavedQboTransaction,
+} from "@/lib/qbo/transactions-store";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +34,32 @@ const AVERAGE_PROFIT_TARGET = 60_000;
 const MARKETING_PER_PHASE = (AVERAGE_PROFIT_TARGET * 0.15) / PHASE_COUNT;
 const MANAGEMENT_PER_PHASE = (AVERAGE_PROFIT_TARGET * 0.2) / PHASE_COUNT;
 const OPERATIONS_AFTER_CLOSE = AVERAGE_PROFIT_TARGET * 0.05;
+const DRAFT_TOTAL_BUDGET_PERCENT = 0.75578;
+const PHASE_ONE_BUDGET_PERCENT = 0.10778;
+const STALL_WARNING_DAYS = 7;
+
+type HouseAgentRow = {
+  id: string;
+  house: string;
+  bank: string;
+  soldPrice: number | null;
+  squareFootage: number | null;
+  city: string | null;
+  setupComplete: boolean;
+  checksSeen: number;
+  transactionCount: number;
+  unclearedCount: number;
+  unknownClearStatusCount: number;
+  lastActivityDate: string | null;
+  daysSinceLastActivity: number | null;
+  phaseOneBudget: number | null;
+  phaseOneOverage: number;
+  draftBudget: number | null;
+  profitIfOnBudget: number | null;
+  profitAfterChecksSeen: number | null;
+  status: "Healthy" | "Watch" | "Needs setup";
+  transactions: SavedQboTransaction[];
+};
 
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -47,14 +85,127 @@ function sumAccountBalances(accounts: QboAccount[]) {
   return accounts.reduce((total, account) => total + bankBalance(account), 0);
 }
 
+function daysSince(date: string | null) {
+  if (!date) {
+    return null;
+  }
+
+  const start = new Date(`${date}T00:00:00`);
+  const now = new Date();
+  const msPerDay = 1000 * 60 * 60 * 24;
+
+  return Math.max(0, Math.floor((now.getTime() - start.getTime()) / msPerDay));
+}
+
+function rowStatus(row: Omit<HouseAgentRow, "status">): HouseAgentRow["status"] {
+  if (!row.setupComplete) {
+    return "Needs setup";
+  }
+
+  if (
+    row.phaseOneOverage > 0 ||
+    row.unclearedCount > 0 ||
+    (row.daysSinceLastActivity !== null && row.daysSinceLastActivity >= STALL_WARNING_DAYS)
+  ) {
+    return "Watch";
+  }
+
+  return "Healthy";
+}
+
+function statusClasses(status: HouseAgentRow["status"]) {
+  if (status === "Healthy") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "Watch") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-red-200 bg-red-50 text-[#ff332b]";
+}
+
 export default async function AgentHealthPage() {
-  const [snapshot, qboConnection, transactionStatus] = await Promise.all([
+  const [
+    snapshot,
+    qboConnection,
+    transactionStatus,
+    detailsByBankAccount,
+    transactionsByBankAccount,
+    env,
+  ] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getQboConnectionStatus(),
     getTransactionsSnapshotStatus(),
+    getHouseDetailsMap(),
+    getTransactionsByBankAccount(),
+    getEnvStatus(),
   ]);
+  const openAiReady = Boolean(env.find((item) => item.key === "OPENAI_API_KEY")?.configured);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
-  const houses = bankAccounts.filter((account) => getConfirmedHouseName(account));
+  const houses: HouseAgentRow[] = bankAccounts
+    .map((account) => {
+      const house = getConfirmedHouseName(account);
+
+      if (!house) {
+        return null;
+      }
+
+      const details = detailsByBankAccount.get(account.Id);
+      const transactions = (transactionsByBankAccount.get(account.Id) ?? []).sort((a, b) =>
+        String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")),
+      );
+      const checksSeen = transactions.reduce(
+        (total, transaction) => total + Math.abs(transaction.totalAmount),
+        0,
+      );
+      const soldPrice = details?.soldPrice ?? null;
+      const squareFootage = details?.squareFootage ?? null;
+      const city = details?.city ?? null;
+      const setupComplete = Boolean(soldPrice && squareFootage && city);
+      const phaseOneBudget = soldPrice ? soldPrice * PHASE_ONE_BUDGET_PERCENT : null;
+      const phaseOneOverage =
+        phaseOneBudget && checksSeen > phaseOneBudget ? checksSeen - phaseOneBudget : 0;
+      const draftBudget = soldPrice ? soldPrice * DRAFT_TOTAL_BUDGET_PERCENT : null;
+      const profitIfOnBudget = soldPrice && draftBudget ? soldPrice - draftBudget : null;
+      const profitAfterChecksSeen = soldPrice ? soldPrice - checksSeen : null;
+      const lastActivityDate = transactions[0]?.txnDate ?? null;
+      const rowWithoutStatus = {
+        id: account.Id,
+        house,
+        bank: accountName(account),
+        soldPrice,
+        squareFootage,
+        city,
+        setupComplete,
+        checksSeen,
+        transactionCount: transactions.length,
+        unclearedCount: transactions.filter((transaction) => transaction.clearedStatus === "not_cleared")
+          .length,
+        unknownClearStatusCount: transactions.filter(
+          (transaction) => transaction.clearedStatus === "unknown",
+        ).length,
+        lastActivityDate,
+        daysSinceLastActivity: daysSince(lastActivityDate),
+        phaseOneBudget,
+        phaseOneOverage,
+        draftBudget,
+        profitIfOnBudget,
+        profitAfterChecksSeen,
+        transactions,
+      };
+
+      return {
+        ...rowWithoutStatus,
+        status: rowStatus(rowWithoutStatus),
+      };
+    })
+    .filter((row): row is HouseAgentRow => Boolean(row))
+    .sort((a, b) => {
+      const statusOrder = { Watch: 0, "Needs setup": 1, Healthy: 2 };
+
+      return statusOrder[a.status] - statusOrder[b.status] || a.house.localeCompare(b.house);
+    });
   const internalAccounts = bankAccounts.filter((account) => isInternalBankAccount(account));
   const incomeClearingAccounts = internalAccounts.filter((account) =>
     accountNameIncludes(account, "income clearing"),
@@ -64,6 +215,21 @@ export default async function AgentHealthPage() {
     transactionStatus.synced && transactionStatus.syncedAt
       ? new Date(transactionStatus.syncedAt).toLocaleString()
       : "Not synced yet";
+  const setupCompleteCount = houses.filter((house) => house.setupComplete).length;
+  const totalProfitIfOnBudget = houses.reduce(
+    (total, house) => total + (house.profitIfOnBudget ?? 0),
+    0,
+  );
+  const totalProfitAfterChecksSeen = houses.reduce(
+    (total, house) => total + (house.profitAfterChecksSeen ?? 0),
+    0,
+  );
+  const totalPhaseOneOverage = houses.reduce((total, house) => total + house.phaseOneOverage, 0);
+  const waitingChecks = houses.reduce((total, house) => total + house.unclearedCount, 0);
+  const stalledHouses = houses.filter(
+    (house) =>
+      house.daysSinceLastActivity === null || house.daysSinceLastActivity >= STALL_WARNING_DAYS,
+  );
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
@@ -115,12 +281,18 @@ export default async function AgentHealthPage() {
 
           <section className="mb-5 grid grid-cols-4 gap-3">
             <StatusCard label="QuickBooks" value={qboConnection.connected ? "Connected" : "Needs reconnect"} />
-            <StatusCard label="House banks" value={String(houses.length)} />
-            <StatusCard label="Internal banks" value={String(internalAccounts.length)} />
+            <StatusCard label="Ready Houses" value={`${setupCompleteCount}/${houses.length}`} />
+            <StatusCard label="Waiting Checks" value={String(waitingChecks)} />
             <StatusCard
-              label="Checks/payments"
-              value={transactionStatus.synced ? String(transactionStatus.total) : "Not synced"}
+              label="Stalled Watch"
+              value={String(stalledHouses.length)}
             />
+          </section>
+
+          <section className="mb-5 grid grid-cols-3 gap-3">
+            <StatusCard label="Profit If On Budget" value={currency(totalProfitIfOnBudget)} />
+            <StatusCard label="Profit After Checks Seen" value={currency(totalProfitAfterChecksSeen)} />
+            <StatusCard label="Phase 1 Risk" value={currency(totalPhaseOneOverage)} />
           </section>
 
           <section className="grid grid-cols-[1fr_420px] gap-4">
@@ -139,9 +311,169 @@ export default async function AgentHealthPage() {
                   The app can see {houses.length} confirmed house bank accounts and{" "}
                   {internalAccounts.length} internal bank accounts from QuickBooks. Today it can
                   trust QuickBooks bank balances, account mapping, and any synced checks/payments.
-                  It should not make final budget or margin calls until house sale price, square
-                  footage, city, and the phase budget rules are entered.
+                  Budget risk is still provisional until the Chart of Accounts cleanup is finished,
+                  but this page can already show the main warnings.
                 </p>
+              </section>
+
+              <section className="rounded-lg border border-[#dfe5dc] bg-white">
+                <PanelHeader
+                  icon={TrendingDown}
+                  title="Budget Risk"
+                  subtitle="Right now this uses Phase 1 draft rules. After the Chart of Accounts cleanup, this will read every phase."
+                />
+                <div className="overflow-auto">
+                  <table className="w-full min-w-[980px] border-collapse text-sm">
+                    <thead className="bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">House</th>
+                        <th className="px-4 py-3 font-medium">Status</th>
+                        <th className="px-4 py-3 text-right font-medium">Spent Seen</th>
+                        <th className="px-4 py-3 text-right font-medium">P1 Budget</th>
+                        <th className="px-4 py-3 text-right font-medium">P1 Risk</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {houses.map((house) => (
+                        <tr className="border-t border-[#edf0eb]" key={house.id}>
+                          <td className="px-4 py-3">
+                            <div className="font-semibold">{house.house}</div>
+                            <div className="text-xs text-[#69746f]">{house.city ?? "City missing"}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(house.status)}`}
+                            >
+                              {house.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold">
+                            {currency(house.checksSeen)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {house.phaseOneBudget ? currency(house.phaseOneBudget) : "Needs price"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {house.phaseOneOverage > 0 ? (
+                              <span className="font-bold text-[#ff332b]">
+                                {currency(house.phaseOneOverage)} over
+                              </span>
+                            ) : house.phaseOneBudget ? (
+                              <span className="font-bold text-emerald-700">On watch, no overage</span>
+                            ) : (
+                              "Needs setup"
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-[#dfe5dc] bg-white">
+                <PanelHeader
+                  icon={WalletCards}
+                  title="Profit Forecast"
+                  subtitle="Shows what profit should look like if the house stays on the draft budget, and what remains after checks seen."
+                />
+                <div className="grid gap-3 p-4 md:grid-cols-2">
+                  {houses.map((house) => (
+                    <div className="rounded-lg border border-[#edf0eb] bg-[#fbfcfa] p-4" key={house.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">{house.house}</h3>
+                          <p className="mt-1 text-xs text-[#69746f]">
+                            Sold: {house.soldPrice ? currency(house.soldPrice) : "Missing"} · Sqft:{" "}
+                            {house.squareFootage ?? "Missing"}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full border px-2 py-1 text-xs font-bold ${statusClasses(house.status)}`}
+                        >
+                          {house.status}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <MiniMetric
+                          label="If on budget"
+                          value={house.profitIfOnBudget ? currency(house.profitIfOnBudget) : "Needs setup"}
+                        />
+                        <MiniMetric
+                          label="After checks seen"
+                          value={
+                            house.profitAfterChecksSeen
+                              ? currency(house.profitAfterChecksSeen)
+                              : "Needs setup"
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-[#dfe5dc] bg-white">
+                <PanelHeader
+                  icon={ReceiptText}
+                  title="Waiting On Checks"
+                  subtitle="This shows checks that QuickBooks says are not cleared yet. Unknown status is shown separately because some QB records do not expose clearing cleanly."
+                />
+                <div className="overflow-auto">
+                  <table className="w-full min-w-[850px] border-collapse text-sm">
+                    <thead className="bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">House</th>
+                        <th className="px-4 py-3 text-right font-medium">Not Cleared</th>
+                        <th className="px-4 py-3 text-right font-medium">Unknown Status</th>
+                        <th className="px-4 py-3 font-medium">Last Activity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {houses.map((house) => (
+                        <tr className="border-t border-[#edf0eb]" key={house.id}>
+                          <td className="px-4 py-3 font-semibold">{house.house}</td>
+                          <td className="px-4 py-3 text-right font-semibold">{house.unclearedCount}</td>
+                          <td className="px-4 py-3 text-right">{house.unknownClearStatusCount}</td>
+                          <td className="px-4 py-3 text-[#69746f]">
+                            {house.lastActivityDate ?? "No activity synced"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-[#dfe5dc] bg-white">
+                <PanelHeader
+                  icon={Clock3}
+                  title="Stalled House Watch"
+                  subtitle={`Flags houses with no synced activity for ${STALL_WARNING_DAYS}+ days, or no activity yet.`}
+                />
+                <div className="grid gap-3 p-4 md:grid-cols-2">
+                  {stalledHouses.length ? (
+                    stalledHouses.map((house) => (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4" key={house.id}>
+                        <div className="flex gap-3">
+                          <AlertTriangle className="mt-0.5 text-amber-700" size={18} />
+                          <div>
+                            <h3 className="font-semibold text-[#121d49]">{house.house}</h3>
+                            <p className="mt-1 text-sm leading-5 text-amber-800">
+                              {house.daysSinceLastActivity === null
+                                ? "No synced check/payment activity yet."
+                                : `${house.daysSinceLastActivity} days since last synced activity.`}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                      No stalled houses based on synced activity.
+                    </div>
+                  )}
+                </div>
               </section>
 
               <section className="rounded-lg border border-[#dfe5dc] bg-white p-4">
@@ -195,11 +527,48 @@ export default async function AgentHealthPage() {
                   </p>
                 </section>
               ) : null}
+
+              <section className="rounded-lg border border-[#dfe5dc] bg-white p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Brain className="text-[#ff332b]" size={18} />
+                  <h2 className="text-sm font-semibold">Ask AI</h2>
+                </div>
+                <AiHealthChat openAiReady={openAiReady} />
+              </section>
             </aside>
           </section>
         </section>
       </div>
     </main>
+  );
+}
+
+function PanelHeader({
+  icon: Icon,
+  subtitle,
+  title,
+}: {
+  icon: typeof TrendingDown;
+  subtitle: string;
+  title: string;
+}) {
+  return (
+    <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
+      <div>
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <p className="mt-1 text-xs leading-5 text-[#69746f]">{subtitle}</p>
+      </div>
+      <Icon className="text-[#ff332b]" size={20} />
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-white p-3">
+      <div className="text-[10px] font-bold uppercase text-[#69746f]">{label}</div>
+      <div className="mt-1 font-semibold text-[#121d49]">{value}</div>
+    </div>
   );
 }
 
