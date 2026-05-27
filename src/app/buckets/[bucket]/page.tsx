@@ -18,7 +18,7 @@ const bucketConfigs = {
   "management-payroll": {
     label: "Management Payroll",
     description: "Charges and checks connected to the Payroll / management bucket.",
-    matchers: ["payroll"],
+    matchers: ["payroll", "management"],
     icon: WalletCards,
   },
   operations: {
@@ -36,6 +36,15 @@ type MonthGroup = {
   label: string;
   totalOut: number;
   totalIn: number;
+  payees: PayeeSpendSummary[];
+  transactions: SavedQboTransaction[];
+};
+
+type PayeeSpendSummary = {
+  name: string;
+  totalSpent: number;
+  transactionCount: number;
+  lastPaymentDate: string | null;
   transactions: SavedQboTransaction[];
 };
 
@@ -72,6 +81,52 @@ function monthLabel(key: string) {
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+function payeeName(transaction: SavedQboTransaction) {
+  return transaction.payeeName?.trim() || "No payee listed";
+}
+
+function buildPayeeSpendSummaries(transactions: SavedQboTransaction[]) {
+  const summaries = new Map<string, PayeeSpendSummary>();
+
+  for (const transaction of transactions) {
+    if (transaction.totalAmount < 0) {
+      continue;
+    }
+
+    const amount = Math.abs(transaction.totalAmount);
+
+    if (amount === 0) {
+      continue;
+    }
+
+    const name = payeeName(transaction);
+    const existing = summaries.get(name) ?? {
+      name,
+      totalSpent: 0,
+      transactionCount: 0,
+      lastPaymentDate: null,
+      transactions: [],
+    };
+
+    existing.totalSpent += amount;
+    existing.transactionCount += 1;
+    existing.transactions.push(transaction);
+
+    if (
+      transaction.txnDate &&
+      (!existing.lastPaymentDate || transaction.txnDate > existing.lastPaymentDate)
+    ) {
+      existing.lastPaymentDate = transaction.txnDate;
+    }
+
+    summaries.set(name, existing);
+  }
+
+  return Array.from(summaries.values()).sort(
+    (a, b) => b.totalSpent - a.totalSpent || a.name.localeCompare(b.name),
+  );
+}
+
 function groupByMonth(transactions: SavedQboTransaction[]) {
   const groups = new Map<string, MonthGroup>();
 
@@ -82,6 +137,7 @@ function groupByMonth(transactions: SavedQboTransaction[]) {
       label: monthLabel(key),
       totalOut: 0,
       totalIn: 0,
+      payees: [],
       transactions: [],
     };
 
@@ -95,7 +151,12 @@ function groupByMonth(transactions: SavedQboTransaction[]) {
     groups.set(key, existing);
   }
 
-  return Array.from(groups.values()).sort((a, b) => b.key.localeCompare(a.key));
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      payees: buildPayeeSpendSummaries(group.transactions),
+    }))
+    .sort((a, b) => b.key.localeCompare(a.key));
 }
 
 export default async function BucketDetailPage({
@@ -130,6 +191,7 @@ export default async function BucketDetailPage({
     .flatMap((account) => transactionsByBankAccount.get(account.Id) ?? [])
     .sort((a, b) => String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")));
   const groups = groupByMonth(transactions);
+  const overallPayees = buildPayeeSpendSummaries(transactions);
   const totalOut = transactions.reduce(
     (total, transaction) => total + (transaction.totalAmount >= 0 ? Math.abs(transaction.totalAmount) : 0),
     0,
@@ -223,10 +285,29 @@ export default async function BucketDetailPage({
               </div>
             </section>
 
+            <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white">
+              <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
+                <div>
+                  <h2 className="text-sm font-semibold">Total Spent By Payee</h2>
+                  <p className="mt-1 text-xs text-[#69746f]">
+                    Overall total for this bucket, grouped by vendor, employee, or payee.
+                  </p>
+                </div>
+                <span className="rounded-md bg-[#fff0ef] px-2 py-1 text-xs font-bold text-[#ff332b]">
+                  {overallPayees.length}
+                </span>
+              </div>
+
+              <PayeeSpendTable
+                emptyText="No payee totals found yet for this bucket."
+                payees={overallPayees}
+              />
+            </section>
+
             {groups.length ? (
               <div className="space-y-4">
-                {groups.map((group) => (
-                  <MonthSection group={group} key={group.key} />
+                {groups.map((group, index) => (
+                  <MonthSection defaultOpen={index === 0} group={group} key={group.key} />
                 ))}
               </div>
             ) : (
@@ -255,13 +336,73 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MonthSection({ group }: { group: MonthGroup }) {
+function PayeeSpendTable({
+  emptyText,
+  payees,
+}: {
+  emptyText: string;
+  payees: PayeeSpendSummary[];
+}) {
+  if (!payees.length) {
+    return <div className="p-4 text-sm text-[#69746f]">{emptyText}</div>;
+  }
+
   return (
-    <section className="rounded-lg border border-[#dfe5dc] bg-white">
-      <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
+    <div className="overflow-auto">
+      <table className="w-full min-w-[760px] border-collapse text-sm">
+        <thead className="bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
+          <tr>
+            <th className="px-4 py-3 font-medium">Payee</th>
+            <th className="px-4 py-3 text-right font-medium">Total Spent</th>
+            <th className="px-4 py-3 text-right font-medium">Transactions</th>
+            <th className="px-4 py-3 font-medium">Last Payment</th>
+            <th className="px-4 py-3 font-medium">Recent Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {payees.map((payee) => (
+            <tr className="border-t border-[#edf0eb]" key={payee.name}>
+              <td className="px-4 py-3 font-semibold">{payee.name}</td>
+              <td className="px-4 py-3 text-right font-semibold text-[#121d49]">
+                {currency(payee.totalSpent)}
+              </td>
+              <td className="px-4 py-3 text-right">{payee.transactionCount}</td>
+              <td className="px-4 py-3 text-[#69746f]">{payee.lastPaymentDate ?? "No date"}</td>
+              <td className="max-w-[360px] px-4 py-3 text-xs leading-5 text-[#69746f]">
+                {payee.transactions
+                  .slice(0, 2)
+                  .map((transaction) => `${transaction.txnDate ?? "No date"} · ${currency(Math.abs(transaction.totalAmount))}`)
+                  .join(" / ") || "No detail"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MonthSection({
+  defaultOpen,
+  group,
+}: {
+  defaultOpen: boolean;
+  group: MonthGroup;
+}) {
+  return (
+    <details
+      className="rounded-lg border border-[#dfe5dc] bg-white [&_summary::-webkit-details-marker]:hidden"
+      open={defaultOpen}
+    >
+      <summary className="flex cursor-pointer items-center justify-between border-b border-[#edf0eb] px-4 py-3">
         <div className="flex items-center gap-2">
           <CalendarDays className="text-[#ff332b]" size={18} />
-          <h2 className="text-sm font-semibold">{group.label}</h2>
+          <div>
+            <h2 className="text-sm font-semibold">{group.label}</h2>
+            <p className="mt-1 text-xs text-[#69746f]">
+              Click to see what was spent this month.
+            </p>
+          </div>
         </div>
         <div className="text-sm text-[#69746f]">
           Out: <span className="font-semibold text-[#121d49]">{currency(group.totalOut)}</span>
@@ -272,6 +413,16 @@ function MonthSection({ group }: { group: MonthGroup }) {
             </>
           ) : null}
         </div>
+      </summary>
+
+      <div className="border-b border-[#edf0eb]">
+        <div className="px-4 py-3">
+          <h3 className="text-xs font-bold uppercase text-[#69746f]">Spent This Month By Payee</h3>
+        </div>
+        <PayeeSpendTable
+          emptyText="No money-out payees found for this month."
+          payees={group.payees}
+        />
       </div>
 
       <div className="overflow-auto">
@@ -315,6 +466,6 @@ function MonthSection({ group }: { group: MonthGroup }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </details>
   );
 }
