@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  ArrowRightLeft,
   Brain,
   ClipboardList,
   HandCoins,
@@ -8,6 +9,7 @@ import {
   NotebookText,
   ReceiptText,
   ShieldCheck,
+  UserPlus,
 } from "lucide-react";
 
 import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
@@ -18,6 +20,7 @@ type PayeeSummary = {
   name: string;
   totalPaid: number;
   paymentCount: number;
+  firstPaymentDate: string | null;
   lastPaymentDate: string | null;
   bankAccounts: string[];
   transactions: SavedQboTransaction[];
@@ -58,6 +61,7 @@ function buildPayeeSummaries(transactions: SavedQboTransaction[]) {
       name,
       totalPaid: 0,
       paymentCount: 0,
+      firstPaymentDate: null,
       lastPaymentDate: null,
       bankAccounts: [],
       transactions: [],
@@ -78,12 +82,72 @@ function buildPayeeSummaries(transactions: SavedQboTransaction[]) {
       existing.lastPaymentDate = transaction.txnDate;
     }
 
+    if (
+      transaction.txnDate &&
+      (!existing.firstPaymentDate || transaction.txnDate < existing.firstPaymentDate)
+    ) {
+      existing.firstPaymentDate = transaction.txnDate;
+    }
+
     summaries.set(name, existing);
   }
 
   return Array.from(summaries.values()).sort(
     (a, b) => b.totalPaid - a.totalPaid || a.name.localeCompare(b.name),
   );
+}
+
+function getTransactionMonth(transaction: SavedQboTransaction) {
+  return transaction.txnDate?.slice(0, 7) ?? null;
+}
+
+function getLatestMonth(transactions: SavedQboTransaction[]) {
+  return transactions.reduce<string | null>((latest, transaction) => {
+    const month = getTransactionMonth(transaction);
+
+    if (!month) {
+      return latest;
+    }
+
+    return !latest || month > latest ? month : latest;
+  }, null);
+}
+
+function formatMonth(month: string | null) {
+  if (!month) {
+    return "latest sync";
+  }
+
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year, monthNumber - 1, 1);
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function isInternalTransfer(transaction: SavedQboTransaction) {
+  const keywords = [
+    "income clearing",
+    "management",
+    "marketing",
+    "operating",
+    "operations",
+    "payroll",
+    "transfer",
+  ];
+  const text = [
+    transaction.payeeName,
+    transaction.bankAccountName,
+    transaction.memo,
+    transaction.expenseAccountNames.join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return keywords.some((keyword) => text.includes(keyword));
 }
 
 export default async function PayeesPage() {
@@ -93,7 +157,16 @@ export default async function PayeesPage() {
     .sort((a, b) => String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")));
   const payees = buildPayeeSummaries(transactions);
   const topPayees = payees.slice(0, 20);
+  const latestMonth = getLatestMonth(transactions);
+  const newPayees = payees
+    .filter((payee) => payee.firstPaymentDate?.slice(0, 7) === latestMonth)
+    .slice(0, 12);
+  const internalTransferPayees = buildPayeeSummaries(transactions.filter(isInternalTransfer)).slice(0, 12);
   const totalPaid = payees.reduce((total, payee) => total + payee.totalPaid, 0);
+  const internalTransferTotal = internalTransferPayees.reduce(
+    (total, payee) => total + payee.totalPaid,
+    0,
+  );
   const biggestPayee = payees[0];
 
   return (
@@ -144,23 +217,94 @@ export default async function PayeesPage() {
 
           <section className="mb-5 grid grid-cols-4 gap-3">
             <Metric label="Total Payees" value={String(payees.length)} />
-            <Metric label="Transactions Seen" value={String(transactions.length)} />
             <Metric label="Total Money Out" value={shortCurrency(totalPaid)} />
-            <Metric label="Largest Payee" value={biggestPayee ? shortCurrency(biggestPayee.totalPaid) : "$0"} />
+            <Metric label={`New in ${formatMonth(latestMonth)}`} value={String(newPayees.length)} />
+            <Metric
+              label="Internal Movement"
+              value={internalTransferTotal ? shortCurrency(internalTransferTotal) : "$0"}
+            />
           </section>
 
-          <section className="rounded-lg border border-[#dfe5dc] bg-white">
+          <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white p-3">
+            <div className="flex flex-wrap gap-2">
+              <SectionJump href="#top-payees" icon={ReceiptText} label="Top Payees" />
+              <SectionJump href="#new-payees" icon={UserPlus} label="New Payees" />
+              <SectionJump
+                href="#internal-transfers"
+                icon={ArrowRightLeft}
+                label="Internal Transfers"
+              />
+            </div>
+          </section>
+
+          <PayeeSection
+            emptyText="No synced checks/payments found yet. Press Sync QB from the dashboard first."
+            icon={ReceiptText}
+            id="top-payees"
+            payees={topPayees}
+            subtitle={
+              biggestPayee
+                ? `${biggestPayee.name} is currently the largest payee seen in QuickBooks.`
+                : "Sorted by total paid from synced QuickBooks transactions."
+            }
+            title="Top Payees"
+          />
+
+          <PayeeSection
+            emptyText={`No brand-new payees were found in ${formatMonth(latestMonth)}.`}
+            icon={UserPlus}
+            id="new-payees"
+            payees={newPayees}
+            rankLabel="New"
+            subtitle={`Payees whose first synced payment appears in ${formatMonth(latestMonth)}.`}
+            title="New Payees"
+          />
+
+          <PayeeSection
+            emptyText="No internal transfer-looking payments were found in the synced data."
+            icon={ArrowRightLeft}
+            id="internal-transfers"
+            payees={internalTransferPayees}
+            rankLabel="Move"
+            subtitle="Payments that mention marketing, payroll, operating, management, income clearing, or transfer."
+            title="Internal Transfers"
+          />
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function PayeeSection({
+  emptyText,
+  icon: Icon,
+  id,
+  payees,
+  rankLabel,
+  subtitle,
+  title,
+}: {
+  emptyText: string;
+  icon: typeof ReceiptText;
+  id: string;
+  payees: PayeeSummary[];
+  rankLabel?: string;
+  subtitle: string;
+  title: string;
+}) {
+  return (
+    <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white" id={id}>
             <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold">Top Payees</h2>
+                <h2 className="text-sm font-semibold">{title}</h2>
                 <p className="mt-1 text-xs text-[#69746f]">
-                  Sorted by total paid. Click a payee row later can become a full detail page.
+                  {subtitle}
                 </p>
               </div>
-              <ReceiptText className="text-[#ff332b]" size={20} />
+              <Icon className="text-[#ff332b]" size={20} />
             </div>
 
-            {topPayees.length ? (
+            {payees.length ? (
               <div className="overflow-auto">
                 <table className="w-full min-w-[980px] border-collapse text-sm">
                   <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
@@ -174,17 +318,17 @@ export default async function PayeesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {topPayees.map((payee, index) => (
+                    {payees.map((payee, index) => (
                       <tr className="border-t border-[#edf0eb]" key={payee.name}>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
                             <div className="grid size-8 place-items-center rounded-md bg-[#fff0ef] text-xs font-bold text-[#ff332b]">
-                              {index + 1}
+                              {rankLabel ? `${rankLabel} ${index + 1}` : index + 1}
                             </div>
                             <div>
                               <div className="font-semibold">{payee.name}</div>
                               <div className="text-xs text-[#69746f]">
-                                {payee.transactions[0]?.source ?? "Transaction"}
+                                First seen {payee.firstPaymentDate ?? "No date"}
                               </div>
                             </div>
                           </div>
@@ -225,13 +369,30 @@ export default async function PayeesPage() {
               </div>
             ) : (
               <div className="p-5 text-sm leading-6 text-[#69746f]">
-                No synced checks/payments found yet. Press Sync QB from the dashboard first.
+                {emptyText}
               </div>
             )}
           </section>
-        </section>
-      </div>
-    </main>
+  );
+}
+
+function SectionJump({
+  href,
+  icon: Icon,
+  label,
+}: {
+  href: string;
+  icon: typeof ReceiptText;
+  label: string;
+}) {
+  return (
+    <a
+      className="inline-flex h-9 items-center gap-2 rounded-md border border-[#dfe5dc] bg-[#fbfcfa] px-3 text-sm font-semibold text-[#121d49] hover:border-[#ff332b] hover:text-[#ff332b]"
+      href={href}
+    >
+      <Icon size={16} />
+      {label}
+    </a>
   );
 }
 
