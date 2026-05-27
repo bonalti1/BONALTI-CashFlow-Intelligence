@@ -30,7 +30,6 @@ const AVERAGE_PROFIT_TARGET = 60_000;
 const MARKETING_PERCENT = 0.15;
 const MANAGEMENT_PERCENT = 0.2;
 const OPERATIONS_PERCENT = 0.05;
-const MONTHLY_PHASE_ASSUMPTION = 10;
 const PHASE_ONE_BUDGET_PERCENT = 0.10778;
 const PHASE_BUDGET_RULES = [
   { key: "pre", label: "Pre", budgetPercent: null },
@@ -64,8 +63,7 @@ type Bucket = {
   slug: string;
   description: string;
   balance: number;
-  monthlyTarget: number;
-  perPhase: number | null;
+  drawRule: string;
   status: string;
   icon: typeof Megaphone;
 };
@@ -173,36 +171,31 @@ export default async function Home() {
   const marketingPerPhase = (AVERAGE_PROFIT_TARGET * MARKETING_PERCENT) / PHASE_COUNT;
   const managementPerPhase = (AVERAGE_PROFIT_TARGET * MANAGEMENT_PERCENT) / PHASE_COUNT;
   const operationsAfterClose = AVERAGE_PROFIT_TARGET * OPERATIONS_PERCENT;
-  const bucketMonthlyMarketing = marketingPerPhase * MONTHLY_PHASE_ASSUMPTION;
-  const bucketMonthlyManagement = managementPerPhase * MONTHLY_PHASE_ASSUMPTION;
   const buckets: Bucket[] = [
     {
       label: "Marketing",
       slug: "marketing",
-      description: "15% of target profit, paid as phases complete",
+      description: "Internal marketing bucket",
       balance: sumAccountBalances(marketingAccounts),
-      monthlyTarget: bucketMonthlyMarketing,
-      perPhase: marketingPerPhase,
+      drawRule: `${shortCurrency(marketingPerPhase)} should be added per phase draw.`,
       status: "Active phase bucket",
       icon: Megaphone,
     },
     {
       label: "Management Payroll",
       slug: "management-payroll",
-      description: "20% of target profit, paid to the payroll bucket",
+      description: "Internal management and payroll bucket",
       balance: sumAccountBalances(managementAccounts),
-      monthlyTarget: bucketMonthlyManagement,
-      perPhase: managementPerPhase,
+      drawRule: `${shortCurrency(managementPerPhase)} should be added per phase draw.`,
       status: "Active phase bucket",
       icon: WalletCards,
     },
     {
       label: "Operations",
       slug: "operations",
-      description: "Planned 5% bucket after a house closes",
+      description: "Future operations bucket",
       balance: sumAccountBalances(operationsAccounts),
-      monthlyTarget: operationsAfterClose,
-      perPhase: null,
+      drawRule: `${shortCurrency(operationsAfterClose)} planned after a house closes.`,
       status: "Later after close",
       icon: Landmark,
     },
@@ -468,10 +461,7 @@ function Metric({
 
 function BucketCard({ bucket }: { bucket: Bucket }) {
   const Icon = bucket.icon;
-  const balanceRatio = bucket.monthlyTarget > 0 ? bucket.balance / bucket.monthlyTarget : 0;
-  const width = `${Math.max(4, Math.min(Math.abs(balanceRatio) * 100, 100))}%`;
-  const barColor =
-    bucket.balance < 0 ? "bg-red-600" : balanceRatio >= 1 ? "bg-[#121d49]" : "bg-[#ff332b]";
+  const balanceTone = bucket.balance < 0 ? "text-red-700" : "text-[#18211f]";
 
   return (
     <Link
@@ -481,7 +471,7 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-medium uppercase text-[#69746f]">{bucket.label}</div>
-          <div className={bucket.balance < 0 ? "mt-2 text-2xl font-semibold text-red-700" : "mt-2 text-2xl font-semibold"}>
+          <div className={`mt-2 text-2xl font-semibold ${balanceTone}`}>
             {currency(bucket.balance)}
           </div>
         </div>
@@ -489,16 +479,12 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
           <Icon size={18} />
         </div>
       </div>
-      <div className="mt-4 h-2 rounded-full bg-[#e7ece8]">
-        <div className={`h-2 rounded-full ${barColor}`} style={{ width }} />
-      </div>
-      <div className="mt-3 flex justify-between gap-3 text-xs text-[#69746f]">
+      <div className="mt-4 flex justify-between gap-3 text-xs text-[#69746f]">
         <span>{bucket.status}</span>
-        <span>Target {shortCurrency(bucket.monthlyTarget)}</span>
       </div>
       <p className="mt-3 min-h-10 text-xs leading-5 text-[#4f5b56]">{bucket.description}</p>
       <div className="mt-3 rounded-md border border-[#edf0eb] bg-[#fbfcfa] px-3 py-2 text-xs text-[#384641]">
-        {bucket.perPhase ? `${shortCurrency(bucket.perPhase)} per completed phase` : "Not drawn per phase yet"}
+        {bucket.drawRule}
       </div>
       <div className="mt-3 text-xs font-bold text-[#ff332b]">View monthly charges</div>
     </Link>
