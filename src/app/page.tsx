@@ -1,10 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
-  AlertTriangle,
   Brain,
   Building2,
-  CheckCircle2,
   ClipboardList,
   HandCoins,
   Landmark,
@@ -13,9 +11,12 @@ import {
   RefreshCcw,
   ShieldCheck,
   WalletCards,
-  XCircle,
 } from "lucide-react";
 
+import {
+  PhaseHealthDrilldown,
+  type PhaseGroupView,
+} from "@/app/phase-health/phase-health-drilldown";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
@@ -613,125 +614,25 @@ function PhaseBudgetStrip({
   phaseGroups: PhaseGroup[];
   soldPrice: number | null;
 }) {
-  const trustedCount = phaseGroups.filter(
-    (group) => group.key !== "needsMapping" && group.transactions.length > 0,
-  ).length;
-  const needsMapping = phaseGroups.find((group) => group.key === "needsMapping");
+  const phaseGroupViews: PhaseGroupView[] = phaseGroups.map((phase) => ({
+    key: phase.key,
+    label: phase.label,
+    name: phase.name,
+    budgetPercent: phase.budgetPercent,
+    budget: phase.budget,
+    spent: phase.spent,
+    transactions: phase.transactions.map((transaction) => ({
+      key: `${transaction.source}-${transaction.id}`,
+      txnDate: transaction.txnDate,
+      payeeName: transaction.payeeName,
+      totalAmount: transaction.totalAmount,
+      clearedStatus: transaction.clearedStatus,
+      expenseAccountName: transaction.expenseAccountNames[0] ?? null,
+      docNumber: transaction.docNumber,
+    })),
+  }));
 
-  return (
-    <div className="min-w-[460px]">
-      <div className="flex flex-wrap gap-1.5">
-        {phaseGroups.map((phase) => {
-          const hasChecks = phase.transactions.length > 0;
-          const needsSoldPrice = hasChecks && !soldPrice && phase.key !== "needsMapping";
-          const overBudget = Boolean(phase.budget && phase.spent > phase.budget);
-          const ready = Boolean(phase.budget && hasChecks && !overBudget);
-          const Icon = overBudget ? XCircle : ready ? CheckCircle2 : AlertTriangle;
-          const className =
-            phase.key === "needsMapping" && hasChecks
-              ? "border-amber-200 bg-amber-50 text-amber-800"
-              : overBudget
-            ? "border-red-200 bg-red-50 text-red-800"
-            : ready
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : needsSoldPrice
-                ? "border-amber-200 bg-amber-50 text-amber-800"
-                : "border-[#dfe5dc] bg-[#fbfcfa] text-[#69746f]";
-
-          return (
-            <details
-              className={`group rounded-md border text-[11px] ${className}`}
-              key={phase.key}
-              title={
-                phase.budgetPercent
-                  ? `${phase.label} budget is ${percent(phase.budgetPercent)} of sold price`
-                  : `${phase.name} needs mapping`
-              }
-            >
-              <summary className="grid min-h-16 min-w-[72px] cursor-pointer place-items-center px-2 py-1 text-center marker:content-['']">
-                <div className="flex items-center gap-1 font-bold">
-                  <Icon size={12} />
-                  {phase.label}
-                </div>
-                <div className="mt-0.5 whitespace-nowrap font-semibold">
-                  {shortCurrency(phase.spent)}
-                </div>
-                <div className="mt-0.5 whitespace-nowrap">
-                  {phase.budget ? `${phase.spent > phase.budget ? "Over" : "Left"} ${shortCurrency(Math.abs(phase.budget - phase.spent))}` : hasChecks ? "Map checks" : "No checks"}
-                </div>
-              </summary>
-              <div className="w-[360px] border-t border-current/15 bg-white p-2 text-[#384641] shadow-sm">
-                <div className="mb-2 font-bold text-[#121d49]">{phase.name} Checks</div>
-                {phase.budget ? (
-                  <div className="mb-2 text-xs text-[#69746f]">
-                    Budget {currency(phase.budget)} • Spent {currency(phase.spent)}
-                  </div>
-                ) : null}
-                {phase.transactions.length ? (
-                  <div className="max-h-44 space-y-1 overflow-auto">
-                    {phase.transactions.slice(0, 8).map((transaction) => (
-                      <TransactionMiniRow key={`${transaction.source}-${transaction.id}`} transaction={transaction} />
-                    ))}
-                    {phase.transactions.length > 8 ? (
-                      <div className="rounded-md bg-[#fbfcfa] px-2 py-1 text-xs text-[#69746f]">
-                        {phase.transactions.length - 8} more checks are hidden in this quick view.
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="rounded-md bg-[#fbfcfa] px-2 py-2 text-xs text-[#69746f]">
-                    No checks are mapped here yet.
-                  </div>
-                )}
-              </div>
-            </details>
-          );
-        })}
-      </div>
-      <div className="mt-2 text-xs leading-5 text-[#69746f]">
-        {trustedCount > 0
-          ? `${trustedCount} phase groups have mapped checks. Click a phase to see the checks.`
-          : "Checks will show inside each phase after Chart of Accounts mapping is cleaned up."}
-        {needsMapping && needsMapping.transactions.length > 0
-          ? ` ${needsMapping.transactions.length} checks still need mapping.`
-          : ""}
-      </div>
-    </div>
-  );
-}
-
-function TransactionMiniRow({ transaction }: { transaction: SavedQboTransaction }) {
-  const statusClass =
-    transaction.clearedStatus === "cleared"
-      ? "text-emerald-700"
-      : transaction.clearedStatus === "not_cleared"
-        ? "text-amber-700"
-        : "text-[#69746f]";
-
-  return (
-    <div className="rounded-md border border-[#edf0eb] bg-[#fbfcfa] px-2 py-1">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate font-bold text-[#121d49]">
-            {transaction.payeeName ?? "No payee listed"}
-          </div>
-          <div className="truncate text-[10px] text-[#69746f]">
-            {transaction.txnDate ?? "No date"} • {transaction.expenseAccountNames[0] ?? "No line item"}
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="font-bold text-[#121d49]">{shortCurrency(Math.abs(transaction.totalAmount))}</div>
-          <div className={`text-[10px] font-semibold ${statusClass}`}>
-            {transaction.clearedStatus === "not_cleared"
-              ? "Pending"
-              : transaction.clearedStatus === "cleared"
-                ? "Cleared"
-                : "Unknown"}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <PhaseHealthDrilldown phaseGroups={phaseGroupViews} soldPrice={soldPrice} />;
 }
 
 function RemainingBalance({ soldPrice, spent }: { soldPrice: number | null; spent: number }) {
