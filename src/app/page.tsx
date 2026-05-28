@@ -21,7 +21,10 @@ import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
-import { getTransactionsByBankAccount } from "@/lib/qbo/transactions-store";
+import {
+  getTransactionsByBankAccount,
+  type SavedQboTransaction,
+} from "@/lib/qbo/transactions-store";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +35,24 @@ const MANAGEMENT_PERCENT = 0.2;
 const OPERATIONS_PERCENT = 0.05;
 const PHASE_ONE_BUDGET_PERCENT = 0.10778;
 const PHASE_BUDGET_RULES = [
-  { key: "pre", label: "Pre", budgetPercent: null },
-  { key: "p1", label: "P1", budgetPercent: PHASE_ONE_BUDGET_PERCENT },
-  { key: "p2", label: "P2", budgetPercent: null },
-  { key: "p3", label: "P3", budgetPercent: null },
-  { key: "p4", label: "P4", budgetPercent: null },
-  { key: "p5", label: "P5", budgetPercent: null },
-  { key: "p6", label: "P6", budgetPercent: null },
+  { key: "pre", label: "Pre", name: "Pre Phase", budgetPercent: 0.02 },
+  { key: "p1", label: "P1", name: "Foundation", budgetPercent: PHASE_ONE_BUDGET_PERCENT },
+  { key: "p2", label: "P2", name: "Frame", budgetPercent: 0.125 },
+  { key: "p3", label: "P3", name: "Rough Trades", budgetPercent: 0.09 },
+  { key: "p4", label: "P4", name: "Exterior", budgetPercent: 0.075 },
+  { key: "p5", label: "P5", name: "Interior", budgetPercent: 0.112 },
+  { key: "p6", label: "P6", name: "Final", budgetPercent: 0.078 },
 ] as const;
+type PhaseKey = (typeof PHASE_BUDGET_RULES)[number]["key"];
+type PhaseGroup = {
+  key: PhaseKey | "needsMapping";
+  label: string;
+  name: string;
+  budgetPercent: number | null;
+  budget: number | null;
+  spent: number;
+  transactions: SavedQboTransaction[];
+};
 
 type HouseRow = {
   id: string;
@@ -52,6 +65,7 @@ type HouseRow = {
   clearedCount: number;
   knownClearedStatusCount: number;
   totalChecksSeen: number;
+  transactions: SavedQboTransaction[];
   soldPrice: number | null;
   squareFootage: number | null;
   city: string | null;
@@ -104,6 +118,106 @@ function sumAccountBalances(accounts: QboAccount[]) {
   return accounts.reduce((total, account) => total + bankBalance(account), 0);
 }
 
+const phaseKeywords: Record<PhaseKey, string[]> = {
+  pre: ["architect", "permit", "insurance", "pre phase", "pre-phase", "pre construction"],
+  p1: [
+    "phase 1",
+    "foundation",
+    "fill dirt",
+    "plumbing rough",
+    "pre-form",
+    "pre form",
+    "termite",
+    "rebar",
+    "concrete",
+  ],
+  p2: ["phase 2", "frame", "framing", "roof", "window", "windstorm", "dry-in", "dry in"],
+  p3: [
+    "phase 3",
+    "top-out",
+    "top out",
+    "duct",
+    "electrical rough",
+    "insulation",
+    "sheetrock",
+    "rough trades",
+  ],
+  p4: ["phase 4", "tape", "float", "texture", "exterior", "flooring", "shower"],
+  p5: ["phase 5", "cabinet", "trim", "doors", "shelving", "counter", "interior paint", "stain"],
+  p6: ["phase 6", "final", "fixture", "mirror", "glass", "driveway", "landscape", "clean-up", "cleanup"],
+};
+
+function transactionSearchText(transaction: SavedQboTransaction) {
+  return [
+    transaction.payeeName,
+    transaction.memo,
+    transaction.docNumber,
+    transaction.paymentType,
+    ...transaction.expenseAccountNames,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function classifyTransactionPhase(transaction: SavedQboTransaction): PhaseKey | "needsMapping" {
+  const searchText = transactionSearchText(transaction);
+
+  for (const phase of PHASE_BUDGET_RULES) {
+    if (phaseKeywords[phase.key].some((keyword) => searchText.includes(keyword))) {
+      return phase.key;
+    }
+  }
+
+  return "needsMapping";
+}
+
+function buildPhaseGroups({
+  soldPrice,
+  transactions,
+}: {
+  soldPrice: number | null;
+  transactions: SavedQboTransaction[];
+}) {
+  const groups = new Map<PhaseKey | "needsMapping", PhaseGroup>();
+
+  for (const phase of PHASE_BUDGET_RULES) {
+    groups.set(phase.key, {
+      key: phase.key,
+      label: phase.label,
+      name: phase.name,
+      budgetPercent: phase.budgetPercent,
+      budget: soldPrice ? soldPrice * phase.budgetPercent : null,
+      spent: 0,
+      transactions: [],
+    });
+  }
+
+  groups.set("needsMapping", {
+    key: "needsMapping",
+    label: "Map",
+    name: "Needs Mapping",
+    budgetPercent: null,
+    budget: null,
+    spent: 0,
+    transactions: [],
+  });
+
+  for (const transaction of transactions) {
+    const phaseKey = classifyTransactionPhase(transaction);
+    const group = groups.get(phaseKey);
+
+    if (!group) {
+      continue;
+    }
+
+    group.transactions.push(transaction);
+    group.spent += Math.abs(transaction.totalAmount);
+  }
+
+  return Array.from(groups.values());
+}
+
 export default async function Home() {
   const appUrl = getPublicAppUrl();
   const [
@@ -146,6 +260,7 @@ export default async function Home() {
           (total, transaction) => total + Math.abs(transaction.totalAmount),
           0,
         ),
+        transactions,
         soldPrice: details?.soldPrice ?? null,
         squareFootage: details?.squareFootage ?? null,
         city: details?.city ?? null,
@@ -330,11 +445,10 @@ export default async function Home() {
                       </thead>
                       <tbody>
                         {houses.map((house) => {
-                          const phaseOneBudget = house.soldPrice
-                            ? house.soldPrice * PHASE_ONE_BUDGET_PERCENT
-                            : null;
-                          const phaseOneOverBudget =
-                            phaseOneBudget !== null && house.totalChecksSeen > phaseOneBudget;
+                          const phaseGroups = buildPhaseGroups({
+                            soldPrice: house.soldPrice,
+                            transactions: house.transactions,
+                          });
 
                           return (
                             <tr className="border-t border-[#edf0eb] transition hover:bg-[#fbfcfa]" key={house.id}>
@@ -371,9 +485,8 @@ export default async function Home() {
                               </td>
                               <td className="px-4 py-4">
                                 <PhaseBudgetStrip
-                                  phaseOneBudget={phaseOneBudget}
-                                  phaseOneOverBudget={phaseOneOverBudget}
-                                  spent={house.totalChecksSeen}
+                                  phaseGroups={phaseGroups}
+                                  soldPrice={house.soldPrice}
                                 />
                               </td>
                               <td className="px-4 py-4">
@@ -494,24 +607,30 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
 }
 
 function PhaseBudgetStrip({
-  phaseOneBudget,
-  phaseOneOverBudget,
-  spent,
+  phaseGroups,
+  soldPrice,
 }: {
-  phaseOneBudget: number | null;
-  phaseOneOverBudget: boolean;
-  spent: number;
+  phaseGroups: PhaseGroup[];
+  soldPrice: number | null;
 }) {
+  const trustedCount = phaseGroups.filter(
+    (group) => group.key !== "needsMapping" && group.transactions.length > 0,
+  ).length;
+  const needsMapping = phaseGroups.find((group) => group.key === "needsMapping");
+
   return (
-    <div className="min-w-[250px]">
+    <div className="min-w-[460px]">
       <div className="flex flex-wrap gap-1.5">
-        {PHASE_BUDGET_RULES.map((phase) => {
-          const isPhaseOne = phase.key === "p1";
-          const needsSoldPrice = isPhaseOne && !phaseOneBudget;
-          const overBudget = isPhaseOne && phaseOneOverBudget;
-          const ready = isPhaseOne && phaseOneBudget && !phaseOneOverBudget;
+        {phaseGroups.map((phase) => {
+          const hasChecks = phase.transactions.length > 0;
+          const needsSoldPrice = hasChecks && !soldPrice && phase.key !== "needsMapping";
+          const overBudget = Boolean(phase.budget && phase.spent > phase.budget);
+          const ready = Boolean(phase.budget && hasChecks && !overBudget);
           const Icon = overBudget ? XCircle : ready ? CheckCircle2 : AlertTriangle;
-          const className = overBudget
+          const className =
+            phase.key === "needsMapping" && hasChecks
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : overBudget
             ? "border-red-200 bg-red-50 text-red-800"
             : ready
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
@@ -520,30 +639,96 @@ function PhaseBudgetStrip({
                 : "border-[#dfe5dc] bg-[#fbfcfa] text-[#69746f]";
 
           return (
-            <div
-              className={`grid min-h-12 min-w-12 place-items-center rounded-md border px-2 py-1 text-center text-[11px] ${className}`}
+            <details
+              className={`group rounded-md border text-[11px] ${className}`}
               key={phase.key}
               title={
                 phase.budgetPercent
                   ? `${phase.label} budget is ${percent(phase.budgetPercent)} of sold price`
-                  : `${phase.label} budget percentage still needs to be set`
+                  : `${phase.name} needs mapping`
               }
             >
-              <div className="flex items-center gap-1 font-semibold">
-                <Icon size={12} />
-                {phase.label}
+              <summary className="grid min-h-16 min-w-[72px] cursor-pointer place-items-center px-2 py-1 text-center marker:content-['']">
+                <div className="flex items-center gap-1 font-bold">
+                  <Icon size={12} />
+                  {phase.label}
+                </div>
+                <div className="mt-0.5 whitespace-nowrap font-semibold">
+                  {shortCurrency(phase.spent)}
+                </div>
+                <div className="mt-0.5 whitespace-nowrap">
+                  {phase.budget ? `${phase.spent > phase.budget ? "Over" : "Left"} ${shortCurrency(Math.abs(phase.budget - phase.spent))}` : hasChecks ? "Map checks" : "No checks"}
+                </div>
+              </summary>
+              <div className="w-[360px] border-t border-current/15 bg-white p-2 text-[#384641] shadow-sm">
+                <div className="mb-2 font-bold text-[#121d49]">{phase.name} Checks</div>
+                {phase.budget ? (
+                  <div className="mb-2 text-xs text-[#69746f]">
+                    Budget {currency(phase.budget)} • Spent {currency(phase.spent)}
+                  </div>
+                ) : null}
+                {phase.transactions.length ? (
+                  <div className="max-h-44 space-y-1 overflow-auto">
+                    {phase.transactions.slice(0, 8).map((transaction) => (
+                      <TransactionMiniRow key={`${transaction.source}-${transaction.id}`} transaction={transaction} />
+                    ))}
+                    {phase.transactions.length > 8 ? (
+                      <div className="rounded-md bg-[#fbfcfa] px-2 py-1 text-xs text-[#69746f]">
+                        {phase.transactions.length - 8} more checks are hidden in this quick view.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-md bg-[#fbfcfa] px-2 py-2 text-xs text-[#69746f]">
+                    No checks are mapped here yet.
+                  </div>
+                )}
               </div>
-              <div className="mt-0.5 whitespace-nowrap">
-                {phase.budgetPercent ? percent(phase.budgetPercent) : "Set %"}
-              </div>
-            </div>
+            </details>
           );
         })}
       </div>
       <div className="mt-2 text-xs leading-5 text-[#69746f]">
-        {phaseOneBudget
-          ? `P1: ${currency(spent)} spent / ${currency(phaseOneBudget)} budget`
-          : "Add sold price to calculate P1 budget"}
+        {trustedCount > 0
+          ? `${trustedCount} phase groups have mapped checks. Click a phase to see the checks.`
+          : "Checks will show inside each phase after Chart of Accounts mapping is cleaned up."}
+        {needsMapping && needsMapping.transactions.length > 0
+          ? ` ${needsMapping.transactions.length} checks still need mapping.`
+          : ""}
+      </div>
+    </div>
+  );
+}
+
+function TransactionMiniRow({ transaction }: { transaction: SavedQboTransaction }) {
+  const statusClass =
+    transaction.clearedStatus === "cleared"
+      ? "text-emerald-700"
+      : transaction.clearedStatus === "not_cleared"
+        ? "text-amber-700"
+        : "text-[#69746f]";
+
+  return (
+    <div className="rounded-md border border-[#edf0eb] bg-[#fbfcfa] px-2 py-1">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate font-bold text-[#121d49]">
+            {transaction.payeeName ?? "No payee listed"}
+          </div>
+          <div className="truncate text-[10px] text-[#69746f]">
+            {transaction.txnDate ?? "No date"} • {transaction.expenseAccountNames[0] ?? "No line item"}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="font-bold text-[#121d49]">{shortCurrency(Math.abs(transaction.totalAmount))}</div>
+          <div className={`text-[10px] font-semibold ${statusClass}`}>
+            {transaction.clearedStatus === "not_cleared"
+              ? "Pending"
+              : transaction.clearedStatus === "cleared"
+                ? "Cleared"
+                : "Unknown"}
+          </div>
+        </div>
       </div>
     </div>
   );
