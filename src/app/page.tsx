@@ -438,7 +438,6 @@ export default async function Home() {
                       <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#121d49]">
                         <tr>
                           <th className="px-4 py-3 font-medium">House</th>
-                          <th className="px-4 py-3 font-medium">House Setup</th>
                           <th className="px-4 py-3 font-medium">Total Spent</th>
                           <th className="px-4 py-3 font-medium">Phase Health</th>
                           <th className="px-4 py-3 font-medium">Remaining Balance</th>
@@ -455,27 +454,12 @@ export default async function Home() {
                             <tr className="border-t border-[#edf0eb] transition hover:bg-[#fbfcfa]" key={house.id}>
                               <td className="px-4 py-4">
                                 <div className="font-bold text-[#121d49]">{house.house}</div>
-                                <div className="text-xs text-[#69746f]">{house.city ?? "City missing"}</div>
-                              </td>
-                              <td className="min-w-[390px] px-4 py-4">
-                                <div className="flex flex-wrap gap-1.5">
-                                  <SetupPill
-                                    label="Sold"
-                                    value={house.soldPrice ? currency(house.soldPrice) : "Missing"}
-                                  />
-                                  <SetupPill
-                                    label="Sqft"
-                                    value={house.squareFootage ? String(house.squareFootage) : "Missing"}
-                                  />
-                                  <SetupPill label="City" value={house.city ?? "Missing"} />
-                                  <SetupPill
-                                    label="Sold / Sqft"
-                                    value={
-                                      house.soldPrice && house.squareFootage
-                                        ? currency(house.soldPrice / house.squareFootage)
-                                        : "Missing"
-                                    }
-                                  />
+                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#69746f]">
+                                  <span>{house.city ?? "City missing"}</span>
+                                  <span className="font-semibold text-[#121d49]">
+                                    Sold {house.soldPrice ? shortCurrency(house.soldPrice) : "missing"}
+                                  </span>
+                                  {house.squareFootage ? <span>{house.squareFootage} sqft</span> : null}
                                 </div>
                               </td>
                               <td className="px-4 py-4">
@@ -661,22 +645,5 @@ function RemainingBalance({ soldPrice, spent }: { soldPrice: number | null; spen
         {percent(spentPercent)} spent so far
       </div>
     </div>
-  );
-}
-
-function SetupPill({ label, value }: { label: string; value: string }) {
-  const missing = value === "Missing";
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${
-        missing
-          ? "border-amber-200 bg-amber-50 text-amber-800"
-          : "border-[#dfe5dc] bg-[#fbfcfa] text-[#4f5b56]"
-      }`}
-    >
-      <span className="text-[#69746f]">{label}</span>
-      <span className="font-medium">{value}</span>
-    </span>
   );
 }

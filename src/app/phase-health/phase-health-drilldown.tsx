@@ -53,6 +53,7 @@ function phaseTone(phase: PhaseGroupView, soldPrice: number | null) {
     return {
       className: "border-amber-200 bg-amber-50 text-amber-800",
       status: "Map checks",
+      dotClassName: "bg-amber-500",
       icon: AlertTriangle,
     };
   }
@@ -61,6 +62,7 @@ function phaseTone(phase: PhaseGroupView, soldPrice: number | null) {
     return {
       className: "border-red-200 bg-red-50 text-red-800",
       status: `Over ${shortCurrency(Math.abs((phase.budget ?? 0) - phase.spent))}`,
+      dotClassName: "bg-red-600",
       icon: XCircle,
     };
   }
@@ -69,6 +71,7 @@ function phaseTone(phase: PhaseGroupView, soldPrice: number | null) {
     return {
       className: "border-emerald-200 bg-emerald-50 text-emerald-800",
       status: `Left ${shortCurrency(Math.abs((phase.budget ?? 0) - phase.spent))}`,
+      dotClassName: "bg-emerald-600",
       icon: CheckCircle2,
     };
   }
@@ -77,6 +80,7 @@ function phaseTone(phase: PhaseGroupView, soldPrice: number | null) {
     return {
       className: "border-amber-200 bg-amber-50 text-amber-800",
       status: "Need price",
+      dotClassName: "bg-amber-500",
       icon: AlertTriangle,
     };
   }
@@ -84,6 +88,7 @@ function phaseTone(phase: PhaseGroupView, soldPrice: number | null) {
   return {
     className: "border-[#dfe5dc] bg-[#fbfcfa] text-[#69746f]",
     status: hasChecks ? "Review" : "No checks",
+    dotClassName: hasChecks ? "bg-amber-500" : "bg-slate-300",
     icon: AlertTriangle,
   };
 }
@@ -118,15 +123,14 @@ export function PhaseHealthDrilldown({
   const needsMapping = phaseGroups.find((group) => group.key === "needsMapping");
 
   return (
-    <div className="min-w-[460px]">
+    <div className="min-w-[360px]">
       <div className="flex flex-wrap gap-1.5">
         {phaseGroups.map((phase) => {
           const tone = phaseTone(phase, soldPrice);
-          const Icon = tone.icon;
 
           return (
             <button
-              className={`grid min-h-16 min-w-[72px] place-items-center rounded-md border px-2 py-1 text-center text-[11px] transition hover:-translate-y-0.5 hover:shadow-sm ${tone.className}`}
+              className={`min-h-12 min-w-[54px] rounded-md border px-2 py-1.5 text-center text-[11px] transition hover:-translate-y-0.5 hover:shadow-sm ${tone.className}`}
               key={phase.key}
               onClick={() => setSelectedKey(phase.key)}
               title={
@@ -136,21 +140,20 @@ export function PhaseHealthDrilldown({
               }
               type="button"
             >
-              <div className="flex items-center gap-1 font-bold">
-                <Icon size={12} />
+              <div className="flex items-center justify-center gap-1 font-bold">
+                <span className={`size-1.5 rounded-full ${tone.dotClassName}`} />
                 {phase.label}
               </div>
-              <div className="mt-0.5 whitespace-nowrap font-semibold">
+              <div className="mt-1 whitespace-nowrap font-semibold">
                 {shortCurrency(phase.spent)}
               </div>
-              <div className="mt-0.5 whitespace-nowrap">{tone.status}</div>
             </button>
           );
         })}
       </div>
-      <div className="mt-2 text-xs leading-5 text-[#69746f]">
+      <div className="mt-2 text-[11px] leading-5 text-[#69746f]">
         {trustedCount > 0
-          ? `${trustedCount} phase groups have mapped checks. Click a phase to see the checks.`
+          ? `${trustedCount} phases have checks. Click a phase to see details.`
           : "Checks will show inside each phase after Chart of Accounts mapping is cleaned up."}
         {needsMapping && needsMapping.transactions.length > 0
           ? ` ${needsMapping.transactions.length} checks still need mapping.`
