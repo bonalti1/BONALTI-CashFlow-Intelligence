@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAgentClient, defaultAgentModel } from "@/lib/agent/client";
+import { saveCompanyAiReport } from "@/lib/company/brain-store";
 import { getEnvStatus } from "@/lib/env";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
@@ -169,6 +170,21 @@ export async function POST(request: Request) {
       },
     ],
   });
+
+  await saveCompanyAiReport({
+    reportType: "project_health_answer",
+    department: "finance",
+    title: "Project Health AI Answer",
+    question,
+    answer: response.output_text,
+    model: defaultAgentModel,
+    dataScope: {
+      source: "ai-health",
+      includesQuickBooksAccounts: true,
+      includesQuickBooksTransactions: true,
+      readingLevel: "8th grade",
+    },
+  }).catch(() => null);
 
   return NextResponse.json({
     answer: response.output_text,

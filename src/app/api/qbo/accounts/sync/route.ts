@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { syncCfoDataLayer } from "@/lib/cfo/data-layer";
+import { syncCompanyBrainFromCurrentData } from "@/lib/company/brain-store";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { syncQboAccounts } from "@/lib/qbo/accounts-sync";
 import { syncQboMoneyTransactions } from "@/lib/qbo/transactions-sync";
@@ -56,6 +57,14 @@ async function runAccountsSync(request: NextRequest) {
         }`,
       ],
     }));
+    const companyBrain = await syncCompanyBrainFromCurrentData().catch((error) => ({
+      synced: false,
+      warnings: [
+        `Company brain did not complete: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      ],
+    }));
     const responsePayload = {
       status: "ok",
       message: "Chart of Accounts synced from QuickBooks.",
@@ -68,6 +77,7 @@ async function runAccountsSync(request: NextRequest) {
         warnings: transactionSnapshot.warnings,
       },
       cfoDataLayer,
+      companyBrain,
     };
 
     if (returnTo?.startsWith("/")) {

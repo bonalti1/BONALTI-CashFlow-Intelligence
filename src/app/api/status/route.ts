@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCfoDataStatus } from "@/lib/cfo/data-layer";
+import { getCompanyBrainStatus } from "@/lib/company/brain-store";
 import { getEnvStatus } from "@/lib/env";
 import { getAccountsSnapshotStatus } from "@/lib/qbo/accounts-store";
 import { getQboSetupDiagnostics } from "@/lib/qbo/oauth";
@@ -14,6 +15,7 @@ export async function GET() {
   const accountsSnapshot = await getAccountsSnapshotStatus();
   const transactionsSnapshot = await getTransactionsSnapshotStatus();
   const cfoDataLayer = await getCfoDataStatus();
+  const companyBrain = await getCompanyBrainStatus();
 
   return NextResponse.json({
     app: "South Texas Builders Project Health",
@@ -27,6 +29,7 @@ export async function GET() {
     accountsSnapshot,
     transactionsSnapshot,
     cfoDataLayer,
+    companyBrain,
     env: getEnvStatus(),
   });
 }
