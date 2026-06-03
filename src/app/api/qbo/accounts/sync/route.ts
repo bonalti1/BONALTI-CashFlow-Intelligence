@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { syncCfoDataLayer } from "@/lib/cfo/data-layer";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { syncQboAccounts } from "@/lib/qbo/accounts-sync";
 import { syncQboMoneyTransactions } from "@/lib/qbo/transactions-sync";
@@ -43,6 +44,18 @@ async function runAccountsSync(request: NextRequest) {
         }`,
       ],
     }));
+    const cfoDataLayer = await syncCfoDataLayer().catch((error) => ({
+      syncedAt: null,
+      phaseLineItems: 0,
+      housePhaseActuals: 0,
+      housesCalculated: 0,
+      needsReviewLineItems: 0,
+      warnings: [
+        `CFO data layer did not complete: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      ],
+    }));
     const responsePayload = {
       status: "ok",
       message: "Chart of Accounts synced from QuickBooks.",
@@ -54,6 +67,7 @@ async function runAccountsSync(request: NextRequest) {
         syncedAt: transactionSnapshot.syncedAt,
         warnings: transactionSnapshot.warnings,
       },
+      cfoDataLayer,
     };
 
     if (returnTo?.startsWith("/")) {

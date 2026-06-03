@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getCfoDataStatus } from "@/lib/cfo/data-layer";
 import { getEnvStatus } from "@/lib/env";
 import { getAccountsSnapshotStatus } from "@/lib/qbo/accounts-store";
 import { getQboSetupDiagnostics } from "@/lib/qbo/oauth";
@@ -12,6 +13,7 @@ export async function GET() {
   const qboConnection = await getQboConnectionStatus();
   const accountsSnapshot = await getAccountsSnapshotStatus();
   const transactionsSnapshot = await getTransactionsSnapshotStatus();
+  const cfoDataLayer = await getCfoDataStatus();
 
   return NextResponse.json({
     app: "South Texas Builders Project Health",
@@ -24,6 +26,7 @@ export async function GET() {
     qboSetup: getQboSetupDiagnostics(),
     accountsSnapshot,
     transactionsSnapshot,
+    cfoDataLayer,
     env: getEnvStatus(),
   });
 }
