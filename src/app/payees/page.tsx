@@ -4,6 +4,7 @@ import {
   ArrowRightLeft,
   Brain,
   ClipboardList,
+  Database,
   HandCoins,
   LayoutDashboard,
   ReceiptText,
@@ -201,6 +202,7 @@ export default async function PayeesPage() {
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem active icon={HandCoins} label="Payees" />
             <NavItem href="/agent-health" icon={Brain} label="Intelligent Center" />
+            <NavItem href="/company-brain" icon={Database} label="Company Brain" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>

@@ -4,6 +4,7 @@ import {
   Brain,
   Building2,
   ClipboardList,
+  Database,
   HandCoins,
   Landmark,
   LayoutDashboard,
@@ -346,6 +347,7 @@ export default async function Home() {
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem href="/agent-health" icon={Brain} label="Intelligent Center" />
+            <NavItem href="/company-brain" icon={Database} label="Company Brain" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>

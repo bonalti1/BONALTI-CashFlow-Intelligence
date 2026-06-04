@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   Brain,
   ClipboardList,
+  Database,
   HandCoins,
   LayoutDashboard,
   ShieldCheck,
@@ -46,6 +47,7 @@ export default async function AgentHealthPage() {
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem active icon={Brain} label="Intelligent Center" />
+            <NavItem href="/company-brain" icon={Database} label="Company Brain" />
             <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
           </nav>
         </aside>
