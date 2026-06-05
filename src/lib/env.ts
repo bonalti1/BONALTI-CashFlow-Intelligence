@@ -6,6 +6,7 @@ const serverEnvKeys = [
   "QBO_ENVIRONMENT",
   "OPENAI_API_KEY",
   "TOKEN_ENCRYPTION_KEY",
+  "AI_CSUITE_EXPORT_TOKEN",
 ] as const;
 
 export type ServerEnvKey = (typeof serverEnvKeys)[number];
