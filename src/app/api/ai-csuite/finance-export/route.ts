@@ -1,36 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { ensureQboFinanceObjectTablesForExport } from "@/lib/qbo/finance-objects-store";
 
 export const runtime = "nodejs";
-
-const unavailableQuickBooksDatasets = {
-  invoices: {
-    available: false,
-    source_system: "quickbooks",
-    reason: "Not synced yet. Current QuickBooks sync reads Account, Purchase, and Check only.",
-    next_source: "QuickBooks Invoice query",
-  },
-  vendor_bills: {
-    available: false,
-    source_system: "quickbooks",
-    reason: "Not synced yet. Current QuickBooks sync reads Account, Purchase, and Check only.",
-    next_source: "QuickBooks Bill query",
-  },
-  customers: {
-    available: false,
-    source_system: "quickbooks",
-    reason: "Not synced yet. Current QuickBooks sync reads Account, Purchase, and Check only.",
-    next_source: "QuickBooks Customer query",
-  },
-  projects: {
-    available: false,
-    source_system: "quickbooks",
-    reason:
-      "Not synced yet. House projects are currently inferred from QuickBooks bank accounts and house_details.",
-    next_source: "QuickBooks Customer/SubCustomer, Class, or Project-style customer mapping",
-  },
-};
 
 type CashSnapshotRow = {
   source_account_id: string;
@@ -80,6 +53,56 @@ type PaymentRow = {
   cleared_status_raw: string | null;
   expense_account_ids: string[];
   expense_account_names: string[];
+  updated_at: Date;
+};
+
+type InvoiceRow = {
+  qbo_id: string;
+  invoice_number: string | null;
+  customer_name: string | null;
+  invoice_status: string;
+  invoice_date: Date | null;
+  due_date: Date | null;
+  paid_date: Date | null;
+  total_amount: string;
+  paid_amount: string;
+  balance_due: string;
+  currency: string;
+  memo: string | null;
+  source_updated_at: Date | null;
+  updated_at: Date;
+};
+
+type VendorBillRow = {
+  qbo_id: string;
+  bill_number: string | null;
+  vendor_name: string | null;
+  bill_status: string;
+  bill_date: Date | null;
+  due_date: Date | null;
+  paid_date: Date | null;
+  total_amount: string;
+  paid_amount: string;
+  balance_due: string;
+  currency: string;
+  cost_category: string | null;
+  memo: string | null;
+  source_updated_at: Date | null;
+  updated_at: Date;
+};
+
+type CustomerRow = {
+  qbo_id: string;
+  display_name: string | null;
+  company_name: string | null;
+  fully_qualified_name: string | null;
+  parent_customer_qbo_id: string | null;
+  project_name: string | null;
+  is_project: boolean;
+  active: boolean | null;
+  balance: string;
+  source_updated_at: Date | null;
+  raw: Record<string, unknown>;
   updated_at: Date;
 };
 
@@ -274,6 +297,157 @@ async function getPayments() {
   }));
 }
 
+async function getInvoices() {
+  const rows = await sql()<InvoiceRow[]>`
+    select
+      qbo_id,
+      invoice_number,
+      customer_name,
+      invoice_status,
+      invoice_date,
+      due_date,
+      paid_date,
+      total_amount,
+      paid_amount,
+      balance_due,
+      currency,
+      memo,
+      source_updated_at,
+      updated_at
+    from qbo_invoices
+    order by invoice_date desc nulls last, updated_at desc
+  `;
+
+  return rows.map((row) => ({
+    source_system: "quickbooks",
+    source_table: "qbo_invoices",
+    source_invoice_id: row.qbo_id,
+    invoice_number: row.invoice_number,
+    customer_name: row.customer_name,
+    invoice_status: row.invoice_status,
+    invoice_date: dateOrNull(row.invoice_date),
+    due_date: dateOrNull(row.due_date),
+    paid_date: dateOrNull(row.paid_date),
+    total_amount: Number(row.total_amount),
+    paid_amount: Number(row.paid_amount),
+    balance_due: Number(row.balance_due),
+    currency: row.currency,
+    memo: row.memo,
+    source_updated_at: dateOrNull(row.source_updated_at ?? row.updated_at),
+  }));
+}
+
+async function getVendorBills() {
+  const rows = await sql()<VendorBillRow[]>`
+    select
+      qbo_id,
+      bill_number,
+      vendor_name,
+      bill_status,
+      bill_date,
+      due_date,
+      paid_date,
+      total_amount,
+      paid_amount,
+      balance_due,
+      currency,
+      cost_category,
+      memo,
+      source_updated_at,
+      updated_at
+    from qbo_vendor_bills
+    order by bill_date desc nulls last, updated_at desc
+  `;
+
+  return rows.map((row) => ({
+    source_system: "quickbooks",
+    source_table: "qbo_vendor_bills",
+    source_bill_id: row.qbo_id,
+    bill_number: row.bill_number,
+    vendor_name: row.vendor_name,
+    bill_status: row.bill_status,
+    bill_date: dateOrNull(row.bill_date),
+    due_date: dateOrNull(row.due_date),
+    paid_date: dateOrNull(row.paid_date),
+    total_amount: Number(row.total_amount),
+    paid_amount: Number(row.paid_amount),
+    balance_due: Number(row.balance_due),
+    currency: row.currency,
+    cost_category: row.cost_category,
+    memo: row.memo,
+    source_updated_at: dateOrNull(row.source_updated_at ?? row.updated_at),
+  }));
+}
+
+async function getCustomers() {
+  const rows = await sql()<CustomerRow[]>`
+    select
+      qbo_id,
+      display_name,
+      company_name,
+      fully_qualified_name,
+      parent_customer_qbo_id,
+      project_name,
+      is_project,
+      active,
+      balance,
+      source_updated_at,
+      raw,
+      updated_at
+    from qbo_customers
+    order by display_name nulls last, fully_qualified_name nulls last
+  `;
+
+  return rows.map((row) => ({
+    source_system: "quickbooks",
+    source_table: "qbo_customers",
+    source_customer_id: row.qbo_id,
+    display_name: row.display_name,
+    company_name: row.company_name,
+    parent_customer_id: row.parent_customer_qbo_id,
+    project_name: row.project_name,
+    active: row.active,
+    balance: Number(row.balance),
+    raw: row.raw,
+    source_updated_at: dateOrNull(row.source_updated_at ?? row.updated_at),
+  }));
+}
+
+async function getProjects() {
+  const rows = await sql()<CustomerRow[]>`
+    select
+      qbo_id,
+      display_name,
+      company_name,
+      fully_qualified_name,
+      parent_customer_qbo_id,
+      project_name,
+      is_project,
+      active,
+      balance,
+      source_updated_at,
+      raw,
+      updated_at
+    from qbo_customers
+    where is_project = true
+    order by project_name nulls last, display_name nulls last
+  `;
+
+  return rows.map((row) => ({
+    source_system: "quickbooks",
+    source_table: "qbo_customers",
+    source_customer_id: row.qbo_id,
+    display_name: row.display_name,
+    company_name: row.company_name,
+    parent_customer_id: row.parent_customer_qbo_id,
+    project_name: row.project_name ?? row.display_name ?? row.fully_qualified_name,
+    active: row.active,
+    balance: Number(row.balance),
+    raw: row.raw,
+    source_updated_at: dateOrNull(row.source_updated_at ?? row.updated_at),
+  }));
+}
+
 export async function GET(request: Request) {
   const auth = isAuthorized(request);
 
@@ -298,10 +472,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [cashSnapshots, jobCosts, payments] = await Promise.all([
+    await ensureQboFinanceObjectTablesForExport();
+    const [cashSnapshots, jobCosts, payments, invoices, vendorBills, customers, projects] =
+      await Promise.all([
       getCashSnapshots(),
       getJobCosts(),
       getPayments(),
+        getInvoices(),
+        getVendorBills(),
+        getCustomers(),
+        getProjects(),
     ]);
 
     return NextResponse.json({
@@ -312,10 +492,10 @@ export async function GET(request: Request) {
         cash_snapshots: cashSnapshots.length,
         job_costs: jobCosts.length,
         payments: payments.length,
-        invoices: 0,
-        vendor_bills: 0,
-        customers: 0,
-        projects: 0,
+        invoices: invoices.length,
+        vendor_bills: vendorBills.length,
+        customers: customers.length,
+        projects: projects.length,
       },
       dataset_status: {
         cash_snapshots: {
@@ -334,15 +514,38 @@ export async function GET(request: Request) {
           source_table: "qbo_money_transactions",
           qbo_source_types: ["Purchase", "Check"],
         },
-        ...unavailableQuickBooksDatasets,
+        invoices: {
+          available: true,
+          source_system: "quickbooks",
+          source_table: "qbo_invoices",
+          qbo_source_types: ["Invoice"],
+        },
+        vendor_bills: {
+          available: true,
+          source_system: "quickbooks",
+          source_table: "qbo_vendor_bills",
+          qbo_source_types: ["Bill"],
+        },
+        customers: {
+          available: true,
+          source_system: "quickbooks",
+          source_table: "qbo_customers",
+          qbo_source_types: ["Customer"],
+        },
+        projects: {
+          available: true,
+          source_system: "quickbooks",
+          source_table: "qbo_customers",
+          note: "Projects are QuickBooks customers/sub-customers detected from Customer.ParentRef or Customer.Job.",
+        },
       },
       cash_snapshots: cashSnapshots,
       job_costs: jobCosts,
       payments,
-      invoices: [],
-      vendor_bills: [],
-      customers: [],
-      projects: [],
+      invoices,
+      vendor_bills: vendorBills,
+      customers,
+      projects,
     });
   } catch (error) {
     return NextResponse.json(

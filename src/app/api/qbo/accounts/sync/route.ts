@@ -5,6 +5,7 @@ import { syncCfoDataLayer } from "@/lib/cfo/data-layer";
 import { syncCompanyBrainFromCurrentData } from "@/lib/company/brain-store";
 import { getPublicAppUrl } from "@/lib/app-url";
 import { syncQboAccounts } from "@/lib/qbo/accounts-sync";
+import { syncQboFinanceObjects } from "@/lib/qbo/finance-objects-sync";
 import { syncQboMoneyTransactions } from "@/lib/qbo/transactions-sync";
 import {
   getStoredQboConnection,
@@ -45,6 +46,18 @@ async function runAccountsSync(request: NextRequest) {
         }`,
       ],
     }));
+    const financeObjectsSnapshot = await syncQboFinanceObjects(connection).catch((error) => ({
+      invoices: 0,
+      vendorBills: 0,
+      customers: 0,
+      projects: 0,
+      syncedAt: null,
+      warnings: [
+        `Invoice, bill, customer, and project sync did not complete: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      ],
+    }));
     const cfoDataLayer = await syncCfoDataLayer().catch((error) => ({
       syncedAt: null,
       phaseLineItems: 0,
@@ -75,6 +88,14 @@ async function runAccountsSync(request: NextRequest) {
         total: transactionSnapshot.total,
         syncedAt: transactionSnapshot.syncedAt,
         warnings: transactionSnapshot.warnings,
+      },
+      financeObjectsSynced: {
+        invoices: financeObjectsSnapshot.invoices,
+        vendorBills: financeObjectsSnapshot.vendorBills,
+        customers: financeObjectsSnapshot.customers,
+        projects: financeObjectsSnapshot.projects,
+        syncedAt: financeObjectsSnapshot.syncedAt,
+        warnings: financeObjectsSnapshot.warnings,
       },
       cfoDataLayer,
       companyBrain,
