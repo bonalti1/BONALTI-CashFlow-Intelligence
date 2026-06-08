@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   Brain,
+  ClipboardCheck,
   ClipboardList,
   Database,
   HandCoins,
@@ -91,6 +92,7 @@ export default async function SetupInputsPage() {
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
             <NavItem active icon={ClipboardList} label="House Setup" />
+            <NavItem href="/draws-budget" icon={ClipboardCheck} label="Draws & Budget" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem href="/agent-health" icon={Brain} label="Intelligent Center" />
             <NavItem href="/company-brain" icon={Database} label="Company Brain" />

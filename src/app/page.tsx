@@ -3,6 +3,7 @@ import Image from "next/image";
 import {
   Brain,
   Building2,
+  ClipboardCheck,
   ClipboardList,
   Database,
   HandCoins,
@@ -345,6 +346,7 @@ export default async function Home() {
           <nav className="space-y-1">
             <NavItem active icon={LayoutDashboard} label="Portfolio" />
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
+            <NavItem href="/draws-budget" icon={ClipboardCheck} label="Draws & Budget" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem href="/agent-health" icon={Brain} label="Intelligent Center" />
             <NavItem href="/company-brain" icon={Database} label="Company Brain" />

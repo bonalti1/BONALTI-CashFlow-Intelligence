@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   Brain,
   Building2,
+  ClipboardCheck,
   ClipboardList,
   Database,
   HandCoins,
@@ -82,6 +83,7 @@ export default async function CompanyBrainPage() {
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
+            <NavItem href="/draws-budget" icon={ClipboardCheck} label="Draws & Budget" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem href="/agent-health" icon={Brain} label="Intelligent Center" />
             <NavItem active icon={Database} label="Company Brain" />

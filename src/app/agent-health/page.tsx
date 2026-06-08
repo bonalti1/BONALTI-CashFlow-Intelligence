@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Brain,
+  ClipboardCheck,
   ClipboardList,
   Database,
   HandCoins,
@@ -45,6 +46,7 @@ export default async function AgentHealthPage() {
           <nav className="space-y-1">
             <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
             <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
+            <NavItem href="/draws-budget" icon={ClipboardCheck} label="Draws & Budget" />
             <NavItem href="/payees" icon={HandCoins} label="Payees" />
             <NavItem active icon={Brain} label="Intelligent Center" />
             <NavItem href="/company-brain" icon={Database} label="Company Brain" />
