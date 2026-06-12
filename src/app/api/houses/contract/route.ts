@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { extractContractSourceFromFile } from "@/lib/contracts/contract-extraction";
 import { saveHouseContractSource } from "@/lib/houses/house-details-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 
@@ -69,6 +70,9 @@ export async function POST(request: Request) {
     let contractFileUrl: string | null = null;
     let contractStoragePath: string | null = null;
     let contractFileDataUrl: string | null = null;
+    let extractedContractPrice: number | null = null;
+    let extractedContractSquareFootage: number | null = null;
+    let extractedContractCity: string | null = null;
 
     if (contractFile instanceof File && contractFile.size > 0) {
       if (!isAllowedContractFile(contractFile)) {
@@ -103,7 +107,22 @@ export async function POST(request: Request) {
       contractFileUrl = uploaded?.url ?? null;
       contractStoragePath = uploaded?.path ?? null;
       contractFileDataUrl = uploaded ? null : `data:${contentType};base64,${buffer.toString("base64")}`;
+
+      const extracted = await extractContractSourceFromFile({
+        bytes: buffer,
+        contentType,
+        fileName: contractFile.name,
+        houseName,
+      });
+
+      extractedContractPrice = extracted?.contractPrice ?? null;
+      extractedContractSquareFootage = extracted?.contractSquareFootage ?? null;
+      extractedContractCity = extracted?.contractCity ?? null;
     }
+
+    const manualContractPrice = optionalMoney(formData.get("contractPrice"));
+    const manualContractSquareFootage = optionalInteger(formData.get("contractSquareFootage"));
+    const manualContractCity = optionalText(formData.get("contractCity"));
 
     await saveHouseContractSource({
       qboBankAccountId,
@@ -113,9 +132,9 @@ export async function POST(request: Request) {
       contractFileUrl,
       contractStoragePath,
       contractFileDataUrl,
-      contractPrice: optionalMoney(formData.get("contractPrice")),
-      contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
-      contractCity: optionalText(formData.get("contractCity")),
+      contractPrice: manualContractPrice ?? extractedContractPrice,
+      contractSquareFootage: manualContractSquareFootage ?? extractedContractSquareFootage,
+      contractCity: manualContractCity ?? extractedContractCity,
     });
 
     revalidatePath("/");
