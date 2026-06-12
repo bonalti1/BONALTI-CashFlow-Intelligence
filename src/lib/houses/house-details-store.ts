@@ -6,6 +6,7 @@ export type HouseDetail = {
   soldPrice: number | null;
   squareFootage: number | null;
   city: string | null;
+  manualRenderImageUrl: string | null;
   updatedAt: string;
 };
 
@@ -17,9 +18,12 @@ async function ensureHouseDetailsTable() {
       sold_price numeric,
       square_footage integer,
       city text,
+      manual_render_image_url text,
       updated_at timestamptz not null default now()
     )
   `;
+
+  await sql()`alter table house_details add column if not exists manual_render_image_url text`;
 }
 
 export async function getHouseDetailsMap() {
@@ -37,6 +41,7 @@ export async function getHouseDetailsMap() {
       sold_price: string | null;
       square_footage: number | null;
       city: string | null;
+      manual_render_image_url: string | null;
       updated_at: Date;
     }>
   >`
@@ -46,6 +51,7 @@ export async function getHouseDetailsMap() {
       sold_price,
       square_footage,
       city,
+      manual_render_image_url,
       updated_at
     from house_details
     order by house_name
@@ -58,11 +64,46 @@ export async function getHouseDetailsMap() {
       soldPrice: row.sold_price === null ? null : Number(row.sold_price),
       squareFootage: row.square_footage,
       city: row.city,
+      manualRenderImageUrl: row.manual_render_image_url,
       updatedAt: row.updated_at.toISOString(),
     });
   }
 
   return details;
+}
+
+export async function saveHouseManualRenderImage({
+  qboBankAccountId,
+  houseName,
+  manualRenderImageUrl,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  manualRenderImageUrl: string | null;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to save house render images.");
+  }
+
+  await ensureHouseDetailsTable();
+  await sql()`
+    insert into house_details (
+      qbo_bank_account_id,
+      house_name,
+      manual_render_image_url,
+      updated_at
+    )
+    values (
+      ${qboBankAccountId},
+      ${houseName},
+      ${manualRenderImageUrl},
+      now()
+    )
+    on conflict (qbo_bank_account_id) do update set
+      house_name = excluded.house_name,
+      manual_render_image_url = excluded.manual_render_image_url,
+      updated_at = now()
+  `;
 }
 
 export async function saveHouseDetail({

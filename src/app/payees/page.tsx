@@ -1,16 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowRightLeft,
-  Brain,
-  ClipboardCheck,
-  ClipboardList,
-  Database,
+  ArrowLeft,
   HandCoins,
-  LayoutDashboard,
   ReceiptText,
-  ShieldCheck,
-  UserPlus,
 } from "lucide-react";
 
 import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
@@ -32,14 +25,6 @@ function currency(value: number) {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function shortCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
   }).format(value);
 }
 
@@ -102,181 +87,70 @@ function buildPayeeSummaries(transactions: SavedQboTransaction[]) {
   );
 }
 
-function getTransactionMonth(transaction: SavedQboTransaction) {
-  return transaction.txnDate?.slice(0, 7) ?? null;
-}
-
-function getLatestMonth(transactions: SavedQboTransaction[]) {
-  return transactions.reduce<string | null>((latest, transaction) => {
-    const month = getTransactionMonth(transaction);
-
-    if (!month) {
-      return latest;
-    }
-
-    return !latest || month > latest ? month : latest;
-  }, null);
-}
-
-function formatMonth(month: string | null) {
-  if (!month) {
-    return "latest sync";
-  }
-
-  const [year, monthNumber] = month.split("-").map(Number);
-  const date = new Date(year, monthNumber - 1, 1);
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    year: "numeric",
-  }).format(date);
-}
-
-function isInternalTransfer(transaction: SavedQboTransaction) {
-  const keywords = [
-    "income clearing",
-    "management",
-    "marketing",
-    "operating",
-    "operations",
-    "payroll",
-    "transfer",
-  ];
-  const text = [
-    transaction.payeeName,
-    transaction.bankAccountName,
-    transaction.memo,
-    transaction.expenseAccountNames.join(" "),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return keywords.some((keyword) => text.includes(keyword));
-}
-
 export default async function PayeesPage() {
   const transactionsByBankAccount = await getTransactionsByBankAccount();
   const transactions = Array.from(transactionsByBankAccount.values())
     .flat()
     .sort((a, b) => String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")));
   const payees = buildPayeeSummaries(transactions);
-  const topPayees = payees.slice(0, 20);
-  const latestMonth = getLatestMonth(transactions);
-  const newPayees = payees
-    .filter((payee) => payee.firstPaymentDate?.slice(0, 7) === latestMonth)
-    .slice(0, 12);
-  const internalTransferPayees = buildPayeeSummaries(transactions.filter(isInternalTransfer)).slice(0, 12);
-  const totalPaid = payees.reduce((total, payee) => total + payee.totalPaid, 0);
-  const internalTransferTotal = internalTransferPayees.reduce(
-    (total, payee) => total + payee.totalPaid,
-    0,
-  );
-  const biggestPayee = payees[0];
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
-      <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
-          <div className="mb-8">
-            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+    <main className="min-h-screen bg-[#f2f1ea] text-[#17213c] [background-image:linear-gradient(rgba(18,29,73,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(18,29,73,0.045)_1px,transparent_1px)] [background-size:32px_32px]">
+      <header className="bg-[#121d49] px-6 py-5 text-white shadow-sm">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[9px] bg-white p-2 shadow-sm">
               <Image
                 alt="South Texas Builders"
-                className="h-auto w-full"
+                className="h-full w-full object-contain"
                 height={1080}
                 src="/south-texas-builders-logo.png"
                 width={1080}
               />
             </div>
             <div>
-              <div className="brand-heading text-base font-semibold text-[#121d49]">
-                South Texas Builders
-              </div>
-              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
+              <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.22em] text-[#ff332b]">
                 Money Out
-              </div>
+              </p>
+              <h1 className="brand-heading mt-1 flex items-center gap-3 text-[28px] font-bold uppercase tracking-[0.05em]">
+                <HandCoins size={26} />
+                Payees
+              </h1>
             </div>
           </div>
 
-          <nav className="space-y-1">
-            <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
-            <NavItem href="/draws-budget" icon={ClipboardCheck} label="Draws & Budget" />
-            <NavItem active icon={HandCoins} label="Payees" />
-            <NavItem href="/agent-health" icon={Brain} label="Intelligent Center" />
-            <NavItem href="/company-brain" icon={Database} label="Company Brain" />
-            <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
-          </nav>
-        </aside>
+          <Link
+            className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-white/20 bg-white/10 px-4 text-sm font-bold uppercase tracking-[0.06em] text-white hover:bg-white/15"
+            href="/draws-budget"
+          >
+            <ArrowLeft size={17} />
+            Back
+          </Link>
+        </div>
+      </header>
 
-        <section className="min-w-0 px-6 py-5">
-          <header className="mb-5">
-            <p className="brand-kicker text-xs font-bold uppercase text-[#ff332b]">Payees</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#121d49]">
-              Who Is Getting The Most Money
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5f6b66]">
-              This page reads synced QuickBooks checks/payments and ranks vendors, employees, and
-              payees by total money paid.
-            </p>
-          </header>
+      <section className="mx-auto max-w-[1440px] px-6 py-6">
+        <div className="mb-5 rounded-[12px] border border-[#dedbd1] bg-white p-5 shadow-sm">
+          <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff332b]">
+            Payee List
+          </p>
+          <h2 className="brand-heading mt-1 text-[24px] font-bold uppercase tracking-[0.04em] text-[#121d49]">
+            Everyone Paid Through South Texas Builders
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-[#727d78]">
+            Click a payee to see how much they were paid by month, then open a month
+            to review the check-level breakdown.
+          </p>
+        </div>
 
-          <section className="mb-5 grid grid-cols-4 gap-3">
-            <Metric label="Total Payees" value={String(payees.length)} />
-            <Metric label="Total Money Out" value={shortCurrency(totalPaid)} />
-            <Metric label={`New in ${formatMonth(latestMonth)}`} value={String(newPayees.length)} />
-            <Metric
-              label="Internal Movement"
-              value={internalTransferTotal ? shortCurrency(internalTransferTotal) : "$0"}
-            />
-          </section>
-
-          <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white p-3">
-            <div className="flex flex-wrap gap-2">
-              <SectionJump href="#top-payees" icon={ReceiptText} label="Top Payees" />
-              <SectionJump href="#new-payees" icon={UserPlus} label="New Payees" />
-              <SectionJump
-                href="#internal-transfers"
-                icon={ArrowRightLeft}
-                label="Internal Transfers"
-              />
-            </div>
-          </section>
-
-          <PayeeSection
-            emptyText="No synced checks/payments found yet. Press Sync QB from the dashboard first."
-            icon={ReceiptText}
-            id="top-payees"
-            payees={topPayees}
-            subtitle={
-              biggestPayee
-                ? `${biggestPayee.name} is currently the largest payee seen in QuickBooks.`
-                : "Sorted by total paid from synced QuickBooks transactions."
-            }
-            title="Top Payees"
-          />
-
-          <PayeeSection
-            emptyText={`No brand-new payees were found in ${formatMonth(latestMonth)}.`}
-            icon={UserPlus}
-            id="new-payees"
-            payees={newPayees}
-            rankLabel="New"
-            subtitle={`Payees whose first synced payment appears in ${formatMonth(latestMonth)}.`}
-            title="New Payees"
-          />
-
-          <PayeeSection
-            emptyText="No internal transfer-looking payments were found in the synced data."
-            icon={ArrowRightLeft}
-            id="internal-transfers"
-            payees={internalTransferPayees}
-            rankLabel="Move"
-            subtitle="Payments that mention marketing, payroll, operating, management, income clearing, or transfer."
-            title="Internal Transfers"
-          />
-        </section>
-      </div>
+        <PayeeSection
+          emptyText="No synced checks/payments found yet. Press Sync QB from the dashboard first."
+          icon={ReceiptText}
+          payees={payees}
+          subtitle="Sorted by total paid from synced QuickBooks checks and payments."
+          title="Payees"
+        />
+      </section>
     </main>
   );
 }
@@ -284,168 +158,103 @@ export default async function PayeesPage() {
 function PayeeSection({
   emptyText,
   icon: Icon,
-  id,
   payees,
-  rankLabel,
   subtitle,
   title,
 }: {
   emptyText: string;
   icon: typeof ReceiptText;
-  id: string;
   payees: PayeeSummary[];
-  rankLabel?: string;
   subtitle: string;
   title: string;
 }) {
   return (
-    <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white" id={id}>
-            <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold">{title}</h2>
-                <p className="mt-1 text-xs text-[#69746f]">
-                  {subtitle}
-                </p>
-              </div>
-              <Icon className="text-[#ff332b]" size={20} />
-            </div>
+    <section className="mb-5 rounded-[12px] border border-[#dedbd1] bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-[#ece7dc] px-5 py-4">
+        <div>
+          <h2 className="brand-heading text-[18px] font-bold uppercase tracking-[0.05em] text-[#121d49]">
+            {title}
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-[#727d78]">{subtitle}</p>
+        </div>
+        <div className="grid size-10 place-items-center rounded-[8px] bg-[#fff0ef] text-[#ff332b]">
+          <Icon size={20} />
+        </div>
+      </div>
 
-            {payees.length ? (
-              <div className="overflow-auto">
-                <table className="w-full min-w-[980px] border-collapse text-sm">
-                  <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Payee</th>
-                      <th className="px-4 py-3 text-right font-medium">Total Paid</th>
-                      <th className="px-4 py-3 text-right font-medium">Payments</th>
-                      <th className="px-4 py-3 font-medium">Last Payment</th>
-                      <th className="px-4 py-3 font-medium">Paid From</th>
-                      <th className="px-4 py-3 font-medium">Recent Checks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payees.map((payee, index) => (
-                      <tr className="border-t border-[#edf0eb]" key={payee.name}>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="grid size-8 place-items-center rounded-md bg-[#fff0ef] text-xs font-bold text-[#ff332b]">
-                              {rankLabel ? `${rankLabel} ${index + 1}` : index + 1}
-                            </div>
-                            <div>
-                              <Link
-                                className="font-semibold text-[#121d49] hover:text-[#ff332b]"
-                                href={payeeHref(payee.name)}
-                              >
-                                {payee.name}
-                              </Link>
-                              <div className="text-xs text-[#69746f]">
-                                First seen {payee.firstPaymentDate ?? "No date"}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-right font-semibold text-[#121d49]">
-                          {currency(payee.totalPaid)}
-                        </td>
-                        <td className="px-4 py-4 text-right">{payee.paymentCount}</td>
-                        <td className="px-4 py-4 text-[#4f5b56]">
-                          {payee.lastPaymentDate ?? "No date"}
-                        </td>
-                        <td className="max-w-[230px] px-4 py-4 text-xs leading-5 text-[#69746f]">
-                          {payee.bankAccounts.slice(0, 3).join(", ") || "No bank account"}
-                          {payee.bankAccounts.length > 3 ? "..." : ""}
-                        </td>
-                        <td className="max-w-[330px] px-4 py-4">
-                          <div className="space-y-1">
-                            {payee.transactions.slice(0, 3).map((transaction) => (
-                              <div
-                                className="flex items-center justify-between gap-3 rounded-md bg-[#fbfcfa] px-2 py-1 text-xs"
-                                key={`${transaction.source}-${transaction.id}`}
-                              >
-                                <span className="truncate text-[#69746f]">
-                                  {transaction.txnDate ?? "No date"} ·{" "}
-                                  {transaction.bankAccountName ?? "No account"}
-                                </span>
-                                <span className="font-semibold text-[#121d49]">
-                                  {currency(Math.abs(transaction.totalAmount))}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-5 text-sm leading-6 text-[#69746f]">
-                {emptyText}
-              </div>
-            )}
-          </section>
-  );
-}
-
-function SectionJump({
-  href,
-  icon: Icon,
-  label,
-}: {
-  href: string;
-  icon: typeof ReceiptText;
-  label: string;
-}) {
-  return (
-    <a
-      className="inline-flex h-9 items-center gap-2 rounded-md border border-[#dfe5dc] bg-[#fbfcfa] px-3 text-sm font-semibold text-[#121d49] hover:border-[#ff332b] hover:text-[#ff332b]"
-      href={href}
-    >
-      <Icon size={16} />
-      {label}
-    </a>
-  );
-}
-
-function NavItem({
-  icon: Icon,
-  label,
-  active = false,
-  href,
-}: {
-  icon: typeof LayoutDashboard;
-  label: string;
-  active?: boolean;
-  href?: string;
-}) {
-  const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
-    active
-      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
-      : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
-  }`;
-
-  if (href) {
-    return (
-      <Link className={className} href={href}>
-        <Icon size={17} />
-        {label}
-      </Link>
-    );
-  }
-
-  return (
-    <div className={className}>
-      <Icon size={17} />
-      {label}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
-      <div className="text-xs font-medium uppercase text-[#69746f]">{label}</div>
-      <div className="mt-3 text-2xl font-semibold text-[#18211f]">{value}</div>
-    </div>
+      {payees.length ? (
+        <div className="overflow-auto">
+          <table className="w-full min-w-[980px] border-collapse text-sm">
+            <thead className="sticky top-0 bg-[#fbfaf6] text-left text-[11px] uppercase tracking-[0.14em] text-[#8d94a7]">
+              <tr>
+                <th className="px-5 py-3 font-bold">Payee</th>
+                <th className="px-5 py-3 text-right font-bold">Total Paid</th>
+                <th className="px-5 py-3 text-right font-bold">Payments</th>
+                <th className="px-5 py-3 font-bold">Last Payment</th>
+                <th className="px-5 py-3 font-bold">Paid From</th>
+                <th className="px-5 py-3 font-bold">Recent Checks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payees.map((payee, index) => (
+                <tr className="border-t border-[#ece7dc]" key={payee.name}>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="grid size-9 place-items-center rounded-[8px] border border-[#ffd4d1] bg-[#fff7f6] text-xs font-bold text-[#ff332b]">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <Link
+                          className="font-bold text-[#121d49] hover:text-[#ff332b]"
+                          href={payeeHref(payee.name)}
+                        >
+                          {payee.name}
+                        </Link>
+                        <div className="text-xs font-semibold text-[#8d94a7]">
+                          First seen {payee.firstPaymentDate ?? "No date"}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-right font-bold text-[#121d49]">
+                    {currency(payee.totalPaid)}
+                  </td>
+                  <td className="px-5 py-4 text-right font-semibold text-[#727d78]">
+                    {payee.paymentCount}
+                  </td>
+                  <td className="px-5 py-4 font-semibold text-[#727d78]">
+                    {payee.lastPaymentDate ?? "No date"}
+                  </td>
+                  <td className="max-w-[230px] px-5 py-4 text-xs font-semibold leading-5 text-[#727d78]">
+                    {payee.bankAccounts.slice(0, 3).join(", ") || "No bank account"}
+                    {payee.bankAccounts.length > 3 ? "..." : ""}
+                  </td>
+                  <td className="max-w-[330px] px-5 py-4">
+                    <div className="space-y-1">
+                      {payee.transactions.slice(0, 3).map((transaction) => (
+                        <div
+                          className="flex items-center justify-between gap-3 rounded-[8px] bg-[#fbfaf6] px-2 py-1 text-xs"
+                          key={`${transaction.source}-${transaction.id}`}
+                        >
+                          <span className="truncate text-[#727d78]">
+                            {transaction.txnDate ?? "No date"} ·{" "}
+                            {transaction.bankAccountName ?? "No account"}
+                          </span>
+                          <span className="font-bold text-[#121d49]">
+                            {currency(Math.abs(transaction.totalAmount))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="p-5 text-sm font-semibold leading-6 text-[#727d78]">{emptyText}</div>
+      )}
+    </section>
   );
 }

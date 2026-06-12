@@ -12,18 +12,24 @@ const bucketConfigs = {
   marketing: {
     label: "Marketing",
     description: "Charges and checks connected to the Marketing bank account.",
+    reviewTitle: "Marketing Payments",
+    payeeSubtitle: "Every vendor, platform, or payee paid from Marketing, sorted by total paid.",
     matchers: ["marketing"],
     icon: Megaphone,
   },
   "management-payroll": {
-    label: "Management Payroll",
+    label: "Management",
     description: "Charges and checks connected to the Payroll / management bucket.",
+    reviewTitle: "Management Payments",
+    payeeSubtitle: "Every person, vendor, or payee paid from Management, sorted by total paid.",
     matchers: ["payroll", "management"],
     icon: WalletCards,
   },
   operations: {
     label: "Operations",
     description: "Charges and checks connected to the operating bucket.",
+    reviewTitle: "Operations Charges",
+    payeeSubtitle: "Every vendor, service, software, item, or payee charged to Operations, sorted by total paid.",
     matchers: ["operating"],
     icon: Landmark,
   },
@@ -35,7 +41,6 @@ type MonthGroup = {
   key: string;
   label: string;
   totalOut: number;
-  totalIn: number;
   payees: PayeeSpendSummary[];
   transactions: SavedQboTransaction[];
 };
@@ -136,14 +141,11 @@ function groupByMonth(transactions: SavedQboTransaction[]) {
       key,
       label: monthLabel(key),
       totalOut: 0,
-      totalIn: 0,
       payees: [],
       transactions: [],
     };
 
-    if (transaction.totalAmount < 0) {
-      existing.totalIn += Math.abs(transaction.totalAmount);
-    } else {
+    if (transaction.totalAmount >= 0) {
       existing.totalOut += Math.abs(transaction.totalAmount);
     }
 
@@ -192,147 +194,122 @@ export default async function BucketDetailPage({
     .sort((a, b) => String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")));
   const groups = groupByMonth(transactions);
   const overallPayees = buildPayeeSpendSummaries(transactions);
-  const totalOut = transactions.reduce(
-    (total, transaction) => total + (transaction.totalAmount >= 0 ? Math.abs(transaction.totalAmount) : 0),
-    0,
-  );
-  const totalIn = transactions.reduce(
-    (total, transaction) => total + (transaction.totalAmount < 0 ? Math.abs(transaction.totalAmount) : 0),
-    0,
-  );
-  const balance = accounts.reduce((total, account) => total + (account.CurrentBalance ?? 0), 0);
   const Icon = config.icon;
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
-      <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
-          <div className="mb-8">
-            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+    <main className="min-h-screen bg-[#f2f1ea] text-[#17213c] [background-image:linear-gradient(rgba(18,29,73,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(18,29,73,0.045)_1px,transparent_1px)] [background-size:32px_32px]">
+      <header className="bg-[#121d49] px-6 py-5 text-white shadow-sm">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[9px] bg-white p-2 shadow-sm">
               <Image
                 alt="South Texas Builders"
-                className="h-auto w-full"
+                className="h-full w-full object-contain"
                 height={1080}
                 src="/south-texas-builders-logo.png"
                 width={1080}
               />
             </div>
-            <div className="brand-heading text-base font-semibold text-[#121d49]">
-              South Texas Builders
-            </div>
-            <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
-              Bucket Detail
+            <div>
+              <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.22em] text-[#ff332b]">
+                Internal Spending
+              </p>
+              <h1 className="brand-heading mt-1 flex items-center gap-3 text-[28px] font-bold uppercase tracking-[0.05em]">
+                <Icon size={26} />
+                {config.label}
+              </h1>
             </div>
           </div>
 
-          <nav className="space-y-1">
+          <div className="flex items-center gap-3">
             <Link
-              className="flex h-10 items-center gap-3 rounded-md px-3 text-sm font-bold text-[#ff332b] hover:bg-[#fff0ef]"
-              href="/"
+              className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-white/20 bg-white/10 px-4 text-sm font-bold uppercase tracking-[0.06em] text-white hover:bg-white/15"
+              href="/draws-budget"
             >
               <ArrowLeft size={17} />
-              Back to Dashboard
+              Back
             </Link>
-          </nav>
-        </aside>
-
-        <section className="flex min-w-0 flex-col">
-          <header className="flex min-h-16 items-center justify-between border-b border-[#d9dee9] bg-white px-6 py-3">
-            <div>
-              <p className="brand-kicker text-[10px] font-bold uppercase text-[#ff332b]">
-                Internal Bucket
-              </p>
-              <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold text-[#121d49]">
-                <Icon size={24} />
-                {config.label}
-              </h1>
-              <p className="text-xs text-[#69746f]">{config.description}</p>
-            </div>
             <a
-              className="inline-flex items-center gap-2 rounded-md bg-[#ff332b] px-3 py-1.5 text-sm font-bold text-white"
+              className="inline-flex h-11 items-center gap-2 rounded-[8px] bg-[#ff332b] px-4 text-sm font-bold uppercase tracking-[0.06em] text-white shadow-sm"
               href={`${appUrl}/api/qbo/accounts/sync?next=/buckets/${bucket}`}
             >
               <RefreshCcw size={16} />
               Sync QB
             </a>
-          </header>
+          </div>
+        </div>
+      </header>
 
-          <div className="flex-1 px-6 py-5">
-            <section className="mb-5 grid grid-cols-4 gap-3">
-              <Metric label="Current Balance" value={currency(balance)} />
-              <Metric label="Money Out Seen" value={currency(totalOut)} />
-              <Metric label="Money In Seen" value={currency(totalIn)} />
-              <Metric label="Transactions" value={String(transactions.length)} />
-            </section>
-
-            <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white p-4">
-              <h2 className="text-sm font-semibold">Connected QuickBooks Accounts</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {accounts.length ? (
-                  accounts.map((account) => (
-                    <span
-                      className="rounded-md border border-[#dfe5dc] bg-[#fbfcfa] px-3 py-2 text-xs text-[#4f5b56]"
-                      key={account.Id}
-                    >
-                      {accountName(account)} · {currency(account.CurrentBalance ?? 0)}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-sm text-[#69746f]">
-                    No matching QuickBooks bank account was found for this bucket.
+      <div className="mx-auto max-w-[1440px] px-6 py-6">
+        <section className="mb-5 rounded-[12px] border border-[#dedbd1] bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff332b]">
+                {config.label} Review
+              </p>
+              <h2 className="brand-heading mt-1 text-[24px] font-bold uppercase tracking-[0.04em] text-[#121d49]">
+                {config.reviewTitle}
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#69746f]">
+                Open a month below to see who was paid and each synced QuickBooks check or payment.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {accounts.length ? (
+                accounts.map((account) => (
+                  <span
+                    className="rounded-[8px] border border-[#dedbd1] bg-[#fbfaf6] px-3 py-2 text-xs font-bold text-[#66716c]"
+                    key={account.Id}
+                  >
+                    {accountName(account)}
                   </span>
-                )}
-              </div>
-            </section>
-
-            <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white">
-              <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
-                <div>
-                  <h2 className="text-sm font-semibold">Total Spent By Payee</h2>
-                  <p className="mt-1 text-xs text-[#69746f]">
-                    Overall total for this bucket, grouped by vendor, employee, or payee.
-                  </p>
-                </div>
-                <span className="rounded-md bg-[#fff0ef] px-2 py-1 text-xs font-bold text-[#ff332b]">
-                  {overallPayees.length}
+                ))
+              ) : (
+                <span className="text-sm font-semibold text-[#69746f]">
+                  No matching QuickBooks bank account found.
                 </span>
-              </div>
-
-              <PayeeSpendTable
-                emptyText="No payee totals found yet for this bucket."
-                payees={overallPayees}
-              />
-            </section>
-
-            {groups.length ? (
-              <div className="space-y-4">
-                {groups.map((group, index) => (
-                  <MonthSection defaultOpen={index === 0} group={group} key={group.key} />
-                ))}
-              </div>
-            ) : (
-              <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-900">
-                <h2 className="text-sm font-semibold">No charges found yet</h2>
-                <p className="mt-2 text-sm leading-6">
-                  Sync QB after QuickBooks has checks or purchases in this account. This first
-                  version reads charges/checks already available from the QuickBooks transaction
-                  sync.
-                </p>
-              </section>
-            )}
+              )}
+            </div>
           </div>
         </section>
+
+        <section className="mb-5 rounded-[12px] border border-[#dedbd1] bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-[#ece7dc] px-5 py-4">
+            <div>
+              <h2 className="brand-heading text-[18px] font-bold uppercase tracking-[0.05em] text-[#121d49]">
+                Everyone Paid
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-[#727d78]">
+                {config.payeeSubtitle}
+              </p>
+            </div>
+            <span className="rounded-[8px] bg-[#fff0ef] px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-[#ff332b]">
+              {overallPayees.length} payees
+            </span>
+          </div>
+
+          <PayeeSpendTable
+            emptyText="No payee totals found yet for this bucket."
+            payees={overallPayees}
+          />
+        </section>
+
+        {groups.length ? (
+          <div className="space-y-4">
+            {groups.map((group, index) => (
+              <MonthSection defaultOpen={index === 0} group={group} key={group.key} />
+            ))}
+          </div>
+        ) : (
+          <section className="rounded-[12px] border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm">
+            <h2 className="text-sm font-bold uppercase tracking-[0.08em]">No charges found yet</h2>
+            <p className="mt-2 text-sm leading-6">
+              Sync QB after QuickBooks has checks or purchases in this account.
+            </p>
+          </section>
+        )}
       </div>
     </main>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
-      <div className="text-xs font-medium uppercase text-[#69746f]">{label}</div>
-      <div className="mt-3 text-2xl font-semibold text-[#18211f]">{value}</div>
-    </div>
   );
 }
 
@@ -350,25 +327,25 @@ function PayeeSpendTable({
   return (
     <div className="overflow-auto">
       <table className="w-full min-w-[760px] border-collapse text-sm">
-        <thead className="bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
+        <thead className="bg-[#fbfaf6] text-left text-[11px] uppercase tracking-[0.14em] text-[#8d94a7]">
           <tr>
             <th className="px-4 py-3 font-medium">Payee</th>
-            <th className="px-4 py-3 text-right font-medium">Total Spent</th>
-            <th className="px-4 py-3 text-right font-medium">Transactions</th>
+            <th className="px-4 py-3 text-right font-medium">Total Paid</th>
+            <th className="px-4 py-3 text-right font-medium">Checks / Payments</th>
             <th className="px-4 py-3 font-medium">Last Payment</th>
-            <th className="px-4 py-3 font-medium">Recent Detail</th>
+            <th className="px-4 py-3 font-medium">Recent Payments</th>
           </tr>
         </thead>
         <tbody>
           {payees.map((payee) => (
-            <tr className="border-t border-[#edf0eb]" key={payee.name}>
-              <td className="px-4 py-3 font-semibold">{payee.name}</td>
-              <td className="px-4 py-3 text-right font-semibold text-[#121d49]">
+            <tr className="border-t border-[#ece7dc]" key={payee.name}>
+              <td className="px-4 py-3 font-bold text-[#121d49]">{payee.name}</td>
+              <td className="px-4 py-3 text-right font-bold text-[#121d49]">
                 {currency(payee.totalSpent)}
               </td>
               <td className="px-4 py-3 text-right">{payee.transactionCount}</td>
               <td className="px-4 py-3 text-[#69746f]">{payee.lastPaymentDate ?? "No date"}</td>
-              <td className="max-w-[360px] px-4 py-3 text-xs leading-5 text-[#69746f]">
+              <td className="max-w-[360px] px-4 py-3 text-xs font-semibold leading-5 text-[#69746f]">
                 {payee.transactions
                   .slice(0, 2)
                   .map((transaction) => `${transaction.txnDate ?? "No date"} · ${currency(Math.abs(transaction.totalAmount))}`)
@@ -389,83 +366,83 @@ function MonthSection({
   defaultOpen: boolean;
   group: MonthGroup;
 }) {
+  const spendingTransactions = group.transactions.filter((transaction) => transaction.totalAmount >= 0);
+
   return (
     <details
-      className="rounded-lg border border-[#dfe5dc] bg-white [&_summary::-webkit-details-marker]:hidden"
+      className="rounded-[12px] border border-[#dedbd1] bg-white shadow-sm [&_summary::-webkit-details-marker]:hidden"
       open={defaultOpen}
     >
-      <summary className="flex cursor-pointer items-center justify-between border-b border-[#edf0eb] px-4 py-3">
+      <summary className="flex cursor-pointer items-center justify-between border-b border-[#ece7dc] px-5 py-4">
         <div className="flex items-center gap-2">
           <CalendarDays className="text-[#ff332b]" size={18} />
           <div>
-            <h2 className="text-sm font-semibold">{group.label}</h2>
-            <p className="mt-1 text-xs text-[#69746f]">
-              Click to see what was spent this month.
+            <h2 className="brand-heading text-[18px] font-bold uppercase tracking-[0.04em] text-[#121d49]">
+              {group.label}
+            </h2>
+            <p className="mt-1 text-xs font-semibold text-[#69746f]">
+              Click to see who was paid this month.
             </p>
           </div>
         </div>
-        <div className="text-sm text-[#69746f]">
-          Out: <span className="font-semibold text-[#121d49]">{currency(group.totalOut)}</span>
-          {group.totalIn > 0 ? (
-            <>
-              {" "}· In:{" "}
-              <span className="font-semibold text-emerald-700">{currency(group.totalIn)}</span>
-            </>
-          ) : null}
+        <div className="rounded-[8px] border border-[#dedbd1] bg-[#fbfaf6] px-3 py-2 text-sm font-bold text-[#69746f]">
+          Paid: <span className="text-[#121d49]">{currency(group.totalOut)}</span>
         </div>
       </summary>
 
-      <div className="border-b border-[#edf0eb]">
-        <div className="px-4 py-3">
-          <h3 className="text-xs font-bold uppercase text-[#69746f]">Spent This Month By Payee</h3>
+      <div className="border-b border-[#ece7dc]">
+        <div className="px-5 py-3">
+          <h3 className="brand-kicker text-[11px] font-bold uppercase tracking-[0.16em] text-[#8d94a7]">
+            Paid This Month By Payee
+          </h3>
         </div>
         <PayeeSpendTable
-          emptyText="No money-out payees found for this month."
+          emptyText="No paid payees found for this month."
           payees={group.payees}
         />
       </div>
 
-      <div className="overflow-auto">
-        <table className="w-full min-w-[900px] border-collapse text-sm">
-          <thead className="bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
-            <tr>
-              <th className="px-4 py-3 font-medium">Date</th>
-              <th className="px-4 py-3 font-medium">Payee</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium">Memo</th>
-              <th className="px-4 py-3 text-right font-medium">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {group.transactions.map((transaction) => (
-              <tr className="border-t border-[#edf0eb]" key={`${transaction.source}-${transaction.id}`}>
-                <td className="px-4 py-3">{transaction.txnDate ?? "No date"}</td>
-                <td className="px-4 py-3 font-medium">
-                  {transaction.payeeName ?? "No payee"}
-                  {transaction.docNumber ? (
-                    <div className="mt-1 text-xs font-normal text-[#69746f]">
-                      #{transaction.docNumber}
-                    </div>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 text-[#69746f]">{transaction.source}</td>
-                <td className="max-w-[340px] px-4 py-3 text-[#4f5b56]">
-                  {transaction.memo || transaction.expenseAccountNames.join(", ") || "No memo"}
-                </td>
-                <td
-                  className={`px-4 py-3 text-right font-semibold ${
-                    transaction.totalAmount < 0 ? "text-emerald-700" : "text-[#121d49]"
-                  }`}
-                >
-                  {transaction.totalAmount < 0
-                    ? currency(Math.abs(transaction.totalAmount))
-                    : currency(transaction.totalAmount)}
-                </td>
+      {spendingTransactions.length ? (
+        <div className="overflow-auto">
+          <table className="w-full min-w-[900px] border-collapse text-sm">
+            <thead className="bg-[#fbfaf6] text-left text-[11px] uppercase tracking-[0.14em] text-[#8d94a7]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Date</th>
+                <th className="px-4 py-3 font-medium">Payee</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Memo</th>
+                <th className="px-4 py-3 text-right font-medium">Amount Paid</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {spendingTransactions.map((transaction) => (
+                <tr className="border-t border-[#ece7dc]" key={`${transaction.source}-${transaction.id}`}>
+                  <td className="px-4 py-3">{transaction.txnDate ?? "No date"}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {transaction.payeeName ?? "No payee"}
+                    {transaction.docNumber ? (
+                      <div className="mt-1 text-xs font-normal text-[#69746f]">
+                        #{transaction.docNumber}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3 text-[#69746f]">{transaction.source}</td>
+                  <td className="max-w-[340px] px-4 py-3 text-[#4f5b56]">
+                    {transaction.memo || transaction.expenseAccountNames.join(", ") || "No memo"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-[#121d49]">
+                    {currency(transaction.totalAmount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="border-t border-[#ece7dc] px-5 py-4 text-sm font-semibold text-[#69746f]">
+          No paid checks or purchases found for this month.
+        </div>
+      )}
     </details>
   );
 }

@@ -8,11 +8,13 @@ export function AiHealthChat({
   hideInput = false,
   initialQuestion = "Tell me which houses need attention first.",
   openAiReady,
+  starterQuestions = [],
 }: {
   buttonLabel?: string;
   hideInput?: boolean;
   initialQuestion?: string;
   openAiReady: boolean;
+  starterQuestions?: string[];
 }) {
   const [question, setQuestion] = useState(initialQuestion);
   const [answer, setAnswer] = useState("");
@@ -53,26 +55,41 @@ export function AiHealthChat({
   }
 
   return (
-    <div className="rounded-lg border border-dashed border-[#d9dee9] bg-[#f7f8f5] p-4">
-      <div className="flex items-center gap-2 text-sm font-bold text-[#121a36]">
+    <div className="rounded-[12px] border border-[#dedbd1] bg-[#fbfaf6] p-4">
+      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-[#121a36]">
         <MessageSquareText className="h-4 w-4 text-[#ff332b]" />
         Read-only construction analyst
       </div>
-      <p className="mt-2 text-sm leading-6 text-[#5f6b66]">
+      <p className="mt-2 text-sm font-semibold leading-6 text-[#5f6b66]">
         Ask questions about house risk, profit, budget health, and what needs attention. The AI
         reads the dashboard data and explains it in simple language. It does not change QuickBooks.
       </p>
+      {starterQuestions.length > 0 ? (
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {starterQuestions.map((starterQuestion) => (
+            <button
+              className="rounded-[8px] border border-[#d9dee9] bg-white px-3 py-2 text-left text-xs font-bold leading-5 text-[#121a36] transition hover:border-[#ff332b] hover:bg-[#fff8f7] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!openAiReady || isLoading}
+              key={starterQuestion}
+              onClick={() => setQuestion(starterQuestion)}
+              type="button"
+            >
+              {starterQuestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {hideInput ? null : (
         <textarea
-          className="mt-4 min-h-28 w-full rounded-md border border-[#d9dee9] bg-white p-3 text-sm text-[#121a36] outline-none transition focus:border-[#ff332b]"
+          className="mt-4 min-h-36 w-full rounded-[10px] border-2 border-[#121d49] bg-white p-4 text-base font-semibold leading-7 text-[#121a36] outline-none transition placeholder:text-[#9aa3b7] focus:border-[#ff332b]"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask about a house, budget, profit, or risk..."
+          placeholder="Ask any Project Health question: house risk, budget, draws, vendors, payees, or cash flow..."
           disabled={!openAiReady || isLoading}
         />
       )}
       <button
-        className={`${hideInput ? "mt-4" : "mt-3"} flex w-full items-center justify-center gap-2 rounded-md bg-[#121a36] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#ff332b] disabled:cursor-not-allowed disabled:opacity-60`}
+        className={`${hideInput ? "mt-4" : "mt-3"} flex min-h-12 w-full items-center justify-center gap-2 rounded-[10px] bg-[#121d49] px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:bg-[#ff332b] disabled:cursor-not-allowed disabled:opacity-60`}
         disabled={!openAiReady || isLoading || !question.trim()}
         onClick={askAi}
       >

@@ -7,6 +7,7 @@ import { getAccountsSnapshotStatus } from "@/lib/qbo/accounts-store";
 import { getQboSetupDiagnostics } from "@/lib/qbo/oauth";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
 import { getTransactionsSnapshotStatus } from "@/lib/qbo/transactions-store";
+import { getSchedulingConnectionStatus } from "@/lib/scheduling/status-store";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,7 @@ export async function GET() {
   const transactionsSnapshot = await getTransactionsSnapshotStatus();
   const cfoDataLayer = await getCfoDataStatus();
   const companyBrain = await getCompanyBrainStatus();
+  const scheduling = await getSchedulingConnectionStatus();
 
   return NextResponse.json({
     app: "South Texas Builders Project Health",
@@ -23,11 +25,13 @@ export async function GET() {
       quickBooks: qboConnection.connected,
       database: Boolean(process.env.DATABASE_URL),
       ai: Boolean(process.env.OPENAI_API_KEY),
+      scheduling: scheduling.connected,
     },
     qboConnection,
     qboSetup: getQboSetupDiagnostics(),
     accountsSnapshot,
     transactionsSnapshot,
+    scheduling,
     cfoDataLayer,
     companyBrain,
     env: getEnvStatus(),

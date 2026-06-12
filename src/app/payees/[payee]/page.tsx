@@ -2,14 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Brain,
-  ClipboardCheck,
-  ClipboardList,
-  Database,
   HandCoins,
-  LayoutDashboard,
   ReceiptText,
-  ShieldCheck,
 } from "lucide-react";
 
 import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
@@ -21,6 +15,7 @@ type MonthSummary = {
   label: string;
   totalPaid: number;
   count: number;
+  transactions: SavedQboTransaction[];
 };
 
 function currency(value: number) {
@@ -68,10 +63,12 @@ function buildMonthSummaries(transactions: SavedQboTransaction[]) {
       label: monthLabel(key),
       totalPaid: 0,
       count: 0,
+      transactions: [],
     };
 
     existing.totalPaid += Math.abs(transaction.totalAmount);
     existing.count += 1;
+    existing.transactions.push(transaction);
     summaries.set(key, existing);
   }
 
@@ -100,207 +97,175 @@ export default async function PayeeDetailPage({
   const monthSummaries = buildMonthSummaries(transactions);
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
-      <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
-          <div className="mb-8">
-            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+    <main className="min-h-screen bg-[#f2f1ea] text-[#17213c] [background-image:linear-gradient(rgba(18,29,73,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(18,29,73,0.045)_1px,transparent_1px)] [background-size:32px_32px]">
+      <header className="bg-[#121d49] px-6 py-5 text-white shadow-sm">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[9px] bg-white p-2 shadow-sm">
               <Image
                 alt="South Texas Builders"
-                className="h-auto w-full"
+                className="h-full w-full object-contain"
                 height={1080}
                 src="/south-texas-builders-logo.png"
                 width={1080}
               />
             </div>
             <div>
-              <div className="brand-heading text-base font-semibold text-[#121d49]">
-                South Texas Builders
-              </div>
-              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
+              <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.22em] text-[#ff332b]">
                 Payee Detail
-              </div>
+              </p>
+              <h1 className="brand-heading mt-1 flex items-center gap-3 text-[28px] font-bold uppercase tracking-[0.05em]">
+                <HandCoins size={26} />
+                {payeeName}
+              </h1>
             </div>
           </div>
 
-          <nav className="space-y-1">
-            <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
-            <NavItem href="/draws-budget" icon={ClipboardCheck} label="Draws & Budget" />
-            <NavItem href="/payees" icon={HandCoins} label="Payees" />
-            <NavItem href="/agent-health" icon={Brain} label="Intelligent Center" />
-            <NavItem href="/company-brain" icon={Database} label="Company Brain" />
-            <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
-          </nav>
-        </aside>
+          <Link
+            className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-white/20 bg-white/10 px-4 text-sm font-bold uppercase tracking-[0.06em] text-white hover:bg-white/15"
+            href="/payees"
+          >
+            <ArrowLeft size={17} />
+            Back To Payees
+          </Link>
+        </div>
+      </header>
 
-        <section className="min-w-0 px-6 py-5">
-          <header className="mb-5">
-            <Link
-              className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-[#ff332b]"
-              href="/payees"
-            >
-              <ArrowLeft size={16} />
-              Back to Payees
-            </Link>
-            <p className="brand-kicker text-xs font-bold uppercase text-[#ff332b]">
-              Payee Checks
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#121d49]">{payeeName}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5f6b66]">
-              Every synced QuickBooks check/payment connected to this payee.
-            </p>
-          </header>
+      <section className="mx-auto max-w-[1440px] px-6 py-6">
+        <div className="mb-5 rounded-[12px] border border-[#dedbd1] bg-white p-5 shadow-sm">
+          <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff332b]">
+            Check History
+          </p>
+          <h2 className="brand-heading mt-1 text-[24px] font-bold uppercase tracking-[0.04em] text-[#121d49]">
+            {payeeName}
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-[#727d78]">
+            Open a month to see every synced QuickBooks check or payment connected to this payee.
+          </p>
+        </div>
 
-          <section className="mb-5 grid grid-cols-4 gap-3">
-            <Metric label="Total Paid" value={shortCurrency(totalPaid)} />
-            <Metric label="Checks / Payments" value={String(transactions.length)} />
-            <Metric label="Bank Accounts" value={String(bankAccounts.length)} />
-            <Metric
-              label="Last Payment"
-              value={transactions[0]?.txnDate ?? "No date"}
-            />
-          </section>
-
-          <section className="mb-5 rounded-lg border border-[#dfe5dc] bg-white">
-            <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold">Monthly Total</h2>
-                <p className="mt-1 text-xs text-[#69746f]">
-                  This shows how much was paid to this payee each month.
-                </p>
-              </div>
-              <ReceiptText className="text-[#ff332b]" size={20} />
-            </div>
-
-            {monthSummaries.length ? (
-              <div className="overflow-auto">
-                <table className="w-full min-w-[680px] border-collapse text-sm">
-                  <thead className="bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Month</th>
-                      <th className="px-4 py-3 text-right font-medium">Total Paid</th>
-                      <th className="px-4 py-3 text-right font-medium">Checks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {monthSummaries.map((month) => (
-                      <tr className="border-t border-[#edf0eb]" key={month.key}>
-                        <td className="px-4 py-3 font-semibold">{month.label}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-[#121d49]">
-                          {currency(month.totalPaid)}
-                        </td>
-                        <td className="px-4 py-3 text-right">{month.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-5 text-sm text-[#69746f]">No synced checks found yet.</div>
-            )}
-          </section>
-
-          <section className="rounded-lg border border-[#dfe5dc] bg-white">
-            <div className="flex items-center justify-between border-b border-[#edf0eb] px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold">Every Check / Payment</h2>
-                <p className="mt-1 text-xs text-[#69746f]">
-                  Full synced list from newest to oldest.
-                </p>
-              </div>
-              <span className="rounded-md bg-[#fff0ef] px-2 py-1 text-xs font-bold text-[#ff332b]">
-                {transactions.length}
-              </span>
-            </div>
-
-            {transactions.length ? (
-              <div className="overflow-auto">
-                <table className="w-full min-w-[980px] border-collapse text-sm">
-                  <thead className="sticky top-0 bg-[#fbfcfa] text-left text-xs uppercase text-[#69746f]">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Date</th>
-                      <th className="px-4 py-3 font-medium">Bank Account</th>
-                      <th className="px-4 py-3 font-medium">Type</th>
-                      <th className="px-4 py-3 font-medium">Check #</th>
-                      <th className="px-4 py-3 font-medium">Memo / Category</th>
-                      <th className="px-4 py-3 text-right font-medium">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map((transaction) => (
-                      <tr
-                        className="border-t border-[#edf0eb]"
-                        key={`${transaction.source}-${transaction.id}`}
-                      >
-                        <td className="px-4 py-3">{transaction.txnDate ?? "No date"}</td>
-                        <td className="px-4 py-3 text-[#4f5b56]">
-                          {transaction.bankAccountName ?? "No bank account"}
-                        </td>
-                        <td className="px-4 py-3 text-[#69746f]">{transaction.source}</td>
-                        <td className="px-4 py-3">{transaction.docNumber ?? "-"}</td>
-                        <td className="max-w-[360px] px-4 py-3 text-[#4f5b56]">
-                          {transaction.memo || transaction.expenseAccountNames.join(", ") || "No memo"}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold text-[#121d49]">
-                          {currency(Math.abs(transaction.totalAmount))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-5 text-sm leading-6 text-[#69746f]">
-                No checks/payments are synced for this payee yet.
-              </div>
-            )}
-          </section>
+        <section className="mb-5 grid gap-3 md:grid-cols-4">
+          <Metric label="Total Paid" value={shortCurrency(totalPaid)} />
+          <Metric label="Checks / Payments" value={String(transactions.length)} />
+          <Metric label="Bank Accounts" value={String(bankAccounts.length)} />
+          <Metric label="Last Payment" value={transactions[0]?.txnDate ?? "No date"} />
         </section>
-      </div>
+
+        <section className="mb-5 rounded-[12px] border border-[#dedbd1] bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-[#ece7dc] px-5 py-4">
+            <div>
+              <h2 className="brand-heading text-[18px] font-bold uppercase tracking-[0.05em] text-[#121d49]">
+                Monthly Total
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-[#727d78]">
+                How much was paid to this payee each month.
+              </p>
+            </div>
+            <div className="grid size-10 place-items-center rounded-[8px] bg-[#fff0ef] text-[#ff332b]">
+              <ReceiptText size={20} />
+            </div>
+          </div>
+
+          {monthSummaries.length ? (
+            <div className="divide-y divide-[#ece7dc]">
+              {monthSummaries.map((month, index) => (
+                <details className="group" key={month.key} open={index === 0}>
+                  <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-4 hover:bg-[#fbfaf6]">
+                    <div>
+                      <div className="brand-heading text-[18px] font-bold text-[#121d49]">
+                        {month.label}
+                      </div>
+                      <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-[#8d94a7]">
+                        Click to see each check
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#8d94a7]">
+                        Paid
+                      </div>
+                      <div className="brand-heading text-lg font-bold text-[#121d49]">
+                        {currency(month.totalPaid)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#8d94a7]">
+                        Checks
+                      </div>
+                      <div className="brand-heading text-lg font-bold text-[#121d49]">
+                        {month.count}
+                      </div>
+                    </div>
+                    <span className="rounded-[8px] border border-[#dedbd1] bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-[#121d49] group-open:border-[#ff332b] group-open:text-[#ff332b]">
+                      Open
+                    </span>
+                  </summary>
+
+                  <div className="border-t border-[#ece7dc] bg-[#fbfaf6] px-5 py-4">
+                    <div className="overflow-auto rounded-[10px] border border-[#dedbd1] bg-white">
+                      <table className="w-full min-w-[980px] border-collapse text-sm">
+                        <thead className="bg-white text-left text-[11px] uppercase tracking-[0.14em] text-[#8d94a7]">
+                          <tr>
+                            <th className="px-4 py-3 font-bold">Date</th>
+                            <th className="px-4 py-3 font-bold">Bank Account</th>
+                            <th className="px-4 py-3 font-bold">Type</th>
+                            <th className="px-4 py-3 font-bold">Check #</th>
+                            <th className="px-4 py-3 font-bold">Memo / Category</th>
+                            <th className="px-4 py-3 text-right font-bold">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {month.transactions.map((transaction) => (
+                            <tr
+                              className="border-t border-[#ece7dc]"
+                              key={`${transaction.source}-${transaction.id}`}
+                            >
+                              <td className="px-4 py-3 font-semibold text-[#727d78]">
+                                {transaction.txnDate ?? "No date"}
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-[#727d78]">
+                                {transaction.bankAccountName ?? "No bank account"}
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-[#727d78]">
+                                {transaction.source}
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-[#727d78]">
+                                {transaction.docNumber ?? "-"}
+                              </td>
+                              <td className="max-w-[360px] px-4 py-3 font-semibold text-[#727d78]">
+                                {transaction.memo ||
+                                  transaction.expenseAccountNames.join(", ") ||
+                                  "No memo"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-bold text-[#121d49]">
+                                {currency(Math.abs(transaction.totalAmount))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </details>
+              ))}
+            </div>
+          ) : (
+            <div className="p-5 text-sm font-semibold text-[#727d78]">
+              No synced checks found yet.
+            </div>
+          )}
+        </section>
+      </section>
     </main>
-  );
-}
-
-function NavItem({
-  icon: Icon,
-  label,
-  active = false,
-  href,
-}: {
-  icon: typeof LayoutDashboard;
-  label: string;
-  active?: boolean;
-  href?: string;
-}) {
-  const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
-    active
-      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
-      : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
-  }`;
-
-  if (href) {
-    return (
-      <Link className={className} href={href}>
-        <Icon size={17} />
-        {label}
-      </Link>
-    );
-  }
-
-  return (
-    <div className={className}>
-      <Icon size={17} />
-      {label}
-    </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#dfe5dc] bg-white p-4">
-      <div className="text-xs font-medium uppercase text-[#69746f]">{label}</div>
-      <div className="mt-3 text-2xl font-semibold text-[#18211f]">{value}</div>
+    <div className="rounded-[12px] border border-[#dedbd1] bg-white p-5 shadow-sm">
+      <div className="brand-kicker text-[11px] font-bold uppercase tracking-[0.16em] text-[#8d94a7]">
+        {label}
+      </div>
+      <div className="brand-heading mt-2 text-[28px] font-bold text-[#121d49]">{value}</div>
     </div>
   );
 }

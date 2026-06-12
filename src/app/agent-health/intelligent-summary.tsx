@@ -1,44 +1,47 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Brain, Loader2, Send } from "lucide-react";
 
 import { AiHealthChat } from "@/app/ai-health/ai-health-chat";
 
 type SummaryCardKey =
-  | "overallRead"
-  | "whatIsWorking"
-  | "whatNeedsAttention"
-  | "cashBudgetBottleneck"
-  | "recommendedNextMoves";
+  | "marginRead"
+  | "budgetPressure"
+  | "vendorPricing"
+  | "drawCashTiming"
+  | "controllerNextMove";
 
 type ExecutiveSummary = Record<SummaryCardKey, string>;
 
 const defaultSummary: ExecutiveSummary = {
-  overallRead:
-    "Generate the summary to read the latest QuickBooks, house setup, spending, and project health data.",
-  whatIsWorking:
-    "The AI will identify the cleanest parts of the operation, such as healthy houses, strong internal buckets, or clean project setup.",
-  whatNeedsAttention:
-    "The AI will flag missing setup, budget pressure, unclear checks, stalled houses, or data that needs accounting cleanup.",
-  cashBudgetBottleneck:
-    "The AI will look for the biggest place where cash flow, checks, phase spending, or internal buckets may slow decisions.",
-  recommendedNextMoves:
-    "The AI will give the next practical moves for the owner, accountant, payroll team, or construction team.",
+  marginRead:
+    "Generate the summary to read where profit may be protected or at risk.",
+  budgetPressure:
+    "The AI will compare spending to sold price, square footage, phase budget, and setup data.",
+  vendorPricing:
+    "The AI will look for payees or subcontractors that may be charging more than before.",
+  drawCashTiming:
+    "The AI will review draw timing, missing draw marks, and internal bucket rules for marketing, management, and operations.",
+  controllerNextMove:
+    "The AI will give the next simple CFO action for the owner, accountant, payroll team, or construction team.",
 };
 
 const summaryPrompt = `
-Generate an executive summary for South Texas Builders using the latest dashboard data.
+Generate an AI CFO summary for South Texas Builders using the latest dashboard data.
 Return ONLY valid JSON with these exact keys:
 {
-  "overallRead": "short paragraph",
-  "whatIsWorking": "short paragraph",
-  "whatNeedsAttention": "short paragraph",
-  "cashBudgetBottleneck": "short paragraph",
-  "recommendedNextMoves": "short paragraph"
+  "marginRead": "short paragraph",
+  "budgetPressure": "short paragraph",
+  "vendorPricing": "short paragraph",
+  "drawCashTiming": "short paragraph",
+  "controllerNextMove": "short paragraph"
 }
 
-The summary should answer: what matters most today across houses, spending, checks, payees, and internal buckets?
+Think like an expert CFO for a custom home builder.
+The summary should answer what matters most today across house margin, phase budget, vendor pricing, draw status, payees, and internal buckets.
+Do not ask generic questions like which house spent the most. A larger house may spend more because it sold for more.
+Compare cost against sold price, square footage, current phase, budget rules, and prior payee behavior when the data exists.
 Every field must be written at an 8th grade reading level.
 Use short sentences and plain words.
 Avoid accounting and finance jargon. If a hard word is needed, explain it in simple words.
@@ -48,11 +51,18 @@ If Chart of Accounts or phase mapping is provisional, say so clearly.
 `;
 
 const cards: Array<{ key: SummaryCardKey; label: string }> = [
-  { key: "overallRead", label: "Overall Read" },
-  { key: "whatIsWorking", label: "What Is Working" },
-  { key: "whatNeedsAttention", label: "What Needs Attention" },
-  { key: "cashBudgetBottleneck", label: "Cash / Budget Bottleneck" },
-  { key: "recommendedNextMoves", label: "Recommended Next Moves" },
+  { key: "marginRead", label: "Margin Read" },
+  { key: "budgetPressure", label: "Budget Pressure" },
+  { key: "vendorPricing", label: "Vendor Pricing" },
+  { key: "drawCashTiming", label: "Draw / Cash Timing" },
+  { key: "controllerNextMove", label: "Controller Next Move" },
+];
+
+const controllerQuestions = [
+  "Which contractors or payees look like they may be charging more than before, and what should we review first?",
+  "Which houses may be losing margin after comparing sold price, square footage, current phase, and spending?",
+  "Which draw items look submitted, missing, or delayed, and what money should we follow up on?",
+  "What should the accountant and owner review today to protect profit and cash flow?",
 ];
 
 function parseSummary(answer: string): ExecutiveSummary {
@@ -63,16 +73,16 @@ function parseSummary(answer: string): ExecutiveSummary {
     const parsed = JSON.parse(maybeJson) as Partial<ExecutiveSummary>;
 
     return {
-      overallRead: parsed.overallRead || answer,
-      whatIsWorking: parsed.whatIsWorking || "No clear working pattern was returned.",
-      whatNeedsAttention: parsed.whatNeedsAttention || "No clear attention item was returned.",
-      cashBudgetBottleneck: parsed.cashBudgetBottleneck || "No clear bottleneck was returned.",
-      recommendedNextMoves: parsed.recommendedNextMoves || "No clear next move was returned.",
+      marginRead: parsed.marginRead || answer,
+      budgetPressure: parsed.budgetPressure || "No clear budget pressure item was returned.",
+      vendorPricing: parsed.vendorPricing || "No clear vendor pricing item was returned.",
+      drawCashTiming: parsed.drawCashTiming || "No clear draw or cash timing item was returned.",
+      controllerNextMove: parsed.controllerNextMove || "No clear next move was returned.",
     };
   } catch {
     return {
       ...defaultSummary,
-      overallRead: answer,
+      marginRead: answer,
     };
   }
 }
@@ -82,13 +92,6 @@ export function IntelligentSummary({ openAiReady }: { openAiReady: boolean }) {
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const generatedLabel = useMemo(() => {
-    if (generatedAt) {
-      return `Generated ${generatedAt}`;
-    }
-
-    return "Ready to generate from live dashboard data";
-  }, [generatedAt]);
 
   async function generateSummary() {
     if (isLoading || !openAiReady) {
@@ -125,14 +128,46 @@ export function IntelligentSummary({ openAiReady }: { openAiReady: boolean }) {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-lg border border-[#dfe5dc] bg-white p-5">
-        <div className="mb-5 flex items-start justify-between gap-4">
+      <section className="rounded-[12px] border-2 border-[#121d49] bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-[9px] bg-[#121d49] text-white">
+              <Send size={20} />
+            </span>
+            <div>
+              <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff332b]">
+                AI CFO
+              </p>
+              <h2 className="brand-heading text-[24px] font-bold uppercase tracking-[0.04em] text-[#121d49]">
+                AI CFO (Chief Financial Officer)
+              </h2>
+            </div>
+          </div>
+          <p className="max-w-xl text-sm font-semibold leading-6 text-[#727d78]">
+            Pick one CFO question, or ask anything you want about Project Health.
+            The answer stays read-only.
+          </p>
+        </div>
+        <AiHealthChat
+          buttonLabel="Ask AI CFO"
+          initialQuestion={controllerQuestions[0]}
+          openAiReady={openAiReady}
+          starterQuestions={controllerQuestions}
+        />
+      </section>
+
+      <section className="rounded-[12px] border border-[#dedbd1] bg-white p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="brand-kicker text-xs font-bold uppercase text-[#121d49]">AI Strategy</p>
-            <h2 className="mt-1 text-2xl font-semibold text-[#18211f]">Executive Summary</h2>
+            <p className="brand-kicker text-[10px] font-bold uppercase tracking-[0.16em] text-[#ff332b]">
+              AI Strategy
+            </p>
+            <h2 className="brand-heading mt-1 text-[18px] font-bold uppercase tracking-[0.04em] text-[#121d49]">
+              AI CFO Summary
+            </h2>
           </div>
           <button
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-[#121d49] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#ff332b] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-[#121d49] px-4 text-xs font-bold uppercase tracking-[0.06em] text-white shadow-sm transition hover:bg-[#ff332b] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!openAiReady || isLoading}
             onClick={generateSummary}
           >
@@ -141,9 +176,11 @@ export function IntelligentSummary({ openAiReady }: { openAiReady: boolean }) {
           </button>
         </div>
 
-        <div className="mb-3 rounded-lg border border-[#d9dee9] bg-[#eef3fb] px-4 py-3 text-sm font-semibold text-[#5f6b66]">
-          {generatedLabel}
-        </div>
+        {generatedAt ? (
+          <div className="mb-3 text-xs font-bold uppercase tracking-[0.08em] text-[#727d78]">
+            Generated {generatedAt}
+          </div>
+        ) : null}
 
         {error ? (
           <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-[#ff332b]">
@@ -151,27 +188,21 @@ export function IntelligentSummary({ openAiReady }: { openAiReady: boolean }) {
           </div>
         ) : null}
 
-        <div className="grid gap-3 lg:grid-cols-5">
+        <div className="grid gap-2 lg:grid-cols-5">
           {cards.map((card) => (
             <article
-              className="min-h-[210px] rounded-lg border border-[#d9dee9] bg-white p-4"
+              className="min-h-[100px] rounded-[8px] border border-[#d9dee9] bg-white p-3"
               key={card.key}
             >
-              <h3 className="brand-kicker text-xs font-bold uppercase text-[#121d49]">
+              <h3 className="brand-kicker text-[10px] font-bold uppercase tracking-[0.1em] text-[#121d49]">
                 {card.label}
               </h3>
-              <p className="mt-3 text-sm leading-6 text-[#18211f]">{summary[card.key]}</p>
+              <p className="mt-2 line-clamp-4 text-[11px] font-semibold leading-5 text-[#5f6b66]">
+                {summary[card.key]}
+              </p>
             </article>
           ))}
         </div>
-      </section>
-
-      <section className="rounded-lg border border-[#dfe5dc] bg-white p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <Send className="text-[#ff332b]" size={18} />
-          <h2 className="text-sm font-semibold">Ask A Specific Question</h2>
-        </div>
-        <AiHealthChat openAiReady={openAiReady} />
       </section>
     </div>
   );

@@ -1,14 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import {
-  Brain,
-  ClipboardCheck,
-  ClipboardList,
-  Database,
-  HandCoins,
-  LayoutDashboard,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowLeft, Brain } from "lucide-react";
 
 import { IntelligentSummary } from "@/app/agent-health/intelligent-summary";
 import { getEnvStatus } from "@/lib/env";
@@ -20,91 +12,55 @@ export default async function AgentHealthPage() {
   const openAiReady = Boolean(env.find((item) => item.key === "OPENAI_API_KEY")?.configured);
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#121a36]">
-      <div className="grid min-h-screen grid-cols-[248px_1fr]">
-        <aside className="border-r border-[#d9dee9] bg-white px-5 py-5">
-          <div className="mb-8">
-            <div className="mb-4 rounded-lg border border-[#d9dee9] bg-white p-3">
+    <main className="min-h-screen bg-[#f2f1ea] text-[#17213c] [background-image:linear-gradient(rgba(18,29,73,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(18,29,73,0.045)_1px,transparent_1px)] [background-size:32px_32px]">
+      <header className="bg-[#121d49] px-6 py-5 text-white shadow-sm">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[9px] bg-white p-2 shadow-sm">
               <Image
                 alt="South Texas Builders"
-                className="h-auto w-full"
+                className="h-full w-full object-contain"
                 height={1080}
                 src="/south-texas-builders-logo.png"
                 width={1080}
               />
             </div>
             <div>
-              <div className="brand-heading text-base font-semibold text-[#121d49]">
-                South Texas Builders
-              </div>
-              <div className="brand-kicker mt-1 text-[10px] font-medium uppercase text-[#ff332b]">
-                Intelligent Center
-              </div>
+              <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.22em] text-[#ff332b]">
+                AI Controller
+              </p>
+              <h1 className="brand-heading mt-1 flex items-center gap-3 text-[28px] font-bold uppercase tracking-[0.05em]">
+                <Brain size={26} />
+                AI Center
+              </h1>
             </div>
           </div>
 
-          <nav className="space-y-1">
-            <NavItem href="/" icon={LayoutDashboard} label="Portfolio" />
-            <NavItem href="/setup-inputs" icon={ClipboardList} label="House Setup" />
-            <NavItem href="/draws-budget" icon={ClipboardCheck} label="Draws & Budget" />
-            <NavItem href="/payees" icon={HandCoins} label="Payees" />
-            <NavItem active icon={Brain} label="Intelligent Center" />
-            <NavItem href="/company-brain" icon={Database} label="Company Brain" />
-            <NavItem href="/setup" icon={ShieldCheck} label="Setup" />
-          </nav>
-        </aside>
+          <Link
+            className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-white/20 bg-white/10 px-4 text-sm font-bold uppercase tracking-[0.06em] text-white hover:bg-white/15"
+            href="/draws-budget"
+          >
+            <ArrowLeft size={17} />
+            Back
+          </Link>
+        </div>
+      </header>
 
-        <section className="min-w-0 px-6 py-5">
-          <header className="mb-5">
-            <p className="brand-kicker text-xs font-bold uppercase text-[#ff332b]">
-              Intelligent Center
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#121d49]">
-              Intelligent Center
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5f6b66]">
-              Generate a clean executive summary, then ask a specific follow-up question when
-              needed.
-            </p>
-          </header>
+      <section className="mx-auto max-w-[1440px] px-6 py-6">
+        <div className="mb-5 rounded-[12px] border border-[#dedbd1] bg-white p-5 shadow-sm">
+          <p className="brand-kicker text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff332b]">
+            Executive Read
+          </p>
+          <h2 className="brand-heading mt-1 text-[24px] font-bold uppercase tracking-[0.04em] text-[#121d49]">
+            AI Center
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-[#727d78]">
+            Generate a simple finance summary, then ask a follow-up question when needed.
+          </p>
+        </div>
 
-          <IntelligentSummary openAiReady={openAiReady} />
-        </section>
-      </div>
+        <IntelligentSummary openAiReady={openAiReady} />
+      </section>
     </main>
-  );
-}
-
-function NavItem({
-  icon: Icon,
-  label,
-  active = false,
-  href,
-}: {
-  icon: typeof LayoutDashboard;
-  label: string;
-  active?: boolean;
-  href?: string;
-}) {
-  const className = `flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm ${
-    active
-      ? "bg-[#fff0ef] font-bold text-[#ff332b]"
-      : "text-[#5f6b66] hover:bg-[#fff0ef] hover:text-[#ff332b]"
-  }`;
-
-  if (href) {
-    return (
-      <Link className={className} href={href}>
-        <Icon size={17} />
-        {label}
-      </Link>
-    );
-  }
-
-  return (
-    <div className={className}>
-      <Icon size={17} />
-      {label}
-    </div>
   );
 }

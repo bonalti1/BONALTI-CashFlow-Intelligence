@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "South Texas Builders Project Health",
   description: "AI-assisted construction project health from QuickBooks Online.",
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
