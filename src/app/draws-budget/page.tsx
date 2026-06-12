@@ -231,6 +231,10 @@ function anchorIdForHouse(id: string) {
   return `house-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
+function setupAnchorIdForHouse(id: string) {
+  return `setup-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
 function isDrawPhaseKey(value: string | string[] | undefined): value is DrawPhaseKey {
   return typeof value === "string" && drawPhaseKeys.includes(value as DrawPhaseKey);
 }
@@ -836,6 +840,12 @@ function HouseCard({
           <MiniPhaseStrip house={house} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <Link
+              className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
+              href={`/setup-inputs#${setupAnchorIdForHouse(house.id)}`}
+            >
+              Contract
+            </Link>
             <Link
               className={`rounded-[9px] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] ${
                 showDetails

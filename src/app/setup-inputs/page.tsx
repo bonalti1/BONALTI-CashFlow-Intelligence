@@ -41,6 +41,10 @@ function bankBalance(account: QboAccount) {
   return account.CurrentBalance ?? 0;
 }
 
+function setupAnchorIdForHouse(id: string) {
+  return `setup-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
 export default async function SetupInputsPage() {
   const [snapshot, detailsByBankAccount, changeOrdersByBankAccount] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
@@ -151,7 +155,11 @@ export default async function SetupInputsPage() {
             </div>
             <div className="grid max-h-[720px] grid-cols-1 gap-3 overflow-auto bg-[#fbfaf7] p-4 xl:grid-cols-2">
               {houses.map((house) => (
-                <div className="rounded-lg border border-[#d9dee9] bg-white p-3 shadow-sm" key={house.id}>
+                <div
+                  className="scroll-mt-6 rounded-lg border border-[#d9dee9] bg-white p-3 shadow-sm"
+                  id={setupAnchorIdForHouse(house.id)}
+                  key={house.id}
+                >
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
                       <div className="font-semibold">{house.house}</div>
