@@ -32,6 +32,12 @@ export function ProjectRenderUpload({
   const [showContractFields, setShowContractFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function confirmContractFile(file: File) {
+    return window.confirm(
+      `Are you sure "${file.name}" is the contract for ${houseName}?`,
+    );
+  }
+
   async function saveRender(formData: FormData) {
     setError(null);
     setIsUploading(true);
@@ -114,12 +120,53 @@ export function ProjectRenderUpload({
       return;
     }
 
+    if (!confirmContractFile(file)) {
+      if (contractInputRef.current) {
+        contractInputRef.current.value = "";
+      }
+      return;
+    }
+
     const formData = new FormData();
     formData.set("qboBankAccountId", qboBankAccountId);
     formData.set("houseName", houseName);
     formData.set("contractFile", file);
 
     await saveContract(formData);
+  }
+
+  async function deleteContract() {
+    const confirmText = window.prompt(`Type delete to delete the contract for ${houseName}.`);
+
+    if (confirmText !== "delete") {
+      return;
+    }
+
+    setError(null);
+    setIsContractUploading(true);
+
+    try {
+      const response = await fetch("/api/houses/contract", {
+        body: JSON.stringify({
+          confirmText,
+          qboBankAccountId,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "DELETE",
+      });
+      const result = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Contract delete failed.");
+      }
+
+      window.location.href = returnTo;
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Contract delete failed.");
+      setIsContractUploading(false);
+    }
   }
 
   async function saveContractValues(event: React.FormEvent<HTMLFormElement>) {
@@ -297,6 +344,13 @@ export function ProjectRenderUpload({
               {isContractUploading ? "Saving" : "Save source"}
             </button>
           </form>
+          <button
+            className="mt-1 h-7 w-full rounded-[7px] border border-[#ffc7bf] bg-[#fdebea] text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#9d251c]"
+            onClick={deleteContract}
+            type="button"
+          >
+            Delete Contract
+          </button>
         </div>
       ) : null}
       {error ? (

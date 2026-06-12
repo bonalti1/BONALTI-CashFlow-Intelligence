@@ -128,3 +128,31 @@ export async function uploadSupabaseStorageObject({
       : `${config.supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`,
   };
 }
+
+export async function deleteSupabaseStorageObject({
+  bucket,
+  path,
+}: {
+  bucket: string;
+  path: string | null;
+}) {
+  const config = storageConfig();
+
+  if (!config || !path) {
+    return false;
+  }
+
+  const response = await fetch(`${config.supabaseUrl}/storage/v1/object/${bucket}`, {
+    body: JSON.stringify({
+      prefixes: [path],
+    }),
+    headers: {
+      apikey: config.serviceRoleKey,
+      Authorization: `Bearer ${config.serviceRoleKey}`,
+      "Content-Type": "application/json",
+    },
+    method: "DELETE",
+  });
+
+  return response.ok;
+}

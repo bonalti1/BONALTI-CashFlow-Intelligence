@@ -336,9 +336,9 @@ export async function saveHouseContractSource({
     values (
       ${qboBankAccountId},
       ${houseName},
-      ${contractPrice},
-      ${contractSquareFootage},
-      ${contractCity},
+      null,
+      null,
+      null,
       ${contractFileName},
       ${contractFileType},
       ${contractFileUrl ?? null},
@@ -353,9 +353,6 @@ export async function saveHouseContractSource({
     )
     on conflict (qbo_bank_account_id) do update set
       house_name = excluded.house_name,
-      sold_price = coalesce(excluded.sold_price, house_details.sold_price),
-      square_footage = coalesce(excluded.square_footage, house_details.square_footage),
-      city = coalesce(excluded.city, house_details.city),
       contract_file_name = coalesce(excluded.contract_file_name, house_details.contract_file_name),
       contract_file_type = coalesce(excluded.contract_file_type, house_details.contract_file_type),
       contract_file_url = coalesce(excluded.contract_file_url, house_details.contract_file_url),
@@ -368,6 +365,59 @@ export async function saveHouseContractSource({
       contract_source_status = excluded.contract_source_status,
       updated_at = now()
   `;
+}
+
+export async function clearHouseContractSource({
+  qboBankAccountId,
+}: {
+  qboBankAccountId: string;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to delete contract source data.");
+  }
+
+  await ensureHouseDetailsTable();
+  const rows = await sql()<
+    Array<{
+      contract_storage_path: string | null;
+    }>
+  >`
+    select contract_storage_path
+    from house_details
+    where qbo_bank_account_id = ${qboBankAccountId}
+    limit 1
+  `;
+
+  await sql()`
+    update house_details
+    set
+      sold_price = case
+        when contract_price is not null and sold_price = contract_price then null
+        else sold_price
+      end,
+      square_footage = case
+        when contract_square_footage is not null and square_footage = contract_square_footage then null
+        else square_footage
+      end,
+      city = case
+        when contract_city is not null and city = contract_city then null
+        else city
+      end,
+      contract_file_name = null,
+      contract_file_type = null,
+      contract_file_url = null,
+      contract_storage_path = null,
+      contract_file_data_url = null,
+      contract_uploaded_at = null,
+      contract_price = null,
+      contract_square_footage = null,
+      contract_city = null,
+      contract_source_status = null,
+      updated_at = now()
+    where qbo_bank_account_id = ${qboBankAccountId}
+  `;
+
+  return rows[0]?.contract_storage_path ?? null;
 }
 
 export async function addHouseChangeOrder({

@@ -2,8 +2,14 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { extractContractSourceFromFile } from "@/lib/contracts/contract-extraction";
-import { saveHouseContractSource } from "@/lib/houses/house-details-store";
-import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
+import {
+  clearHouseContractSource,
+  saveHouseContractSource,
+} from "@/lib/houses/house-details-store";
+import {
+  deleteSupabaseStorageObject,
+  uploadSupabaseStorageObject,
+} from "@/lib/storage/supabase-storage";
 
 function optionalText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -49,6 +55,13 @@ function isAllowedContractFile(file: File) {
   const fileName = file.name.toLowerCase();
 
   return allowedTypes.includes(file.type) || allowedExtensions.some((extension) => fileName.endsWith(extension));
+}
+
+function revalidateHousePages() {
+  revalidatePath("/");
+  revalidatePath("/draws-budget");
+  revalidatePath("/setup-inputs");
+  revalidatePath("/reports/dashboard");
 }
 
 export async function POST(request: Request) {
@@ -137,10 +150,7 @@ export async function POST(request: Request) {
       contractCity: manualContractCity ?? extractedContractCity,
     });
 
-    revalidatePath("/");
-    revalidatePath("/draws-budget");
-    revalidatePath("/setup-inputs");
-    revalidatePath("/reports/dashboard");
+    revalidateHousePages();
 
     return NextResponse.json({ status: "ok" });
   } catch (error) {
@@ -152,6 +162,55 @@ export async function POST(request: Request) {
         message:
           message.includes("DATABASE_URL")
             ? "Saving contracts needs the database connection. Use the live Render app or add DATABASE_URL locally."
+            : message,
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json().catch(() => null)) as {
+      confirmText?: unknown;
+      qboBankAccountId?: unknown;
+    } | null;
+    const qboBankAccountId =
+      typeof body?.qboBankAccountId === "string" ? body.qboBankAccountId.trim() : "";
+    const confirmText = typeof body?.confirmText === "string" ? body.confirmText.trim() : "";
+
+    if (!qboBankAccountId) {
+      return NextResponse.json(
+        { status: "error", message: "House account is missing." },
+        { status: 400 },
+      );
+    }
+
+    if (confirmText !== "delete") {
+      return NextResponse.json(
+        { status: "error", message: "Type delete to delete this contract." },
+        { status: 400 },
+      );
+    }
+
+    const storagePath = await clearHouseContractSource({ qboBankAccountId });
+
+    await deleteSupabaseStorageObject({
+      bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
+      path: storagePath,
+    });
+    revalidateHousePages();
+
+    return NextResponse.json({ status: "ok" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Contract delete failed.";
+
+    return NextResponse.json(
+      {
+        status: "error",
+        message:
+          message.includes("DATABASE_URL")
+            ? "Deleting contracts needs the database connection. Use the live Render app or add DATABASE_URL locally."
             : message,
       },
       { status: 500 },
