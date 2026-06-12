@@ -61,15 +61,19 @@ export default async function SetupInputsPage() {
       }
 
       const details = detailsByBankAccount.get(account.Id);
+      const sourceSoldPrice =
+        details?.currentContractPrice ?? details?.contractPrice ?? details?.soldPrice ?? null;
+      const sourceSquareFootage = details?.contractSquareFootage ?? details?.squareFootage ?? null;
+      const sourceCity = details?.contractCity ?? details?.city ?? null;
 
       return {
         id: account.Id,
         house,
         bank: accountName(account),
         balance: bankBalance(account),
-        soldPrice: details?.soldPrice ?? null,
-        squareFootage: details?.squareFootage ?? null,
-        city: details?.city ?? null,
+        soldPrice: sourceSoldPrice,
+        squareFootage: sourceSquareFootage,
+        city: sourceCity,
         contractFileName: details?.contractFileName ?? null,
         contractUploadedAt: details?.contractUploadedAt ?? null,
         contractPrice: details?.contractPrice ?? null,
@@ -79,7 +83,7 @@ export default async function SetupInputsPage() {
         changeOrderTotal: details?.changeOrderTotal ?? 0,
         currentContractPrice: details?.currentContractPrice ?? null,
         changeOrders: changeOrdersByBankAccount.get(account.Id) ?? [],
-        setupComplete: Boolean(details?.soldPrice && details?.squareFootage && details?.city),
+        setupComplete: Boolean(sourceSoldPrice && sourceSquareFootage && sourceCity),
       };
     })
     .filter((house): house is NonNullable<typeof house> => Boolean(house))

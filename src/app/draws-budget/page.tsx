@@ -498,15 +498,20 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
       ).length;
       const currentPhase = currentPhaseFor(phases);
 
+      const contractSoldPrice = details?.currentContractPrice ?? details?.contractPrice ?? null;
+      const sourceSoldPrice = contractSoldPrice ?? details?.soldPrice ?? null;
+      const sourceSquareFootage = details?.contractSquareFootage ?? details?.squareFootage ?? null;
+      const sourceCity = details?.contractCity ?? details?.city ?? null;
+
       const houseView: HouseView = {
         id: account.Id,
         house,
         bank: accountName(account),
-        city: details?.city ?? null,
-        soldPrice: details?.soldPrice ?? null,
-        squareFootage: details?.squareFootage ?? null,
+        city: sourceCity,
+        soldPrice: sourceSoldPrice,
+        squareFootage: sourceSquareFootage,
         totalSpent,
-        progress: progressFor(phases, details?.soldPrice ?? null, totalSpent),
+        progress: progressFor(phases, sourceSoldPrice, totalSpent),
         currentPhase,
         readyPhases,
         needsReview,

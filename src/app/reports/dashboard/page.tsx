@@ -312,13 +312,18 @@ async function getReportHouses() {
       });
       const totalSpent = phases.reduce((total, phase) => total + phase.spent, 0);
 
+      const contractSoldPrice = details?.currentContractPrice ?? details?.contractPrice ?? null;
+      const sourceSoldPrice = contractSoldPrice ?? details?.soldPrice ?? null;
+      const sourceSquareFootage = details?.contractSquareFootage ?? details?.squareFootage ?? null;
+      const sourceCity = details?.contractCity ?? details?.city ?? null;
+
       return {
         id: account.Id,
         house,
         bank: accountName(account),
-        city: details?.city ?? null,
-        soldPrice: details?.soldPrice ?? null,
-        squareFootage: details?.squareFootage ?? null,
+        city: sourceCity,
+        soldPrice: sourceSoldPrice,
+        squareFootage: sourceSquareFootage,
         totalSpent,
         currentPhase: currentPhaseFor(phases),
         completed: false,
