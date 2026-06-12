@@ -64,6 +64,23 @@ function revalidateHousePages() {
   revalidatePath("/reports/dashboard");
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -83,6 +100,9 @@ export async function POST(request: Request) {
     let contractFileUrl: string | null = null;
     let contractStoragePath: string | null = null;
     let contractFileDataUrl: string | null = null;
+    let uploadedFileBuffer: Buffer | null = null;
+    let uploadedFileContentType: string | null = null;
+    let uploadedFileName: string | null = null;
     let extractedContractPrice: number | null = null;
     let extractedContractSquareFootage: number | null = null;
     let extractedContractCity: string | null = null;
@@ -120,17 +140,9 @@ export async function POST(request: Request) {
       contractFileUrl = uploaded?.url ?? null;
       contractStoragePath = uploaded?.path ?? null;
       contractFileDataUrl = uploaded ? null : `data:${contentType};base64,${buffer.toString("base64")}`;
-
-      const extracted = await extractContractSourceFromFile({
-        bytes: buffer,
-        contentType,
-        fileName: contractFile.name,
-        houseName,
-      });
-
-      extractedContractPrice = extracted?.contractPrice ?? null;
-      extractedContractSquareFootage = extracted?.contractSquareFootage ?? null;
-      extractedContractCity = extracted?.contractCity ?? null;
+      uploadedFileBuffer = buffer;
+      uploadedFileContentType = contentType;
+      uploadedFileName = contractFile.name;
     }
 
     const manualContractPrice = optionalMoney(formData.get("contractPrice"));
@@ -145,14 +157,53 @@ export async function POST(request: Request) {
       contractFileUrl,
       contractStoragePath,
       contractFileDataUrl,
-      contractPrice: manualContractPrice ?? extractedContractPrice,
-      contractSquareFootage: manualContractSquareFootage ?? extractedContractSquareFootage,
-      contractCity: manualContractCity ?? extractedContractCity,
+      contractPrice: manualContractPrice,
+      contractSquareFootage: manualContractSquareFootage,
+      contractCity: manualContractCity,
     });
+
+    if (
+      uploadedFileBuffer &&
+      uploadedFileContentType &&
+      uploadedFileName &&
+      (!manualContractPrice || !manualContractSquareFootage || !manualContractCity)
+    ) {
+      const extracted = await withTimeout(
+        extractContractSourceFromFile({
+          bytes: uploadedFileBuffer,
+          contentType: uploadedFileContentType,
+          fileName: uploadedFileName,
+          houseName,
+        }),
+        18_000,
+      );
+
+      extractedContractPrice = extracted?.contractPrice ?? null;
+      extractedContractSquareFootage = extracted?.contractSquareFootage ?? null;
+      extractedContractCity = extracted?.contractCity ?? null;
+
+      if (extractedContractPrice || extractedContractSquareFootage || extractedContractCity) {
+        await saveHouseContractSource({
+          qboBankAccountId,
+          houseName,
+          contractFileName: null,
+          contractFileType: null,
+          contractFileUrl: null,
+          contractStoragePath: null,
+          contractFileDataUrl: null,
+          contractPrice: manualContractPrice ?? extractedContractPrice,
+          contractSquareFootage: manualContractSquareFootage ?? extractedContractSquareFootage,
+          contractCity: manualContractCity ?? extractedContractCity,
+        });
+      }
+    }
 
     revalidateHousePages();
 
-    return NextResponse.json({ status: "ok" });
+    return NextResponse.json({
+      extracted: Boolean(extractedContractPrice || extractedContractSquareFootage || extractedContractCity),
+      status: "ok",
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Contract upload failed.";
 
