@@ -9,6 +9,14 @@ function optionalText(value: FormDataEntryValue | null) {
   return text || null;
 }
 
+function isAllowedContractFile(file: File) {
+  const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp", "application/octet-stream"];
+  const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+  const fileName = file.name.toLowerCase();
+
+  return allowedTypes.includes(file.type) || allowedExtensions.some((extension) => fileName.endsWith(extension));
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -30,20 +38,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-
-    if (!allowedTypes.includes(contractFile.type)) {
+    if (!isAllowedContractFile(contractFile)) {
       return NextResponse.json(
         { status: "error", message: "Contract must be a PDF or image file." },
         { status: 400 },
       );
     }
 
-    const maxSize = 6 * 1024 * 1024;
+    const maxSize = 25 * 1024 * 1024;
 
     if (contractFile.size > maxSize) {
       return NextResponse.json(
-        { status: "error", message: "Contract file must be smaller than 6 MB." },
+        { status: "error", message: "Contract file must be smaller than 25 MB." },
         { status: 400 },
       );
     }
@@ -54,8 +60,8 @@ export async function POST(request: Request) {
       qboBankAccountId,
       houseName,
       contractFileName: contractFile.name,
-      contractFileType: contractFile.type,
-      contractFileDataUrl: `data:${contractFile.type};base64,${buffer.toString("base64")}`,
+      contractFileType: contractFile.type || "application/octet-stream",
+      contractFileDataUrl: `data:${contractFile.type || "application/octet-stream"};base64,${buffer.toString("base64")}`,
       contractPrice: null,
       contractSquareFootage: null,
       contractCity: null,

@@ -243,7 +243,7 @@ export function ProjectRenderUpload({
               : "+ Contract"}
       </button>
       {error ? (
-        <span className="absolute inset-x-0 top-full z-10 mt-1 rounded-[6px] border border-[#ffc7bf] bg-[#fdebea] px-2 py-1 text-[9px] font-extrabold text-[#9d251c] shadow-sm">
+        <span className="mt-1 block rounded-[6px] border border-[#ffc7bf] bg-[#fdebea] px-2 py-1 text-[9px] font-extrabold leading-3 text-[#9d251c] shadow-sm">
           {error}
         </span>
       ) : null}

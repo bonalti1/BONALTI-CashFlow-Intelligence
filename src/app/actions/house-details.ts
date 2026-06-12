@@ -58,6 +58,14 @@ function safeReturnTo(value: FormDataEntryValue | null) {
   return text;
 }
 
+function isAllowedContractFile(file: File) {
+  const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp", "application/octet-stream"];
+  const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+  const fileName = file.name.toLowerCase();
+
+  return allowedTypes.includes(file.type) || allowedExtensions.some((extension) => fileName.endsWith(extension));
+}
+
 export async function saveHouseDetailsAction(formData: FormData) {
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
@@ -130,28 +138,21 @@ export async function saveHouseContractSourceAction(formData: FormData) {
   }
 
   if (contractFile instanceof File && contractFile.size > 0) {
-    const allowedTypes = [
-      "application/pdf",
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-    ];
-
-    if (!allowedTypes.includes(contractFile.type)) {
+    if (!isAllowedContractFile(contractFile)) {
       throw new Error("Contract must be a PDF or image file.");
     }
 
-    const maxSize = 6 * 1024 * 1024;
+    const maxSize = 25 * 1024 * 1024;
 
     if (contractFile.size > maxSize) {
-      throw new Error("Contract file must be smaller than 6 MB.");
+      throw new Error("Contract file must be smaller than 25 MB.");
     }
 
     const buffer = Buffer.from(await contractFile.arrayBuffer());
 
     contractFileName = contractFile.name;
-    contractFileType = contractFile.type;
-    contractFileDataUrl = `data:${contractFile.type};base64,${buffer.toString("base64")}`;
+    contractFileType = contractFile.type || "application/octet-stream";
+    contractFileDataUrl = `data:${contractFile.type || "application/octet-stream"};base64,${buffer.toString("base64")}`;
   }
 
   await saveHouseContractSource({
