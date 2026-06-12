@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { saveHouseDetail, saveHouseManualRenderImage } from "@/lib/houses/house-details-store";
+import {
+  addHouseChangeOrder,
+  saveHouseContractSource,
+  saveHouseDetail,
+  saveHouseManualRenderImage,
+} from "@/lib/houses/house-details-store";
 
 function optionalMoney(value: FormDataEntryValue | null) {
   const text = String(value ?? "").replace(/[$,]/g, "").trim();
@@ -110,4 +115,87 @@ export async function saveHouseRenderImageAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/draws-budget");
   redirect(returnTo);
+}
+
+export async function saveHouseContractSourceAction(formData: FormData) {
+  const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
+  const houseName = optionalText(formData.get("houseName"));
+  const contractFile = formData.get("contractFile");
+  let contractFileName: string | null = null;
+  let contractFileType: string | null = null;
+  let contractFileDataUrl: string | null = null;
+
+  if (!qboBankAccountId || !houseName) {
+    throw new Error("House account is missing.");
+  }
+
+  if (contractFile instanceof File && contractFile.size > 0) {
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(contractFile.type)) {
+      throw new Error("Contract must be a PDF or image file.");
+    }
+
+    const maxSize = 6 * 1024 * 1024;
+
+    if (contractFile.size > maxSize) {
+      throw new Error("Contract file must be smaller than 6 MB.");
+    }
+
+    const buffer = Buffer.from(await contractFile.arrayBuffer());
+
+    contractFileName = contractFile.name;
+    contractFileType = contractFile.type;
+    contractFileDataUrl = `data:${contractFile.type};base64,${buffer.toString("base64")}`;
+  }
+
+  await saveHouseContractSource({
+    qboBankAccountId,
+    houseName,
+    contractFileName,
+    contractFileType,
+    contractFileDataUrl,
+    contractPrice: optionalMoney(formData.get("contractPrice")),
+    contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
+    contractCity: optionalText(formData.get("contractCity")),
+  });
+
+  revalidatePath("/");
+  revalidatePath("/setup-inputs");
+  revalidatePath("/draws-budget");
+  revalidatePath("/reports/dashboard");
+}
+
+export async function addHouseChangeOrderAction(formData: FormData) {
+  const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
+  const houseName = optionalText(formData.get("houseName"));
+  const title = optionalText(formData.get("title"));
+  const amount = optionalMoney(formData.get("amount"));
+
+  if (!qboBankAccountId || !houseName || !title) {
+    throw new Error("Change order is missing a house or title.");
+  }
+
+  if (amount === null) {
+    throw new Error("Change order amount is required.");
+  }
+
+  await addHouseChangeOrder({
+    qboBankAccountId,
+    houseName,
+    title,
+    amount,
+    notes: optionalText(formData.get("notes")),
+    approvedAt: optionalText(formData.get("approvedAt")),
+  });
+
+  revalidatePath("/");
+  revalidatePath("/setup-inputs");
+  revalidatePath("/draws-budget");
+  revalidatePath("/reports/dashboard");
 }

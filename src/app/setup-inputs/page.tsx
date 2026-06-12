@@ -10,8 +10,15 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { saveHouseDetailsAction } from "@/app/actions/house-details";
-import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
+import {
+  addHouseChangeOrderAction,
+  saveHouseContractSourceAction,
+  saveHouseDetailsAction,
+} from "@/app/actions/house-details";
+import {
+  getHouseChangeOrdersMap,
+  getHouseDetailsMap,
+} from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
 import { PhaseBudgetCalculator } from "./phase-budget-calculator";
@@ -35,9 +42,10 @@ function bankBalance(account: QboAccount) {
 }
 
 export default async function SetupInputsPage() {
-  const [snapshot, detailsByBankAccount] = await Promise.all([
+  const [snapshot, detailsByBankAccount, changeOrdersByBankAccount] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getHouseDetailsMap(),
+    getHouseChangeOrdersMap(),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses = bankAccounts
@@ -58,6 +66,15 @@ export default async function SetupInputsPage() {
         soldPrice: details?.soldPrice ?? null,
         squareFootage: details?.squareFootage ?? null,
         city: details?.city ?? null,
+        contractFileName: details?.contractFileName ?? null,
+        contractUploadedAt: details?.contractUploadedAt ?? null,
+        contractPrice: details?.contractPrice ?? null,
+        contractSquareFootage: details?.contractSquareFootage ?? null,
+        contractCity: details?.contractCity ?? null,
+        contractSourceStatus: details?.contractSourceStatus ?? null,
+        changeOrderTotal: details?.changeOrderTotal ?? 0,
+        currentContractPrice: details?.currentContractPrice ?? null,
+        changeOrders: changeOrdersByBankAccount.get(account.Id) ?? [],
         setupComplete: Boolean(details?.soldPrice && details?.squareFootage && details?.city),
       };
     })
@@ -128,19 +145,13 @@ export default async function SetupInputsPage() {
             <div className="border-b border-[#121d49] bg-[#121d49] px-4 py-4 text-white">
               <h2 className="text-lg font-semibold">Inputs By House</h2>
               <p className="mt-1 text-xs text-white/75">
-                Once these are filled in, the app can calculate price per sqft and budget percent
-                against the sold price.
+                Contract source is the baseline. Change orders adjust the current contract price
+                without changing the original agreement.
               </p>
             </div>
-            <div className="grid max-h-[620px] grid-cols-2 gap-3 overflow-auto bg-[#fbfaf7] p-4">
+            <div className="grid max-h-[720px] grid-cols-1 gap-3 overflow-auto bg-[#fbfaf7] p-4 xl:grid-cols-2">
               {houses.map((house) => (
-                <form
-                  action={saveHouseDetailsAction}
-                  className="rounded-lg border border-[#d9dee9] bg-white p-3 shadow-sm"
-                  key={house.id}
-                >
-                  <input name="qboBankAccountId" type="hidden" value={house.id} />
-                  <input name="houseName" type="hidden" value={house.house} />
+                <div className="rounded-lg border border-[#d9dee9] bg-white p-3 shadow-sm" key={house.id}>
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
                       <div className="font-semibold">{house.house}</div>
@@ -158,49 +169,194 @@ export default async function SetupInputsPage() {
                       {house.setupComplete ? "Ready" : "Missing setup"}
                     </span>
                   </div>
-                  <div className="grid grid-cols-[1fr_112px_112px_auto] gap-2">
-                    <label className="text-xs text-[#69746f]">
-                      Sold Price
-                      <input
-                        className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
-                        defaultValue={house.soldPrice ?? ""}
-                        inputMode="decimal"
-                        name="soldPrice"
-                        placeholder="250000"
-                      />
-                    </label>
-                    <label className="text-xs text-[#69746f]">
-                      Sq Ft
-                      <input
-                        className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
-                        defaultValue={house.squareFootage ?? ""}
-                        inputMode="numeric"
-                        name="squareFootage"
-                        placeholder="2180"
-                      />
-                    </label>
-                    <label className="text-xs text-[#69746f]">
-                      City
-                      <input
-                        className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
-                        defaultValue={house.city ?? ""}
-                        name="city"
-                        placeholder="Laredo"
-                      />
-                    </label>
-                    <button
-                      className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white"
-                      type="submit"
-                    >
-                      Save
-                    </button>
+
+                  <div className="mb-3 grid gap-2 rounded-lg border border-[#d9dee9] bg-[#fbfaf7] p-3 md:grid-cols-4">
+                    <InfoTile label="Contract price" value={house.contractPrice ? currency(house.contractPrice) : "Missing"} />
+                    <InfoTile label="Change orders" value={currency(house.changeOrderTotal)} />
+                    <InfoTile label="Current price" value={house.currentContractPrice ? currency(house.currentContractPrice) : "Missing"} />
+                    <InfoTile
+                      label="Contract source"
+                      value={house.contractFileName ? "Uploaded" : "Missing"}
+                    />
                   </div>
+
+                  <details className="mb-3 rounded-lg border border-[#d9dee9] bg-white p-3">
+                    <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-[#121d49]">
+                      Contract source
+                    </summary>
+                    <form action={saveHouseContractSourceAction} className="mt-3 space-y-3">
+                      <input name="qboBankAccountId" type="hidden" value={house.id} />
+                      <input name="houseName" type="hidden" value={house.house} />
+                      <div className="rounded-md border border-dashed border-[#c8cfde] bg-[#fbfaf7] p-3 text-xs text-[#69746f]">
+                        <label className="font-bold text-[#121d49]">
+                          Upload contract PDF/image
+                          <input
+                            accept="application/pdf,image/*"
+                            className="mt-2 block w-full text-xs"
+                            name="contractFile"
+                            type="file"
+                          />
+                        </label>
+                        <p className="mt-2">
+                          {house.contractFileName
+                            ? `Current source: ${house.contractFileName}`
+                            : "Upload contract, then review the numbers below before saving."}
+                        </p>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-[1fr_112px_112px_auto]">
+                        <label className="text-xs text-[#69746f]">
+                          Contract Price
+                          <input
+                            className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                            defaultValue={house.contractPrice ?? house.soldPrice ?? ""}
+                            inputMode="decimal"
+                            name="contractPrice"
+                            placeholder="250000"
+                          />
+                        </label>
+                        <label className="text-xs text-[#69746f]">
+                          Sq Ft
+                          <input
+                            className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                            defaultValue={house.contractSquareFootage ?? house.squareFootage ?? ""}
+                            inputMode="numeric"
+                            name="contractSquareFootage"
+                            placeholder="2180"
+                          />
+                        </label>
+                        <label className="text-xs text-[#69746f]">
+                          City
+                          <input
+                            className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                            defaultValue={house.contractCity ?? house.city ?? ""}
+                            name="contractCity"
+                            placeholder="Alice"
+                          />
+                        </label>
+                        <button
+                          className="mt-5 h-9 rounded-md bg-[#121d49] px-3 text-sm font-bold text-white"
+                          type="submit"
+                        >
+                          Save Source
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+
+                  <details className="mb-3 rounded-lg border border-[#d9dee9] bg-white p-3">
+                    <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-[#121d49]">
+                      Change orders
+                    </summary>
+                    <form action={addHouseChangeOrderAction} className="mt-3 grid gap-2 md:grid-cols-[1fr_120px_130px_auto]">
+                      <input name="qboBankAccountId" type="hidden" value={house.id} />
+                      <input name="houseName" type="hidden" value={house.house} />
+                      <label className="text-xs text-[#69746f]">
+                        Change Order
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                          name="title"
+                          placeholder="Client upgrade"
+                        />
+                      </label>
+                      <label className="text-xs text-[#69746f]">
+                        Amount
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                          inputMode="decimal"
+                          name="amount"
+                          placeholder="8500"
+                        />
+                      </label>
+                      <label className="text-xs text-[#69746f]">
+                        Approved
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                          name="approvedAt"
+                          type="date"
+                        />
+                      </label>
+                      <button
+                        className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white"
+                        type="submit"
+                      >
+                        Add
+                      </button>
+                      <label className="md:col-span-4 text-xs text-[#69746f]">
+                        Notes
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                          name="notes"
+                          placeholder="What changed and who approved it"
+                        />
+                      </label>
+                    </form>
+                    <div className="mt-3 space-y-1">
+                      {house.changeOrders.length === 0 ? (
+                        <p className="text-xs text-[#69746f]">No change orders yet.</p>
+                      ) : (
+                        house.changeOrders.slice(0, 3).map((changeOrder) => (
+                          <div
+                            className="flex items-center justify-between rounded-md bg-[#fbfaf7] px-2 py-1 text-xs"
+                            key={changeOrder.id}
+                          >
+                            <span className="font-bold text-[#121d49]">{changeOrder.title}</span>
+                            <span className="text-[#69746f]">{currency(changeOrder.amount)}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </details>
+
+                  <form action={saveHouseDetailsAction}>
+                    <input name="qboBankAccountId" type="hidden" value={house.id} />
+                    <input name="houseName" type="hidden" value={house.house} />
+                    <div className="grid grid-cols-[1fr_112px_112px_auto] gap-2">
+                      <label className="text-xs text-[#69746f]">
+                        Manual Sold Price
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                          defaultValue={house.soldPrice ?? ""}
+                          inputMode="decimal"
+                          name="soldPrice"
+                          placeholder="250000"
+                        />
+                      </label>
+                      <label className="text-xs text-[#69746f]">
+                        Sq Ft
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                          defaultValue={house.squareFootage ?? ""}
+                          inputMode="numeric"
+                          name="squareFootage"
+                          placeholder="2180"
+                        />
+                      </label>
+                      <label className="text-xs text-[#69746f]">
+                        City
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-[#c8cfde] bg-white px-2 text-sm text-[#121a36]"
+                          defaultValue={house.city ?? ""}
+                          name="city"
+                          placeholder="Alice"
+                        />
+                      </label>
+                      <button
+                        className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white"
+                        type="submit"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </form>
+
                   <div className="mt-3 text-xs text-[#69746f]">
-                    {house.soldPrice && house.squareFootage
-                      ? `Sale price per sqft: ${currency(house.soldPrice / house.squareFootage)}`
-                      : "Enter sold price and square footage to calculate price per sqft."}
+                    {house.currentContractPrice && house.squareFootage
+                      ? `Current contract per sqft: ${currency(house.currentContractPrice / house.squareFootage)}`
+                      : house.soldPrice && house.squareFootage
+                        ? `Sale price per sqft: ${currency(house.soldPrice / house.squareFootage)}`
+                        : "Contract price and square footage create the true project baseline."}
                   </div>
-                </form>
+                </div>
               ))}
             </div>
           </section>
@@ -209,6 +365,17 @@ export default async function SetupInputsPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-[#d9dee9] bg-white px-2 py-2">
+      <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#69746f]">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-bold text-[#121d49]">{value}</div>
+    </div>
   );
 }
 
