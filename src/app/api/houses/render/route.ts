@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { saveHouseManualRenderImage } from "@/lib/houses/house-details-store";
+import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 
 function optionalText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -68,12 +69,21 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await renderImage.arrayBuffer());
-    const dataUrl = `data:${renderImage.type};base64,${buffer.toString("base64")}`;
+    const uploaded = await uploadSupabaseStorageObject({
+      bucket: process.env.SUPABASE_RENDER_BUCKET ?? "house-renders",
+      bytes: buffer,
+      contentType: renderImage.type,
+      fileName: renderImage.name,
+      folder: `${qboBankAccountId}-${houseName}`,
+      isPublic: true,
+    });
+    const dataUrl = uploaded ? null : `data:${renderImage.type};base64,${buffer.toString("base64")}`;
 
     await saveHouseManualRenderImage({
       qboBankAccountId,
       houseName,
-      manualRenderImageUrl: dataUrl,
+      manualRenderImageUrl: uploaded?.url ?? dataUrl,
+      renderStoragePath: uploaded?.path ?? null,
     });
 
     revalidatePath("/");

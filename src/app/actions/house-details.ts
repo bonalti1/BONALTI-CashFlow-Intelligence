@@ -9,6 +9,7 @@ import {
   saveHouseDetail,
   saveHouseManualRenderImage,
 } from "@/lib/houses/house-details-store";
+import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 
 function optionalMoney(value: FormDataEntryValue | null) {
   const text = String(value ?? "").replace(/[$,]/g, "").trim();
@@ -112,12 +113,21 @@ export async function saveHouseRenderImageAction(formData: FormData) {
   }
 
   const buffer = Buffer.from(await renderImage.arrayBuffer());
-  const dataUrl = `data:${renderImage.type};base64,${buffer.toString("base64")}`;
+  const uploaded = await uploadSupabaseStorageObject({
+    bucket: process.env.SUPABASE_RENDER_BUCKET ?? "house-renders",
+    bytes: buffer,
+    contentType: renderImage.type,
+    fileName: renderImage.name,
+    folder: `${qboBankAccountId}-${houseName}`,
+    isPublic: true,
+  });
+  const dataUrl = uploaded ? null : `data:${renderImage.type};base64,${buffer.toString("base64")}`;
 
   await saveHouseManualRenderImage({
     qboBankAccountId,
     houseName,
-    manualRenderImageUrl: dataUrl,
+    manualRenderImageUrl: uploaded?.url ?? dataUrl,
+    renderStoragePath: uploaded?.path ?? null,
   });
 
   revalidatePath("/");
@@ -132,6 +142,8 @@ export async function saveHouseContractSourceAction(formData: FormData) {
   let contractFileName: string | null = null;
   let contractFileType: string | null = null;
   let contractFileDataUrl: string | null = null;
+  let contractFileUrl: string | null = null;
+  let contractStoragePath: string | null = null;
 
   if (!qboBankAccountId || !houseName) {
     throw new Error("House account is missing.");
@@ -149,10 +161,21 @@ export async function saveHouseContractSourceAction(formData: FormData) {
     }
 
     const buffer = Buffer.from(await contractFile.arrayBuffer());
+    const contentType = contractFile.type || "application/octet-stream";
+    const uploaded = await uploadSupabaseStorageObject({
+      bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
+      bytes: buffer,
+      contentType,
+      fileName: contractFile.name,
+      folder: `${qboBankAccountId}-${houseName}`,
+      isPublic: false,
+    });
 
     contractFileName = contractFile.name;
-    contractFileType = contractFile.type || "application/octet-stream";
-    contractFileDataUrl = `data:${contractFile.type || "application/octet-stream"};base64,${buffer.toString("base64")}`;
+    contractFileType = contentType;
+    contractFileUrl = uploaded?.url ?? null;
+    contractStoragePath = uploaded?.path ?? null;
+    contractFileDataUrl = uploaded ? null : `data:${contentType};base64,${buffer.toString("base64")}`;
   }
 
   await saveHouseContractSource({
@@ -160,6 +183,8 @@ export async function saveHouseContractSourceAction(formData: FormData) {
     houseName,
     contractFileName,
     contractFileType,
+    contractFileUrl,
+    contractStoragePath,
     contractFileDataUrl,
     contractPrice: optionalMoney(formData.get("contractPrice")),
     contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),

@@ -7,8 +7,11 @@ export type HouseDetail = {
   squareFootage: number | null;
   city: string | null;
   manualRenderImageUrl: string | null;
+  renderStoragePath: string | null;
   contractFileName: string | null;
   contractFileType: string | null;
+  contractFileUrl: string | null;
+  contractStoragePath: string | null;
   contractFileDataUrl: string | null;
   contractUploadedAt: string | null;
   contractPrice: number | null;
@@ -40,8 +43,11 @@ async function ensureHouseDetailsTable() {
       square_footage integer,
       city text,
       manual_render_image_url text,
+      render_storage_path text,
       contract_file_name text,
       contract_file_type text,
+      contract_file_url text,
+      contract_storage_path text,
       contract_file_data_url text,
       contract_uploaded_at timestamptz,
       contract_price numeric,
@@ -53,8 +59,11 @@ async function ensureHouseDetailsTable() {
   `;
 
   await sql()`alter table house_details add column if not exists manual_render_image_url text`;
+  await sql()`alter table house_details add column if not exists render_storage_path text`;
   await sql()`alter table house_details add column if not exists contract_file_name text`;
   await sql()`alter table house_details add column if not exists contract_file_type text`;
+  await sql()`alter table house_details add column if not exists contract_file_url text`;
+  await sql()`alter table house_details add column if not exists contract_storage_path text`;
   await sql()`alter table house_details add column if not exists contract_file_data_url text`;
   await sql()`alter table house_details add column if not exists contract_uploaded_at timestamptz`;
   await sql()`alter table house_details add column if not exists contract_price numeric`;
@@ -95,8 +104,11 @@ export async function getHouseDetailsMap() {
       square_footage: number | null;
       city: string | null;
       manual_render_image_url: string | null;
+      render_storage_path: string | null;
       contract_file_name: string | null;
       contract_file_type: string | null;
+      contract_file_url: string | null;
+      contract_storage_path: string | null;
       contract_file_data_url: string | null;
       contract_uploaded_at: Date | null;
       contract_price: string | null;
@@ -114,8 +126,11 @@ export async function getHouseDetailsMap() {
       h.square_footage,
       h.city,
       h.manual_render_image_url,
+      h.render_storage_path,
       h.contract_file_name,
       h.contract_file_type,
+      h.contract_file_url,
+      h.contract_storage_path,
       h.contract_file_data_url,
       h.contract_uploaded_at,
       h.contract_price,
@@ -134,8 +149,11 @@ export async function getHouseDetailsMap() {
       h.square_footage,
       h.city,
       h.manual_render_image_url,
+      h.render_storage_path,
       h.contract_file_name,
       h.contract_file_type,
+      h.contract_file_url,
+      h.contract_storage_path,
       h.contract_file_data_url,
       h.contract_uploaded_at,
       h.contract_price,
@@ -157,8 +175,11 @@ export async function getHouseDetailsMap() {
       squareFootage: row.square_footage,
       city: row.city,
       manualRenderImageUrl: row.manual_render_image_url,
+      renderStoragePath: row.render_storage_path,
       contractFileName: row.contract_file_name,
       contractFileType: row.contract_file_type,
+      contractFileUrl: row.contract_file_url,
+      contractStoragePath: row.contract_storage_path,
       contractFileDataUrl: row.contract_file_data_url,
       contractUploadedAt: row.contract_uploaded_at?.toISOString() ?? null,
       contractPrice,
@@ -230,10 +251,12 @@ export async function saveHouseManualRenderImage({
   qboBankAccountId,
   houseName,
   manualRenderImageUrl,
+  renderStoragePath = null,
 }: {
   qboBankAccountId: string;
   houseName: string;
   manualRenderImageUrl: string | null;
+  renderStoragePath?: string | null;
 }) {
   if (!hasDatabaseUrl()) {
     throw new Error("DATABASE_URL is required to save house render images.");
@@ -245,17 +268,20 @@ export async function saveHouseManualRenderImage({
       qbo_bank_account_id,
       house_name,
       manual_render_image_url,
+      render_storage_path,
       updated_at
     )
     values (
       ${qboBankAccountId},
       ${houseName},
       ${manualRenderImageUrl},
+      ${renderStoragePath},
       now()
     )
     on conflict (qbo_bank_account_id) do update set
       house_name = excluded.house_name,
       manual_render_image_url = excluded.manual_render_image_url,
+      render_storage_path = coalesce(excluded.render_storage_path, house_details.render_storage_path),
       updated_at = now()
   `;
 }
@@ -265,6 +291,8 @@ export async function saveHouseContractSource({
   houseName,
   contractFileName,
   contractFileType,
+  contractFileUrl,
+  contractStoragePath,
   contractFileDataUrl,
   contractPrice,
   contractSquareFootage,
@@ -274,6 +302,8 @@ export async function saveHouseContractSource({
   houseName: string;
   contractFileName: string | null;
   contractFileType: string | null;
+  contractFileUrl?: string | null;
+  contractStoragePath?: string | null;
   contractFileDataUrl: string | null;
   contractPrice: number | null;
   contractSquareFootage: number | null;
@@ -293,6 +323,8 @@ export async function saveHouseContractSource({
       city,
       contract_file_name,
       contract_file_type,
+      contract_file_url,
+      contract_storage_path,
       contract_file_data_url,
       contract_uploaded_at,
       contract_price,
@@ -309,6 +341,8 @@ export async function saveHouseContractSource({
       ${contractCity},
       ${contractFileName},
       ${contractFileType},
+      ${contractFileUrl ?? null},
+      ${contractStoragePath ?? null},
       ${contractFileDataUrl},
       now(),
       ${contractPrice},
@@ -324,6 +358,8 @@ export async function saveHouseContractSource({
       city = coalesce(excluded.city, house_details.city),
       contract_file_name = coalesce(excluded.contract_file_name, house_details.contract_file_name),
       contract_file_type = coalesce(excluded.contract_file_type, house_details.contract_file_type),
+      contract_file_url = coalesce(excluded.contract_file_url, house_details.contract_file_url),
+      contract_storage_path = coalesce(excluded.contract_storage_path, house_details.contract_storage_path),
       contract_file_data_url = coalesce(excluded.contract_file_data_url, house_details.contract_file_data_url),
       contract_uploaded_at = coalesce(excluded.contract_uploaded_at, house_details.contract_uploaded_at),
       contract_price = coalesce(excluded.contract_price, house_details.contract_price),

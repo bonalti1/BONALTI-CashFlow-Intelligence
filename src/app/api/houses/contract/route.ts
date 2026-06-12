@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { saveHouseContractSource } from "@/lib/houses/house-details-store";
+import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 
 function optionalText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -55,13 +56,24 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await contractFile.arrayBuffer());
+    const contentType = contractFile.type || "application/octet-stream";
+    const uploaded = await uploadSupabaseStorageObject({
+      bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
+      bytes: buffer,
+      contentType,
+      fileName: contractFile.name,
+      folder: `${qboBankAccountId}-${houseName}`,
+      isPublic: false,
+    });
 
     await saveHouseContractSource({
       qboBankAccountId,
       houseName,
       contractFileName: contractFile.name,
-      contractFileType: contractFile.type || "application/octet-stream",
-      contractFileDataUrl: `data:${contractFile.type || "application/octet-stream"};base64,${buffer.toString("base64")}`,
+      contractFileType: contentType,
+      contractFileUrl: uploaded?.url ?? null,
+      contractStoragePath: uploaded?.path ?? null,
+      contractFileDataUrl: uploaded ? null : `data:${contentType};base64,${buffer.toString("base64")}`,
       contractPrice: null,
       contractSquareFootage: null,
       contractCity: null,
