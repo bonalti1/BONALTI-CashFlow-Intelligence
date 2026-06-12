@@ -7,6 +7,9 @@ type ProjectRenderUploadProps = {
   houseName: string;
   imageUrl: string | null;
   contractFileName: string | null;
+  contractPrice: number | null;
+  contractSquareFootage: number | null;
+  contractCity: string | null;
   returnTo: string;
 };
 
@@ -15,6 +18,9 @@ export function ProjectRenderUpload({
   houseName,
   imageUrl,
   contractFileName,
+  contractPrice,
+  contractSquareFootage,
+  contractCity,
   returnTo,
 }: ProjectRenderUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,6 +29,7 @@ export function ProjectRenderUpload({
   const [isContractDragging, setIsContractDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isContractUploading, setIsContractUploading] = useState(false);
+  const [showContractFields, setShowContractFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function saveRender(formData: FormData) {
@@ -111,6 +118,17 @@ export function ProjectRenderUpload({
     formData.set("qboBankAccountId", qboBankAccountId);
     formData.set("houseName", houseName);
     formData.set("contractFile", file);
+
+    await saveContract(formData);
+  }
+
+  async function saveContractValues(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    formData.set("qboBankAccountId", qboBankAccountId);
+    formData.set("houseName", houseName);
 
     await saveContract(formData);
   }
@@ -230,7 +248,14 @@ export function ProjectRenderUpload({
           setIsContractDragging(false);
         }}
         onDrop={handleContractDrop}
-        onClick={() => contractInputRef.current?.click()}
+        onClick={() => {
+          if (contractFileName) {
+            setShowContractFields((value) => !value);
+            return;
+          }
+
+          contractInputRef.current?.click();
+        }}
         title={contractFileName ? `Contract uploaded: ${contractFileName}` : `Add contract for ${houseName}`}
         type="button"
       >
@@ -242,6 +267,38 @@ export function ProjectRenderUpload({
               ? "✓ Contract"
               : "+ Contract"}
       </button>
+      {showContractFields ? (
+        <div className="mt-1 rounded-[8px] border border-[#d8d5ca] bg-white p-2 shadow-sm">
+          <form className="space-y-1" onSubmit={saveContractValues}>
+            <input
+              className="h-7 w-full rounded-[6px] border border-[#d8d5ca] px-2 text-[10px] font-extrabold text-[#16294d] outline-none focus:border-[#16294d]"
+              defaultValue={contractPrice ?? ""}
+              inputMode="decimal"
+              name="contractPrice"
+              placeholder="Sold price"
+            />
+            <input
+              className="h-7 w-full rounded-[6px] border border-[#d8d5ca] px-2 text-[10px] font-extrabold text-[#16294d] outline-none focus:border-[#16294d]"
+              defaultValue={contractSquareFootage ?? ""}
+              inputMode="numeric"
+              name="contractSquareFootage"
+              placeholder="Sqft"
+            />
+            <input
+              className="h-7 w-full rounded-[6px] border border-[#d8d5ca] px-2 text-[10px] font-extrabold text-[#16294d] outline-none focus:border-[#16294d]"
+              defaultValue={contractCity ?? ""}
+              name="contractCity"
+              placeholder="City"
+            />
+            <button
+              className="h-7 w-full rounded-[7px] bg-[#16294d] text-[9px] font-extrabold uppercase tracking-[0.08em] text-white"
+              type="submit"
+            >
+              {isContractUploading ? "Saving" : "Save source"}
+            </button>
+          </form>
+        </div>
+      ) : null}
       {error ? (
         <span className="mt-1 block rounded-[6px] border border-[#ffc7bf] bg-[#fdebea] px-2 py-1 text-[9px] font-extrabold leading-3 text-[#9d251c] shadow-sm">
           {error}

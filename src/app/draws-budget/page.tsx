@@ -67,6 +67,9 @@ type HouseView = {
   renderImageUrl: string | null;
   contractFileName: string | null;
   contractUploadedAt: string | null;
+  contractPrice: number | null;
+  contractSquareFootage: number | null;
+  contractCity: string | null;
   completed: boolean;
   completedAt: string | null;
 };
@@ -424,6 +427,9 @@ function buildDemoHouses(): HouseView[] {
       renderImageUrl: null,
       contractFileName: null,
       contractUploadedAt: null,
+      contractPrice: null,
+      contractSquareFootage: null,
+      contractCity: null,
       completed: house.phaseIndex >= drawPhaseKeys.length - 1,
       completedAt: null,
     };
@@ -520,6 +526,9 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
         renderImageUrl: details?.manualRenderImageUrl ?? null,
         contractFileName: details?.contractFileName ?? null,
         contractUploadedAt: details?.contractUploadedAt ?? null,
+        contractPrice: details?.contractPrice ?? null,
+        contractSquareFootage: details?.contractSquareFootage ?? null,
+        contractCity: details?.contractCity ?? null,
         completed: false,
         completedAt: null,
       };
@@ -813,7 +822,10 @@ function HouseCard({
         <div className="grid gap-3 lg:grid-cols-[104px_1.1fr_0.7fr_0.8fr_1.45fr_130px] lg:items-center">
           <ProjectRenderUpload
             houseName={house.house}
+            contractCity={house.contractCity}
             contractFileName={house.contractFileName}
+            contractPrice={house.contractPrice}
+            contractSquareFootage={house.contractSquareFootage}
             imageUrl={house.renderImageUrl}
             qboBankAccountId={house.id}
             returnTo={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${selectedPhase.key}&details=${showDetails ? "1" : "0"}`}

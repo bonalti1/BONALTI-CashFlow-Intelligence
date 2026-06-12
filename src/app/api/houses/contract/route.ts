@@ -10,6 +10,38 @@ function optionalText(value: FormDataEntryValue | null) {
   return text || null;
 }
 
+function optionalMoney(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").replace(/[$,]/g, "").trim();
+
+  if (!text) {
+    return null;
+  }
+
+  const parsed = Number(text);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("Contract price must be a positive number.");
+  }
+
+  return parsed;
+}
+
+function optionalInteger(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").replace(/,/g, "").trim();
+
+  if (!text) {
+    return null;
+  }
+
+  const parsed = Number(text);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error("Square footage must be a whole positive number.");
+  }
+
+  return parsed;
+}
+
 function isAllowedContractFile(file: File) {
   const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp", "application/octet-stream"];
   const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
@@ -32,51 +64,58 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!(contractFile instanceof File) || contractFile.size === 0) {
-      return NextResponse.json(
-        { status: "error", message: "Please choose a contract PDF or image." },
-        { status: 400 },
-      );
+    let contractFileName: string | null = null;
+    let contractFileType: string | null = null;
+    let contractFileUrl: string | null = null;
+    let contractStoragePath: string | null = null;
+    let contractFileDataUrl: string | null = null;
+
+    if (contractFile instanceof File && contractFile.size > 0) {
+      if (!isAllowedContractFile(contractFile)) {
+        return NextResponse.json(
+          { status: "error", message: "Contract must be a PDF or image file." },
+          { status: 400 },
+        );
+      }
+
+      const maxSize = 25 * 1024 * 1024;
+
+      if (contractFile.size > maxSize) {
+        return NextResponse.json(
+          { status: "error", message: "Contract file must be smaller than 25 MB." },
+          { status: 400 },
+        );
+      }
+
+      const buffer = Buffer.from(await contractFile.arrayBuffer());
+      const contentType = contractFile.type || "application/octet-stream";
+      const uploaded = await uploadSupabaseStorageObject({
+        bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
+        bytes: buffer,
+        contentType,
+        fileName: contractFile.name,
+        folder: `${qboBankAccountId}-${houseName}`,
+        isPublic: false,
+      });
+
+      contractFileName = contractFile.name;
+      contractFileType = contentType;
+      contractFileUrl = uploaded?.url ?? null;
+      contractStoragePath = uploaded?.path ?? null;
+      contractFileDataUrl = uploaded ? null : `data:${contentType};base64,${buffer.toString("base64")}`;
     }
-
-    if (!isAllowedContractFile(contractFile)) {
-      return NextResponse.json(
-        { status: "error", message: "Contract must be a PDF or image file." },
-        { status: 400 },
-      );
-    }
-
-    const maxSize = 25 * 1024 * 1024;
-
-    if (contractFile.size > maxSize) {
-      return NextResponse.json(
-        { status: "error", message: "Contract file must be smaller than 25 MB." },
-        { status: 400 },
-      );
-    }
-
-    const buffer = Buffer.from(await contractFile.arrayBuffer());
-    const contentType = contractFile.type || "application/octet-stream";
-    const uploaded = await uploadSupabaseStorageObject({
-      bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
-      bytes: buffer,
-      contentType,
-      fileName: contractFile.name,
-      folder: `${qboBankAccountId}-${houseName}`,
-      isPublic: false,
-    });
 
     await saveHouseContractSource({
       qboBankAccountId,
       houseName,
-      contractFileName: contractFile.name,
-      contractFileType: contentType,
-      contractFileUrl: uploaded?.url ?? null,
-      contractStoragePath: uploaded?.path ?? null,
-      contractFileDataUrl: uploaded ? null : `data:${contentType};base64,${buffer.toString("base64")}`,
-      contractPrice: null,
-      contractSquareFootage: null,
-      contractCity: null,
+      contractFileName,
+      contractFileType,
+      contractFileUrl,
+      contractStoragePath,
+      contractFileDataUrl,
+      contractPrice: optionalMoney(formData.get("contractPrice")),
+      contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
+      contractCity: optionalText(formData.get("contractCity")),
     });
 
     revalidatePath("/");
