@@ -20,6 +20,7 @@ export function ProjectRenderUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const contractInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isContractDragging, setIsContractDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isContractUploading, setIsContractUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +139,14 @@ export function ProjectRenderUpload({
     await submitWithUrl(droppedUrl(event));
   }
 
+  async function handleContractDrop(event: React.DragEvent) {
+    stopBrowserDrop(event);
+    setIsDragging(false);
+    setIsContractDragging(false);
+
+    await submitContract(event.dataTransfer.files);
+  }
+
   return (
     <form
       className="relative"
@@ -200,15 +209,38 @@ export function ProjectRenderUpload({
       </button>
       <button
         className={`mt-1 flex h-6 w-full items-center justify-center rounded-[7px] border px-1 text-[8px] font-extrabold uppercase tracking-[0.08em] transition ${
-          contractFileName
+          isContractDragging
+            ? "border-[#1f8f5f] bg-[#f1fbf5] text-[#1f8f5f] ring-2 ring-[#2f9b72]/20"
+            : contractFileName
             ? "border-[#b7dfc8] bg-[#f1fbf5] text-[#1f8f5f]"
             : "border-[#e3e1d7] bg-white text-[#7b8298] hover:border-[#16294d]/25 hover:text-[#16294d]"
         }`}
+        onDragEnter={(event) => {
+          stopBrowserDrop(event);
+          setIsDragging(false);
+          setIsContractDragging(true);
+        }}
+        onDragOver={(event) => {
+          stopBrowserDrop(event);
+          setIsDragging(false);
+          setIsContractDragging(true);
+        }}
+        onDragLeave={(event) => {
+          stopBrowserDrop(event);
+          setIsContractDragging(false);
+        }}
+        onDrop={handleContractDrop}
         onClick={() => contractInputRef.current?.click()}
         title={contractFileName ? `Contract uploaded: ${contractFileName}` : `Add contract for ${houseName}`}
         type="button"
       >
-        {isContractUploading ? "Saving" : contractFileName ? "✓ Contract" : "+ Contract"}
+        {isContractUploading
+          ? "Saving"
+          : isContractDragging
+            ? "Drop contract"
+            : contractFileName
+              ? "✓ Contract"
+              : "+ Contract"}
       </button>
       {error ? (
         <span className="absolute inset-x-0 top-full z-10 mt-1 rounded-[6px] border border-[#ffc7bf] bg-[#fdebea] px-2 py-1 text-[9px] font-extrabold text-[#9d251c] shadow-sm">
