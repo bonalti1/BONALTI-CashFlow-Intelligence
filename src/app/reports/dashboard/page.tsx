@@ -52,6 +52,7 @@ type ReportPhase = {
 type ReportHouse = {
   id: string;
   house: string;
+  bank: string;
   city: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
@@ -248,6 +249,7 @@ function buildDemoReportHouses(): ReportHouse[] {
     return {
       id: `demo-${house.house}`,
       house: house.house,
+      bank: `${house.house} demo bank account`,
       city: house.city,
       soldPrice: house.soldPrice,
       squareFootage: house.squareFootage,

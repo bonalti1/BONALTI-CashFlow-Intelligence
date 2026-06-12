@@ -446,7 +446,7 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
     getPhaseLineItemActuals(),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
-  let houses: HouseView[] = bankAccounts
+  const mappedHouses = bankAccounts
     .map((account) => {
       const house = getConfirmedHouseName(account);
 
@@ -490,7 +490,7 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
       ).length;
       const currentPhase = currentPhaseFor(phases);
 
-      return {
+      const houseView: HouseView = {
         id: account.Id,
         house,
         bank: accountName(account),
@@ -508,9 +508,13 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
         completed: false,
         completedAt: null,
       };
+
+      return houseView;
     })
-    .filter((house): house is HouseView => Boolean(house))
-    .sort((a, b) => b.progress - a.progress || a.house.localeCompare(b.house));
+    .filter((house): house is HouseView => Boolean(house));
+  let houses: HouseView[] = mappedHouses.sort(
+    (a, b) => b.progress - a.progress || a.house.localeCompare(b.house),
+  );
 
   if (houses.length === 0) {
     houses = buildDemoHouses();
