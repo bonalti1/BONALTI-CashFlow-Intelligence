@@ -6,6 +6,7 @@ type ProjectRenderUploadProps = {
   qboBankAccountId: string;
   houseName: string;
   imageUrl: string | null;
+  contractFileName: string | null;
   returnTo: string;
 };
 
@@ -13,11 +14,14 @@ export function ProjectRenderUpload({
   qboBankAccountId,
   houseName,
   imageUrl,
+  contractFileName,
   returnTo,
 }: ProjectRenderUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const contractInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isContractUploading, setIsContractUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function saveRender(formData: FormData) {
@@ -73,6 +77,43 @@ export function ProjectRenderUpload({
     await saveRender(formData);
   }
 
+  async function saveContract(formData: FormData) {
+    setError(null);
+    setIsContractUploading(true);
+
+    try {
+      const response = await fetch("/api/houses/contract", {
+        body: formData,
+        method: "POST",
+      });
+      const result = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(result?.message ?? "Contract upload failed.");
+      }
+
+      window.location.href = returnTo;
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Contract upload failed.");
+      setIsContractUploading(false);
+    }
+  }
+
+  async function submitContract(files: FileList | null) {
+    const file = files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("qboBankAccountId", qboBankAccountId);
+    formData.set("houseName", houseName);
+    formData.set("contractFile", file);
+
+    await saveContract(formData);
+  }
+
   function stopBrowserDrop(event: React.DragEvent) {
     event.preventDefault();
     event.stopPropagation();
@@ -125,6 +166,14 @@ export function ProjectRenderUpload({
         onChange={(event) => submitWithFiles(event.currentTarget.files)}
         type="file"
       />
+      <input
+        ref={contractInputRef}
+        accept="application/pdf,image/*"
+        className="sr-only"
+        name="contractFile"
+        onChange={(event) => submitContract(event.currentTarget.files)}
+        type="file"
+      />
       <button
         className={`relative block h-[76px] w-full overflow-hidden rounded-[10px] border bg-white text-left shadow-[0_8px_18px_-20px_rgba(14,27,54,0.65)] transition ${
           isDragging ? "border-[#2f9b72] ring-2 ring-[#2f9b72]/25" : "border-[#d8d5ca]"
@@ -148,6 +197,18 @@ export function ProjectRenderUpload({
         <span className="absolute bottom-1 right-1 rounded-[6px] bg-white/90 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.08em] text-[#16294d] shadow-sm">
           {isUploading ? "Saving" : "Add"}
         </span>
+      </button>
+      <button
+        className={`mt-1 flex h-6 w-full items-center justify-center rounded-[7px] border px-1 text-[8px] font-extrabold uppercase tracking-[0.08em] transition ${
+          contractFileName
+            ? "border-[#b7dfc8] bg-[#f1fbf5] text-[#1f8f5f]"
+            : "border-[#e3e1d7] bg-white text-[#7b8298] hover:border-[#16294d]/25 hover:text-[#16294d]"
+        }`}
+        onClick={() => contractInputRef.current?.click()}
+        title={contractFileName ? `Contract uploaded: ${contractFileName}` : `Add contract for ${houseName}`}
+        type="button"
+      >
+        {isContractUploading ? "Saving" : contractFileName ? "✓ Contract" : "+ Contract"}
       </button>
       {error ? (
         <span className="absolute inset-x-0 top-full z-10 mt-1 rounded-[6px] border border-[#ffc7bf] bg-[#fdebea] px-2 py-1 text-[9px] font-extrabold text-[#9d251c] shadow-sm">

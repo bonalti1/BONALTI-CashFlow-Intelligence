@@ -65,6 +65,8 @@ type HouseView = {
   phases: PhaseView[];
   scheduleUrl: string | null;
   renderImageUrl: string | null;
+  contractFileName: string | null;
+  contractUploadedAt: string | null;
   completed: boolean;
   completedAt: string | null;
 };
@@ -420,6 +422,8 @@ function buildDemoHouses(): HouseView[] {
       phases,
       scheduleUrl: scheduleUrl(house.house),
       renderImageUrl: null,
+      contractFileName: null,
+      contractUploadedAt: null,
       completed: house.phaseIndex >= drawPhaseKeys.length - 1,
       completedAt: null,
     };
@@ -509,6 +513,8 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
         phases,
         scheduleUrl: scheduleUrl(house),
         renderImageUrl: details?.manualRenderImageUrl ?? null,
+        contractFileName: details?.contractFileName ?? null,
+        contractUploadedAt: details?.contractUploadedAt ?? null,
         completed: false,
         completedAt: null,
       };
@@ -802,6 +808,7 @@ function HouseCard({
         <div className="grid gap-3 lg:grid-cols-[104px_1.1fr_0.7fr_0.8fr_1.45fr_130px] lg:items-center">
           <ProjectRenderUpload
             houseName={house.house}
+            contractFileName={house.contractFileName}
             imageUrl={house.renderImageUrl}
             qboBankAccountId={house.id}
             returnTo={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${selectedPhase.key}&details=${showDetails ? "1" : "0"}`}
