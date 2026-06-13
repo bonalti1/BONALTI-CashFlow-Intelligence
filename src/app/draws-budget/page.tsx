@@ -446,19 +446,34 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
     snapshot,
     houseDetails,
     drawStatusesByPhase,
-    drawLineItemStatuses,
     actualsByPhase,
-    phaseLineItemsByPhase,
-    phaseLineItemActuals,
   ] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getHouseDetailsMap(),
     getDrawPhaseStatuses(),
-    getDrawLineItemStatuses(),
     getHousePhaseActuals(),
-    getPhaseLineItemsByPhase(),
-    getPhaseLineItemActuals(),
   ]);
+  const [
+    drawLineItemStatuses,
+    phaseLineItemsByPhase,
+    phaseLineItemActuals,
+  ]: [
+    Map<string, DrawLineItemRecord>,
+    Map<DrawPhaseKey, PhaseLineItem[]>,
+    Map<string, PhaseLineItemActual>,
+  ] = detailsOpen && selectedHouseId
+    ? await Promise.all([
+        getDrawLineItemStatuses(),
+        getPhaseLineItemsByPhase(),
+        getPhaseLineItemActuals(),
+      ])
+    : [
+        new Map<string, DrawLineItemRecord>(),
+        new Map<DrawPhaseKey, PhaseLineItem[]>(
+          drawPhaseKeys.map((key) => [key, [] as PhaseLineItem[]]),
+        ),
+        new Map<string, PhaseLineItemActual>(),
+      ];
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const mappedHouses = bankAccounts
     .map((account) => {
@@ -471,7 +486,10 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
       const details = houseDetails.get(account.Id);
       const phases: PhaseView[] = drawPhaseKeys.map((key) => {
         const actual = actualsByPhase.get(`${account.Id}:${key}`) ?? null;
-        const lineItems = phaseLineItemsByPhase.get(key) ?? [];
+        const lineItems =
+          detailsOpen && account.Id === selectedHouseId
+            ? phaseLineItemsByPhase.get(key) ?? []
+            : [];
 
         return {
           key,
@@ -545,7 +563,11 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
     houses = buildDemoHouses();
   }
 
-  const schedulingMaps = await getSchedulingDashboardMaps(houses).catch(() => ({
+  const schedulingInput =
+    detailsOpen && selectedHouseId
+      ? houses.filter((house) => house.id === selectedHouseId)
+      : houses.map((house) => ({ house: house.house }));
+  const schedulingMaps = await getSchedulingDashboardMaps(schedulingInput).catch(() => ({
     completion: new Map(),
     statuses: new Map(),
     visuals: new Map(),
