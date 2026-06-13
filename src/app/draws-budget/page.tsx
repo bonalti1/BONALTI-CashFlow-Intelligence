@@ -721,6 +721,13 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
               Sync QB
             </Link>
             <Link
+              className="flex h-12 items-center gap-2 rounded-[10px] border border-white/15 bg-white/10 px-5 text-sm font-bold text-white shadow-sm"
+              href="/bank-feed"
+            >
+              <Landmark size={16} />
+              Bank Feed
+            </Link>
+            <Link
               className="flex h-12 items-center gap-2 rounded-[10px] border border-white/15 bg-white px-5 text-sm font-bold text-[#16294d] shadow-sm"
               href="/reports/dashboard"
             >

@@ -7,6 +7,10 @@ const serverEnvKeys = [
   "OPENAI_API_KEY",
   "TOKEN_ENCRYPTION_KEY",
   "AI_CSUITE_EXPORT_TOKEN",
+  "PLAID_CLIENT_ID",
+  "PLAID_SECRET",
+  "PLAID_ENV",
+  "PLAID_REDIRECT_URI",
 ] as const;
 
 export type ServerEnvKey = (typeof serverEnvKeys)[number];

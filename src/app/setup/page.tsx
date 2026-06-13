@@ -49,6 +49,16 @@ const setupSteps: SetupStep[] = [
     envKey: "OPENAI_API_KEY",
   },
   {
+    title: "Plaid client ID",
+    body: "Needed for read-only bank feed access. Plaid helps the AI CFO compare real bank movement to QuickBooks and draws.",
+    envKey: "PLAID_CLIENT_ID",
+  },
+  {
+    title: "Plaid secret",
+    body: "Needed only on the server. This is never shown in the browser.",
+    envKey: "PLAID_SECRET",
+  },
+  {
     title: "QuickBooks OAuth connection",
     body: "After keys are present, we can click Connect and QuickBooks will send us back with a company ID.",
     complete: false,
@@ -65,6 +75,10 @@ export default async function SetupPage() {
     configured.get("QBO_CLIENT_SECRET") &&
     configured.get("QBO_REDIRECT_URI") &&
     configured.get("QBO_ENVIRONMENT");
+  const plaidReady =
+    configured.get("PLAID_CLIENT_ID") &&
+    configured.get("PLAID_SECRET") &&
+    configured.get("PLAID_ENV");
 
   return (
     <main className="min-h-screen bg-[#f7f8f5] px-6 py-6 text-[#121a36]">
@@ -97,7 +111,7 @@ export default async function SetupPage() {
           </Link>
         </div>
 
-        <section className="mb-5 grid grid-cols-4 gap-3">
+        <section className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <StatusCard
             icon={Database}
             label="Database"
@@ -119,6 +133,7 @@ export default async function SetupPage() {
             label="Agent key"
             ready={Boolean(configured.get("OPENAI_API_KEY"))}
           />
+          <StatusCard icon={PlugZap} label="Plaid bank feed" ready={Boolean(plaidReady)} />
         </section>
 
         <section className="rounded-lg border border-[#dfe5dc] bg-white">
