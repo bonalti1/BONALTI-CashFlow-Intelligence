@@ -49,6 +49,14 @@ export type SchedulingProjectCompletion = {
   completedAt: string | null;
 };
 
+type SchedulingHouseInput = Array<{
+  house: string;
+  phases?: Array<{
+    key: DrawPhaseKey;
+    lineItems: Array<{ lineItemName: string }>;
+  }>;
+}>;
+
 const phaseNames: Record<DrawPhaseKey, string> = {
   pre: "Pre Phase",
   p1: "Phase 1",
@@ -244,7 +252,8 @@ export async function getSchedulingConnectionStatus() {
   };
 }
 
-export async function getSchedulingLineItemStatusMap(
+function buildSchedulingLineItemStatusMap(
+  board: SchedulingBoard | null,
   houses: Array<{
     house: string;
     phases: Array<{
@@ -254,7 +263,6 @@ export async function getSchedulingLineItemStatusMap(
   }>,
 ) {
   const statuses = new Map<string, SchedulingLineStatus>();
-  const board = await readSchedulingBoard();
 
   if (!board?.projects) {
     return statuses;
@@ -298,9 +306,23 @@ export async function getSchedulingLineItemStatusMap(
   return statuses;
 }
 
-export async function getSchedulingProjectVisualMap(houses: Array<{ house: string }>) {
+export async function getSchedulingLineItemStatusMap(
+  houses: Array<{
+    house: string;
+    phases: Array<{
+      key: DrawPhaseKey;
+      lineItems: Array<{ lineItemName: string }>;
+    }>;
+  }>,
+) {
+  return buildSchedulingLineItemStatusMap(await readSchedulingBoard(), houses);
+}
+
+function buildSchedulingProjectVisualMap(
+  board: SchedulingBoard | null,
+  houses: Array<{ house: string }>,
+) {
   const visuals = new Map<string, SchedulingProjectVisual>();
-  const board = await readSchedulingBoard();
 
   if (!board?.projects) {
     return visuals;
@@ -325,9 +347,15 @@ export async function getSchedulingProjectVisualMap(houses: Array<{ house: strin
   return visuals;
 }
 
-export async function getSchedulingProjectCompletionMap(houses: Array<{ house: string }>) {
+export async function getSchedulingProjectVisualMap(houses: Array<{ house: string }>) {
+  return buildSchedulingProjectVisualMap(await readSchedulingBoard(), houses);
+}
+
+function buildSchedulingProjectCompletionMap(
+  board: SchedulingBoard | null,
+  houses: Array<{ house: string }>,
+) {
   const completion = new Map<string, SchedulingProjectCompletion>();
-  const board = await readSchedulingBoard();
 
   if (!board) {
     return completion;
@@ -355,4 +383,29 @@ export async function getSchedulingProjectCompletionMap(houses: Array<{ house: s
   }
 
   return completion;
+}
+
+export async function getSchedulingProjectCompletionMap(houses: Array<{ house: string }>) {
+  return buildSchedulingProjectCompletionMap(await readSchedulingBoard(), houses);
+}
+
+export async function getSchedulingDashboardMaps(houses: SchedulingHouseInput) {
+  const board = await readSchedulingBoard();
+
+  return {
+    statuses: buildSchedulingLineItemStatusMap(
+      board,
+      houses.filter(
+        (house): house is {
+          house: string;
+          phases: Array<{
+            key: DrawPhaseKey;
+            lineItems: Array<{ lineItemName: string }>;
+          }>;
+        } => Boolean(house.phases),
+      ),
+    ),
+    visuals: buildSchedulingProjectVisualMap(board, houses),
+    completion: buildSchedulingProjectCompletionMap(board, houses),
+  };
 }

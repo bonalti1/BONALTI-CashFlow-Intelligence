@@ -17,10 +17,7 @@ import {
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
-import {
-  getSchedulingProjectCompletionMap,
-  getSchedulingProjectVisualMap,
-} from "@/lib/scheduling/status-store";
+import { getSchedulingDashboardMaps } from "@/lib/scheduling/status-store";
 
 export const dynamic = "force-dynamic";
 
@@ -336,29 +333,31 @@ async function getReportHouses() {
 
   if (houses.length === 0) {
     const demo = buildDemoReportHouses();
-    const [completion, visuals] = await Promise.all([
-      getSchedulingProjectCompletionMap(demo).catch(() => new Map()),
-      getSchedulingProjectVisualMap(demo).catch(() => new Map()),
-    ]);
+    const schedulingMaps = await getSchedulingDashboardMaps(demo.map((house) => ({ house: house.house }))).catch(() => ({
+      completion: new Map(),
+      statuses: new Map(),
+      visuals: new Map(),
+    }));
 
     return demo.map((house) => ({
       ...house,
-      completed: completion.get(house.house)?.completed ?? house.completed,
-      renderImageUrl: visuals.get(house.house)?.renderImage ?? house.renderImageUrl,
+      completed: schedulingMaps.completion.get(house.house)?.completed ?? house.completed,
+      renderImageUrl: schedulingMaps.visuals.get(house.house)?.renderImage ?? house.renderImageUrl,
     }));
   }
 
-  const [completion, visuals] = await Promise.all([
-    getSchedulingProjectCompletionMap(houses).catch(() => new Map()),
-    getSchedulingProjectVisualMap(houses).catch(() => new Map()),
-  ]);
+  const schedulingMaps = await getSchedulingDashboardMaps(houses.map((house) => ({ house: house.house }))).catch(() => ({
+    completion: new Map(),
+    statuses: new Map(),
+    visuals: new Map(),
+  }));
 
   return houses.map((house) => ({
     ...house,
     completed:
-      completion.get(house.house)?.completed ??
+      schedulingMaps.completion.get(house.house)?.completed ??
       Boolean(house.phases.find((phase) => phase.key === "p6" && phase.transactionCount > 0)),
-    renderImageUrl: house.renderImageUrl ?? visuals.get(house.house)?.renderImage ?? null,
+    renderImageUrl: house.renderImageUrl ?? schedulingMaps.visuals.get(house.house)?.renderImage ?? null,
   }));
 }
 

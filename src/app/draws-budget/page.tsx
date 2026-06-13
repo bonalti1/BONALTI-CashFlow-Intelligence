@@ -30,9 +30,7 @@ import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
 import {
-  getSchedulingLineItemStatusMap,
-  getSchedulingProjectCompletionMap,
-  getSchedulingProjectVisualMap,
+  getSchedulingDashboardMaps,
   type SchedulingLineStatus,
 } from "@/lib/scheduling/status-store";
 
@@ -547,11 +545,14 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
     houses = buildDemoHouses();
   }
 
-  const [schedulingStatuses, schedulingVisuals, schedulingCompletion] = await Promise.all([
-    getSchedulingLineItemStatusMap(houses).catch(() => new Map()),
-    getSchedulingProjectVisualMap(houses).catch(() => new Map()),
-    getSchedulingProjectCompletionMap(houses).catch(() => new Map()),
-  ]);
+  const schedulingMaps = await getSchedulingDashboardMaps(houses).catch(() => ({
+    completion: new Map(),
+    statuses: new Map(),
+    visuals: new Map(),
+  }));
+  const schedulingStatuses = schedulingMaps.statuses;
+  const schedulingVisuals = schedulingMaps.visuals;
+  const schedulingCompletion = schedulingMaps.completion;
 
   houses = houses.map((house) => ({
     ...house,
