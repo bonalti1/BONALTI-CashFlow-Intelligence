@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { readTtlCache } from "@/lib/performance/ttl-cache";
 
 export const drawPhaseKeys = ["pre", "p1", "p2", "p3", "p4", "p5", "p6"] as const;
 
@@ -85,6 +86,7 @@ type LocalDrawStore = {
 };
 
 const localDrawStorePath = path.join(process.cwd(), ".data", "local-draw-statuses.json");
+const qboFinancialSummaryTtlMs = 60_000;
 
 async function readLocalDrawStore(): Promise<LocalDrawStore> {
   try {
@@ -336,7 +338,7 @@ export async function getDrawLineItemStatuses() {
   return statuses;
 }
 
-export async function getHousePhaseActuals() {
+async function loadHousePhaseActuals() {
   const actuals = new Map<string, HousePhaseActual>();
 
   if (!hasDatabaseUrl()) {
@@ -410,7 +412,15 @@ export async function getHousePhaseActuals() {
   return actuals;
 }
 
-export async function getPhaseLineItemsByPhase() {
+export async function getHousePhaseActuals() {
+  return readTtlCache(
+    "draws:house-phase-actuals",
+    qboFinancialSummaryTtlMs,
+    loadHousePhaseActuals,
+  );
+}
+
+async function loadPhaseLineItemsByPhase() {
   const lineItems = new Map<DrawPhaseKey, PhaseLineItem[]>();
 
   for (const key of drawPhaseKeys) {
@@ -491,7 +501,15 @@ export async function getPhaseLineItemsByPhase() {
   return lineItems;
 }
 
-export async function getPhaseLineItemActuals() {
+export async function getPhaseLineItemsByPhase() {
+  return readTtlCache(
+    "draws:phase-line-items-by-phase",
+    5 * qboFinancialSummaryTtlMs,
+    loadPhaseLineItemsByPhase,
+  );
+}
+
+async function loadPhaseLineItemActuals() {
   const actuals = new Map<string, PhaseLineItemActual>();
 
   if (!hasDatabaseUrl()) {
@@ -543,6 +561,14 @@ export async function getPhaseLineItemActuals() {
   }
 
   return actuals;
+}
+
+export async function getPhaseLineItemActuals() {
+  return readTtlCache(
+    "draws:phase-line-item-actuals",
+    qboFinancialSummaryTtlMs,
+    loadPhaseLineItemActuals,
+  );
 }
 
 export async function saveDrawPhaseStatus({

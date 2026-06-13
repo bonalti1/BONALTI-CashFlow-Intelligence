@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { clearTtlCache, readTtlCache } from "@/lib/performance/ttl-cache";
 
 type QboAccount = {
   Id: string;
@@ -28,6 +29,8 @@ type AccountsSnapshot = {
 
 const dataDir = path.join(process.cwd(), ".data");
 const accountsPath = path.join(dataDir, "qbo-accounts.json");
+const accountsSnapshotCacheKey = "qbo:accounts-snapshot";
+const accountsSnapshotTtlMs = 60_000;
 
 async function ensureAccountsTables() {
   await sql()`
@@ -59,6 +62,8 @@ async function ensureAccountsTables() {
 }
 
 export async function saveAccountsSnapshot(snapshot: AccountsSnapshot) {
+  clearTtlCache(accountsSnapshotCacheKey);
+
   if (hasDatabaseUrl()) {
     await ensureAccountsTables();
     await sql().begin(async (transaction) => {
@@ -187,7 +192,7 @@ export async function getAccountsSnapshotStatus() {
   }
 }
 
-export async function getAccountsSnapshot() {
+async function loadAccountsSnapshot() {
   if (hasDatabaseUrl()) {
     await ensureAccountsTables();
     const snapshots = await sql()<
@@ -228,6 +233,14 @@ export async function getAccountsSnapshot() {
   }
 
   return JSON.parse(await readFile(accountsPath, "utf8")) as AccountsSnapshot;
+}
+
+export async function getAccountsSnapshot() {
+  return readTtlCache(
+    accountsSnapshotCacheKey,
+    accountsSnapshotTtlMs,
+    loadAccountsSnapshot,
+  );
 }
 
 export type { QboAccount };
