@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ProjectRenderUploadProps = {
   qboBankAccountId: string;
@@ -46,6 +46,18 @@ export function ProjectRenderUpload({
           : contractFileName
             ? "✓ Contract"
             : "+ Contract";
+
+  useEffect(() => {
+    if (!contractIsReading) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      window.location.reload();
+    }, 7000);
+
+    return () => window.clearTimeout(timeout);
+  }, [contractIsReading]);
 
   function confirmContractFile(file: File) {
     return window.confirm(
