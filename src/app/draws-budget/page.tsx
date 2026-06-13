@@ -810,6 +810,12 @@ function HouseCard({
     house.squareFootage && house.squareFootage > 0
       ? house.totalSpent / house.squareFootage
       : null;
+  const remainingMoney =
+    house.soldPrice === null ? null : house.soldPrice - house.totalSpent;
+  const remainingPercent =
+    house.soldPrice && house.soldPrice > 0 && remainingMoney !== null
+      ? Math.round((remainingMoney / house.soldPrice) * 100)
+      : null;
   const activePhase = house.currentPhase.key === "pre" ? "Pre" : `P${house.currentPhase.label}`;
   const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1`;
   const collapseHref = "/draws-budget";
@@ -822,7 +828,7 @@ function HouseCard({
     >
       <div className="relative block px-4 py-4 transition hover:bg-[#fbfaf7]">
         <div className="absolute bottom-0 left-0 top-0 w-1" style={{ backgroundColor: accent }} />
-        <div className="grid gap-3 lg:grid-cols-[104px_1.1fr_0.7fr_0.8fr_1.45fr_130px] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[104px_1.1fr_0.72fr_0.72fr_0.72fr_1.25fr_130px] lg:items-center">
           <ProjectRenderUpload
             houseName={house.house}
             contractCity={house.contractCity}
@@ -864,6 +870,24 @@ function HouseCard({
             ].filter(Boolean).join(" · ") || undefined}
             value={currency(house.totalSpent)}
             emphasis="secondary"
+          />
+          <SummaryMetric
+            label="Remaining"
+            subValue={
+              remainingPercent === null
+                ? undefined
+                : remainingPercent >= 0
+                  ? `${remainingPercent}% left`
+                  : `${Math.abs(remainingPercent)}% over`
+            }
+            value={
+              remainingMoney === null
+                ? "Pending"
+                : remainingMoney >= 0
+                  ? currency(remainingMoney)
+                  : `${currency(Math.abs(remainingMoney))} over`
+            }
+            emphasis={remainingMoney !== null && remainingMoney < 0 ? "alert" : "secondary"}
           />
           <MiniPhaseStrip house={house} />
 
@@ -945,7 +969,7 @@ function SummaryMetric({
   subValue,
   value,
 }: {
-  emphasis?: "primary" | "secondary" | "quiet";
+  emphasis?: "primary" | "secondary" | "quiet" | "alert";
   label: string;
   subValue?: string;
   value: string;
@@ -953,11 +977,17 @@ function SummaryMetric({
   const valueClassName =
     emphasis === "primary"
       ? "text-[19px] font-extrabold text-[#16294d]"
+      : emphasis === "alert"
+        ? "text-[18px] font-extrabold text-[#9d251c]"
       : emphasis === "secondary"
         ? "text-[18px] font-extrabold text-[#16294d]"
         : "text-[15px] font-bold text-[#26334f]";
   const accentClassName =
-    emphasis === "primary" || emphasis === "secondary" ? "border-t-[#e23b2a]" : "border-t-[#d6dceb]";
+    emphasis === "alert"
+      ? "border-t-[#9d251c]"
+      : emphasis === "primary" || emphasis === "secondary"
+        ? "border-t-[#e23b2a]"
+        : "border-t-[#d6dceb]";
 
   return (
     <div className={`flex h-[74px] min-w-[132px] flex-col justify-center rounded-[10px] border border-[#e3e1d7] border-t-4 ${accentClassName} bg-white px-3 py-2 shadow-[0_8px_20px_-20px_rgba(14,27,54,0.55)]`}>
