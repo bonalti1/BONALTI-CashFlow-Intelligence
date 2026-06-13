@@ -70,6 +70,7 @@ type HouseView = {
   contractPrice: number | null;
   contractSquareFootage: number | null;
   contractCity: string | null;
+  contractSourceStatus: string | null;
   completed: boolean;
   completedAt: string | null;
 };
@@ -430,6 +431,7 @@ function buildDemoHouses(): HouseView[] {
       contractPrice: null,
       contractSquareFootage: null,
       contractCity: null,
+      contractSourceStatus: null,
       completed: house.phaseIndex >= drawPhaseKeys.length - 1,
       completedAt: null,
     };
@@ -529,6 +531,7 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
         contractPrice: details?.contractPrice ?? null,
         contractSquareFootage: details?.contractSquareFootage ?? null,
         contractCity: details?.contractCity ?? null,
+        contractSourceStatus: details?.contractSourceStatus ?? null,
         completed: false,
         completedAt: null,
       };
@@ -826,6 +829,7 @@ function HouseCard({
             contractFileName={house.contractFileName}
             contractPrice={house.contractPrice}
             contractSquareFootage={house.contractSquareFootage}
+            contractSourceStatus={house.contractSourceStatus}
             imageUrl={house.renderImageUrl}
             qboBankAccountId={house.id}
             returnTo={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${selectedPhase.key}&details=${showDetails ? "1" : "0"}`}

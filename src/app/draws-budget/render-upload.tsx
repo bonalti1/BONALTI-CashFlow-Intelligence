@@ -10,6 +10,7 @@ type ProjectRenderUploadProps = {
   contractPrice: number | null;
   contractSquareFootage: number | null;
   contractCity: string | null;
+  contractSourceStatus: string | null;
   returnTo: string;
 };
 
@@ -21,6 +22,7 @@ export function ProjectRenderUpload({
   contractPrice,
   contractSquareFootage,
   contractCity,
+  contractSourceStatus,
   returnTo,
 }: ProjectRenderUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +33,19 @@ export function ProjectRenderUpload({
   const [isContractUploading, setIsContractUploading] = useState(false);
   const [showContractFields, setShowContractFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const contractIsReading = contractSourceStatus === "reading";
+  const contractNeedsReview = contractSourceStatus === "needs_review";
+  const contractButtonLabel = isContractUploading
+    ? "Saving"
+    : isContractDragging
+      ? "Drop contract"
+      : contractIsReading
+        ? "Reading"
+        : contractNeedsReview
+          ? "Review"
+          : contractFileName
+            ? "✓ Contract"
+            : "+ Contract";
 
   function confirmContractFile(file: File) {
     return window.confirm(
@@ -276,6 +291,10 @@ export function ProjectRenderUpload({
         className={`mt-1 flex h-6 w-full items-center justify-center rounded-[7px] border px-1 text-[8px] font-extrabold uppercase tracking-[0.08em] transition ${
           isContractDragging
             ? "border-[#1f8f5f] bg-[#f1fbf5] text-[#1f8f5f] ring-2 ring-[#2f9b72]/20"
+            : contractIsReading
+            ? "border-[#cbd7ee] bg-[#f4f7fc] text-[#16294d]"
+            : contractNeedsReview
+            ? "border-[#ffc7bf] bg-[#fdebea] text-[#9d251c]"
             : contractFileName
             ? "border-[#b7dfc8] bg-[#f1fbf5] text-[#1f8f5f]"
             : "border-[#e3e1d7] bg-white text-[#7b8298] hover:border-[#16294d]/25 hover:text-[#16294d]"
@@ -306,13 +325,7 @@ export function ProjectRenderUpload({
         title={contractFileName ? `Contract uploaded: ${contractFileName}` : `Add contract for ${houseName}`}
         type="button"
       >
-        {isContractUploading
-          ? "Saving"
-          : isContractDragging
-            ? "Drop contract"
-            : contractFileName
-              ? "✓ Contract"
-              : "+ Contract"}
+        {contractButtonLabel}
       </button>
       {showContractFields ? (
         <div className="mt-1 rounded-[8px] border border-[#d8d5ca] bg-white p-2 shadow-sm">

@@ -297,6 +297,7 @@ export async function saveHouseContractSource({
   contractPrice,
   contractSquareFootage,
   contractCity,
+  contractSourceStatus = "reviewed",
 }: {
   qboBankAccountId: string;
   houseName: string;
@@ -308,6 +309,7 @@ export async function saveHouseContractSource({
   contractPrice: number | null;
   contractSquareFootage: number | null;
   contractCity: string | null;
+  contractSourceStatus?: string | null;
 }) {
   if (!hasDatabaseUrl()) {
     throw new Error("DATABASE_URL is required to save contract source data.");
@@ -348,7 +350,7 @@ export async function saveHouseContractSource({
       ${contractPrice},
       ${contractSquareFootage},
       ${contractCity},
-      'reviewed',
+      ${contractSourceStatus ?? "reviewed"},
       now()
     )
     on conflict (qbo_bank_account_id) do update set

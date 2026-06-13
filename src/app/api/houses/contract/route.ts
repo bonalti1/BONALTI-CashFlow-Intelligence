@@ -81,6 +81,87 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
+async function markContractNeedsReview({
+  qboBankAccountId,
+  houseName,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+}) {
+  await saveHouseContractSource({
+    qboBankAccountId,
+    houseName,
+    contractFileName: null,
+    contractFileType: null,
+    contractFileUrl: null,
+    contractStoragePath: null,
+    contractFileDataUrl: null,
+    contractPrice: null,
+    contractSquareFootage: null,
+    contractCity: null,
+    contractSourceStatus: "needs_review",
+  });
+  revalidateHousePages();
+}
+
+async function extractAndSaveContractSource({
+  qboBankAccountId,
+  houseName,
+  bytes,
+  contentType,
+  fileName,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  bytes: Buffer;
+  contentType: string;
+  fileName: string;
+}) {
+  try {
+    const extracted = await withTimeout(
+      extractContractSourceFromFile({
+        bytes,
+        contentType,
+        fileName,
+        houseName,
+      }),
+      90_000,
+    );
+
+    const contractPrice = extracted?.contractPrice ?? null;
+    const contractSquareFootage = extracted?.contractSquareFootage ?? null;
+    const contractCity = extracted?.contractCity ?? null;
+
+    if (!contractPrice && !contractSquareFootage && !contractCity) {
+      await markContractNeedsReview({ qboBankAccountId, houseName });
+      return;
+    }
+
+    await saveHouseContractSource({
+      qboBankAccountId,
+      houseName,
+      contractFileName: null,
+      contractFileType: null,
+      contractFileUrl: null,
+      contractStoragePath: null,
+      contractFileDataUrl: null,
+      contractPrice,
+      contractSquareFootage,
+      contractCity,
+      contractSourceStatus: "reviewed",
+    });
+    revalidateHousePages();
+  } catch (error) {
+    console.error("Contract extraction failed", {
+      error,
+      fileName,
+      houseName,
+      qboBankAccountId,
+    });
+    await markContractNeedsReview({ qboBankAccountId, houseName });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -103,9 +184,6 @@ export async function POST(request: Request) {
     let uploadedFileBuffer: Buffer | null = null;
     let uploadedFileContentType: string | null = null;
     let uploadedFileName: string | null = null;
-    let extractedContractPrice: number | null = null;
-    let extractedContractSquareFootage: number | null = null;
-    let extractedContractCity: string | null = null;
 
     if (contractFile instanceof File && contractFile.size > 0) {
       if (!isAllowedContractFile(contractFile)) {
@@ -148,6 +226,9 @@ export async function POST(request: Request) {
     const manualContractPrice = optionalMoney(formData.get("contractPrice"));
     const manualContractSquareFootage = optionalInteger(formData.get("contractSquareFootage"));
     const manualContractCity = optionalText(formData.get("contractCity"));
+    const shouldExtractContract =
+      Boolean(uploadedFileBuffer && uploadedFileContentType && uploadedFileName) &&
+      (!manualContractPrice || !manualContractSquareFootage || !manualContractCity);
 
     await saveHouseContractSource({
       qboBankAccountId,
@@ -160,48 +241,22 @@ export async function POST(request: Request) {
       contractPrice: manualContractPrice,
       contractSquareFootage: manualContractSquareFootage,
       contractCity: manualContractCity,
+      contractSourceStatus: shouldExtractContract ? "reading" : "reviewed",
     });
-
-    if (
-      uploadedFileBuffer &&
-      uploadedFileContentType &&
-      uploadedFileName &&
-      (!manualContractPrice || !manualContractSquareFootage || !manualContractCity)
-    ) {
-      const extracted = await withTimeout(
-        extractContractSourceFromFile({
-          bytes: uploadedFileBuffer,
-          contentType: uploadedFileContentType,
-          fileName: uploadedFileName,
-          houseName,
-        }),
-        18_000,
-      );
-
-      extractedContractPrice = extracted?.contractPrice ?? null;
-      extractedContractSquareFootage = extracted?.contractSquareFootage ?? null;
-      extractedContractCity = extracted?.contractCity ?? null;
-
-      if (extractedContractPrice || extractedContractSquareFootage || extractedContractCity) {
-        await saveHouseContractSource({
-          qboBankAccountId,
-          houseName,
-          contractFileName: null,
-          contractFileType: null,
-          contractFileUrl: null,
-          contractStoragePath: null,
-          contractFileDataUrl: null,
-          contractPrice: manualContractPrice ?? extractedContractPrice,
-          contractSquareFootage: manualContractSquareFootage ?? extractedContractSquareFootage,
-          contractCity: manualContractCity ?? extractedContractCity,
-        });
-      }
-    }
-
     revalidateHousePages();
 
+    if (shouldExtractContract && uploadedFileBuffer && uploadedFileContentType && uploadedFileName) {
+      void extractAndSaveContractSource({
+        qboBankAccountId,
+        houseName,
+        bytes: uploadedFileBuffer,
+        contentType: uploadedFileContentType,
+        fileName: uploadedFileName,
+      });
+    }
+
     return NextResponse.json({
-      extracted: Boolean(extractedContractPrice || extractedContractSquareFootage || extractedContractCity),
+      extraction: shouldExtractContract ? "queued" : "not_needed",
       status: "ok",
     });
   } catch (error) {
