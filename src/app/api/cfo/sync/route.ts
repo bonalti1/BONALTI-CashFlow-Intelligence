@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 
 import { syncCfoDataLayer } from "@/lib/cfo/data-layer";
+import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 
 export const runtime = "nodejs";
 
 async function runCfoSync() {
   try {
     const result = await syncCfoDataLayer();
+    const dashboardSummaries = await refreshHouseDashboardSummaries();
 
     return NextResponse.json({
       status: "ok",
       message: "CFO data layer synced.",
+      dashboardSummaries: dashboardSummaries.length,
       ...result,
     });
   } catch (error) {

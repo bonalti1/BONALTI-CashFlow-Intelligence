@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { extractContractSourceFromFile } from "@/lib/contracts/contract-extraction";
+import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 import {
   clearHouseContractSource,
   saveHouseContractSource,
@@ -64,6 +65,12 @@ function revalidateHousePages() {
   revalidatePath("/reports/dashboard");
 }
 
+function refreshDashboardSummaryInBackground() {
+  void refreshHouseDashboardSummaries().catch((error) => {
+    console.error("House dashboard summary refresh failed", error);
+  });
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   let timeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -101,6 +108,7 @@ async function markContractNeedsReview({
     contractCity: null,
     contractSourceStatus: "needs_review",
   });
+  refreshDashboardSummaryInBackground();
   revalidateHousePages();
 }
 
@@ -150,6 +158,7 @@ async function extractAndSaveContractSource({
       contractCity,
       contractSourceStatus: "reviewed",
     });
+    refreshDashboardSummaryInBackground();
     revalidateHousePages();
   } catch (error) {
     console.error("Contract extraction failed", {
@@ -243,6 +252,7 @@ export async function POST(request: Request) {
       contractCity: manualContractCity,
       contractSourceStatus: shouldExtractContract ? "reading" : "reviewed",
     });
+    refreshDashboardSummaryInBackground();
     revalidateHousePages();
 
     if (shouldExtractContract && uploadedFileBuffer && uploadedFileContentType && uploadedFileName) {
@@ -301,10 +311,13 @@ export async function DELETE(request: Request) {
 
     const storagePath = await clearHouseContractSource({ qboBankAccountId });
 
-    await deleteSupabaseStorageObject({
-      bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
-      path: storagePath,
-    });
+    if (storagePath) {
+      await deleteSupabaseStorageObject({
+        bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
+        path: storagePath,
+      });
+    }
+    refreshDashboardSummaryInBackground();
     revalidateHousePages();
 
     return NextResponse.json({ status: "ok" });

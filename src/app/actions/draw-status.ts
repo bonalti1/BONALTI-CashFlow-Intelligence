@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 import {
   drawPhaseKeys,
   saveDrawLineItemStatus,
@@ -47,6 +48,12 @@ function safeReturnTo(value: FormDataEntryValue | null) {
   }
 
   return text;
+}
+
+function refreshDashboardSummaryInBackground() {
+  void refreshHouseDashboardSummaries().catch((error) => {
+    console.error("House dashboard summary refresh failed", error);
+  });
 }
 
 function phaseKey(value: FormDataEntryValue | null): DrawPhaseKey {
@@ -127,6 +134,7 @@ export async function saveDrawStatusAction(formData: FormData) {
     notes: optionalText(formData.get("notes")),
   });
 
+  refreshDashboardSummaryInBackground();
   revalidatePath("/");
   revalidatePath("/draws-budget");
 }
