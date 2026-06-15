@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { saveDrawLineItemStatusAction } from "@/app/actions/draw-status";
+import { DrawsBudgetHouseLoader } from "@/app/draws-budget/house-loader";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
 import {
   getHouseDashboardSummaries,
@@ -613,56 +614,8 @@ async function getDetailedHouseViews(selectedHouseId: string | null) {
   return houses.sort((a, b) => b.progress - a.progress || a.house.localeCompare(b.house));
 }
 
-export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageProps) {
-  const params = searchParams ? await searchParams : {};
-  const selectedHouseId = typeof params.house === "string" ? params.house : null;
-  const selectedPhaseKey = isDrawPhaseKey(params.phase) ? params.phase : null;
-  const detailsOpen = params.details === "1";
-  const forceRefresh = params.refresh === "1";
-  const listView: HouseListView = params.view === "completed" ? "completed" : "active";
-  let houses: HouseView[] = detailsOpen
-    ? await getDetailedHouseViews(selectedHouseId)
-    : await getCollapsedHouseViews(forceRefresh);
-
-  if (houses.length === 0) {
-    houses = buildDemoHouses();
-  }
-
-  const schedulingInput =
-    detailsOpen && selectedHouseId
-      ? houses.filter((house) => house.id === selectedHouseId)
-      : houses.map((house) => ({ house: house.house }));
-  const emptySchedulingMaps = {
-    completion: new Map(),
-    statuses: new Map(),
-    visuals: new Map(),
-  };
-  const schedulingMaps =
-    detailsOpen || listView === "completed"
-      ? await withDataTimeout(
-          getSchedulingDashboardMaps(schedulingInput),
-          emptySchedulingMaps,
-          schedulingTimeoutMs,
-        )
-      : emptySchedulingMaps;
-  const schedulingStatuses = schedulingMaps.statuses;
-  const schedulingVisuals = schedulingMaps.visuals;
-  const schedulingCompletion = schedulingMaps.completion;
-
-  houses = houses.map((house) => ({
-    ...house,
-    renderImageUrl: house.renderImageUrl ?? schedulingVisuals.get(house.house)?.renderImage ?? null,
-    completed:
-      schedulingCompletion.get(house.house)?.completed ??
-      (house.currentPhase.key === "p6" && phaseHasMoney(house.currentPhase)),
-    completedAt: schedulingCompletion.get(house.house)?.completedAt ?? null,
-  }));
-
-  const activeHouses = houses.filter((house) => !house.completed);
-  const completedHouses = houses.filter((house) => house.completed);
-  const visibleHouses = listView === "completed" ? completedHouses : activeHouses;
-
-  const buckets: InternalBucketView[] = [
+function internalBuckets(): InternalBucketView[] {
+  return [
     {
       label: "Marketing",
       slug: "marketing",
@@ -704,6 +657,152 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
       icon: Brain,
     },
   ];
+}
+
+function DrawsBudgetShell({
+  buckets,
+  children,
+}: {
+  buckets: InternalBucketView[];
+  children: React.ReactNode;
+}) {
+  return (
+    <main className="min-h-screen bg-[#f2f1ea] text-[#1b2233] [background-image:linear-gradient(rgba(22,41,77,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(22,41,77,0.055)_1px,transparent_1px)] [background-size:34px_34px] [font-family:Barlow,system-ui,sans-serif]">
+      <header className="bg-[#16294d] px-7 py-4 text-white shadow-[0_6px_22px_-10px_rgba(14,27,54,0.6)]">
+        <div className="mx-auto max-w-[1240px]">
+          <div className="flex items-center gap-5">
+            <div className="grid h-[66px] w-[76px] place-items-center rounded-[10px] bg-white shadow-sm">
+              <Image
+                alt="South Texas Builders"
+                className="h-auto w-[54px]"
+                height={1080}
+                src="/south-texas-builders-logo.png"
+                width={1080}
+              />
+            </div>
+            <div>
+              <h1 className="font-['Barlow_Condensed',Barlow,sans-serif] text-[29px] font-bold uppercase leading-none tracking-[0.04em]">
+                Draws <span className="text-[#e23b2a]">Department</span>
+              </h1>
+              <p className="mt-2 text-[12px] font-bold uppercase tracking-[0.22em] text-[#b9c5dc]">
+                Person in charge: <span className="text-white">Finance Team</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="flex h-12 items-center gap-3 rounded-[10px] border border-white/15 bg-white/10 px-4 text-sm font-bold">
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[#b9c5dc]">Working Day</span>
+              <span>Mon · Jun 8</span>
+            </div>
+            <div className="flex h-12 items-center gap-3 rounded-[10px] border border-white/15 bg-white/10 px-4 text-sm font-bold">
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[#b9c5dc]">Updated by</span>
+              <span className="rounded-[8px] border border-white/20 bg-white/10 px-4 py-2">Owner</span>
+            </div>
+            <div className="flex h-12 items-center rounded-[10px] border border-white/15 bg-white/10 px-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[#b7ead1]">
+              QuickBooks synced
+            </div>
+            <Link
+              className="flex h-12 items-center rounded-[10px] bg-[#e23b2a] px-5 text-sm font-bold text-white shadow-sm"
+              href="/api/qbo/accounts/sync?next=/draws-budget"
+            >
+              Sync QB
+            </Link>
+            <Link
+              className="flex h-12 items-center gap-2 rounded-[10px] border border-white/15 bg-white/10 px-5 text-sm font-bold text-white shadow-sm"
+              href="/bank-feed"
+            >
+              <Landmark size={16} />
+              Bank Feed
+            </Link>
+            <Link
+              className="flex h-12 items-center gap-2 rounded-[10px] border border-white/15 bg-white px-5 text-sm font-bold text-[#16294d] shadow-sm"
+              href="/reports/dashboard"
+            >
+              <Printer size={16} />
+              Export Report
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <section className="mx-auto max-w-[1240px] px-7 py-5">
+        <section className="mb-5 rounded-[14px] border border-[#e3e1d7] bg-white p-2 shadow-[0_8px_24px_-18px_rgba(14,27,54,0.45)]">
+          <div className="grid gap-2 md:grid-cols-5">
+            {buckets.map((bucket) => (
+              <InternalBucketCard bucket={bucket} key={bucket.slug} />
+            ))}
+          </div>
+        </section>
+
+        {children}
+
+        <p className="mt-6 text-sm text-[#69746f]">
+          Scheduling controls field status. Finance controls draw submitted, money received, accountant review, and budget notes.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageProps) {
+  const params = searchParams ? await searchParams : {};
+  const selectedHouseId = typeof params.house === "string" ? params.house : null;
+  const selectedPhaseKey = isDrawPhaseKey(params.phase) ? params.phase : null;
+  const detailsOpen = params.details === "1";
+  const forceRefresh = params.refresh === "1";
+  const listView: HouseListView = params.view === "completed" ? "completed" : "active";
+  const buckets = internalBuckets();
+
+  if (!detailsOpen) {
+    return (
+      <DrawsBudgetShell buckets={buckets}>
+        <DrawsBudgetHouseLoader view={listView} />
+      </DrawsBudgetShell>
+    );
+  }
+
+  let houses: HouseView[] = detailsOpen
+    ? await getDetailedHouseViews(selectedHouseId)
+    : await getCollapsedHouseViews(forceRefresh);
+
+  if (houses.length === 0) {
+    houses = buildDemoHouses();
+  }
+
+  const schedulingInput =
+    detailsOpen && selectedHouseId
+      ? houses.filter((house) => house.id === selectedHouseId)
+      : houses.map((house) => ({ house: house.house }));
+  const emptySchedulingMaps = {
+    completion: new Map(),
+    statuses: new Map(),
+    visuals: new Map(),
+  };
+  const schedulingMaps =
+    detailsOpen || listView === "completed"
+      ? await withDataTimeout(
+          getSchedulingDashboardMaps(schedulingInput),
+          emptySchedulingMaps,
+          schedulingTimeoutMs,
+        )
+      : emptySchedulingMaps;
+  const schedulingStatuses = schedulingMaps.statuses;
+  const schedulingVisuals = schedulingMaps.visuals;
+  const schedulingCompletion = schedulingMaps.completion;
+
+  houses = houses.map((house) => ({
+    ...house,
+    renderImageUrl: house.renderImageUrl ?? schedulingVisuals.get(house.house)?.renderImage ?? null,
+    completed:
+      schedulingCompletion.get(house.house)?.completed ??
+      (house.currentPhase.key === "p6" && phaseHasMoney(house.currentPhase)),
+    completedAt: schedulingCompletion.get(house.house)?.completedAt ?? null,
+  }));
+
+  const activeHouses = houses.filter((house) => !house.completed);
+  const completedHouses = houses.filter((house) => house.completed);
+  const visibleHouses = listView === "completed" ? completedHouses : activeHouses;
 
   return (
     <main className="min-h-screen bg-[#f2f1ea] text-[#1b2233] [background-image:linear-gradient(rgba(22,41,77,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(22,41,77,0.055)_1px,transparent_1px)] [background-size:34px_34px] [font-family:Barlow,system-ui,sans-serif]">
