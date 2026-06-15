@@ -26,6 +26,25 @@ const demoHouses = [
   { house: "Pulido", city: "Alice", soldPrice: 295000, squareFootage: 2510, phaseIndex: 5 },
 ] as const;
 
+function withDashboardTimeout<T>(promise: Promise<T>, timeoutMs = 2000) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Dashboard summary read timed out."));
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        resolve(result);
+      })
+      .catch((error) => {
+        reject(error);
+      })
+      .finally(() => {
+        clearTimeout(timer);
+      });
+  });
+}
+
 function phaseHasMoney(phase: HouseDashboardSummaryPhase) {
   return (phase.actual?.spentAmount ?? 0) > 0 || (phase.actual?.transactionCount ?? 0) > 0;
 }
@@ -96,7 +115,7 @@ export async function GET(request: Request) {
   const view = searchParams.get("view") === "completed" ? "completed" : "active";
 
   try {
-    const summaries = await getHouseDashboardSummaries();
+    const summaries = await withDashboardTimeout(getHouseDashboardSummaries());
     const houses = summaries.map((summary) => ({
       ...summary,
       completed: summaryIsCompleted(summary),
