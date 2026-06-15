@@ -93,6 +93,18 @@ type DrawsBudgetPageProps = {
 
 type HouseListView = "active" | "completed";
 
+function withDataTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 7000) {
+  let timeout: NodeJS.Timeout;
+  const guarded = promise.catch(() => fallback);
+
+  return Promise.race([
+    guarded,
+    new Promise<T>((resolve) => {
+      timeout = setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]).finally(() => clearTimeout(timeout));
+}
+
 const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
   pre: { label: "Pre", name: "Pre Phase" },
   p1: { label: "1", name: "Foundation" },
@@ -483,10 +495,10 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
 }
 
 async function getCollapsedHouseViews() {
-  let summaries = await getHouseDashboardSummaries();
+  let summaries = await withDataTimeout(getHouseDashboardSummaries(), []);
 
   if (summaries.length === 0) {
-    summaries = await refreshHouseDashboardSummaries();
+    summaries = await withDataTimeout(refreshHouseDashboardSummaries(), []);
   }
 
   return summaries.map(houseViewFromSummary);
@@ -502,13 +514,13 @@ async function getDetailedHouseViews(selectedHouseId: string | null) {
     phaseLineItemsByPhase,
     phaseLineItemActuals,
   ] = await Promise.all([
-    getAccountsSnapshot().catch(() => null),
-    getHouseDetailsMap(),
-    getDrawPhaseStatuses(),
-    getHousePhaseActuals(),
-    getDrawLineItemStatuses(),
-    getPhaseLineItemsByPhase(),
-    getPhaseLineItemActuals(),
+    withDataTimeout(getAccountsSnapshot(), null),
+    withDataTimeout(getHouseDetailsMap(), new Map()),
+    withDataTimeout(getDrawPhaseStatuses(), new Map<string, DrawPhaseRecord>()),
+    withDataTimeout(getHousePhaseActuals(), new Map<string, HousePhaseActual>()),
+    withDataTimeout(getDrawLineItemStatuses(), new Map<string, DrawLineItemRecord>()),
+    withDataTimeout(getPhaseLineItemsByPhase(), new Map<DrawPhaseKey, PhaseLineItem[]>()),
+    withDataTimeout(getPhaseLineItemActuals(), new Map<string, PhaseLineItemActual>()),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses = bankAccounts

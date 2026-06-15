@@ -85,6 +85,18 @@ type Bucket = {
   icon: typeof Megaphone;
 };
 
+function withDataTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 7000) {
+  let timeout: NodeJS.Timeout;
+  const guarded = promise.catch(() => fallback);
+
+  return Promise.race([
+    guarded,
+    new Promise<T>((resolve) => {
+      timeout = setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]).finally(() => clearTimeout(timeout));
+}
+
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -229,10 +241,10 @@ export default async function Home() {
     transactionsByBankAccount,
     houseDetailsByBankAccount,
   ] = await Promise.all([
-    getAccountsSnapshot().catch(() => null),
-    getQboConnectionStatus(),
-    getTransactionsByBankAccount(),
-    getHouseDetailsMap(),
+    withDataTimeout(getAccountsSnapshot(), null),
+    withDataTimeout(getQboConnectionStatus(), { connected: false }),
+    withDataTimeout(getTransactionsByBankAccount(), new Map<string, SavedQboTransaction[]>()),
+    withDataTimeout(getHouseDetailsMap(), new Map()),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses: HouseRow[] = bankAccounts

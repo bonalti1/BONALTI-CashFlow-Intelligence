@@ -13,9 +13,9 @@ export function sql() {
 
   sqlClient ??= postgres(process.env.DATABASE_URL, {
     max: 1,
+    connect_timeout: 8,
     ssl: "require",
   });
 
   return sqlClient;
 }
-
