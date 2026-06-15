@@ -632,15 +632,19 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
     detailsOpen && selectedHouseId
       ? houses.filter((house) => house.id === selectedHouseId)
       : houses.map((house) => ({ house: house.house }));
-  const schedulingMaps = await withDataTimeout(
-    getSchedulingDashboardMaps(schedulingInput),
-    {
-      completion: new Map(),
-      statuses: new Map(),
-      visuals: new Map(),
-    },
-    schedulingTimeoutMs,
-  );
+  const emptySchedulingMaps = {
+    completion: new Map(),
+    statuses: new Map(),
+    visuals: new Map(),
+  };
+  const schedulingMaps =
+    detailsOpen || listView === "completed"
+      ? await withDataTimeout(
+          getSchedulingDashboardMaps(schedulingInput),
+          emptySchedulingMaps,
+          schedulingTimeoutMs,
+        )
+      : emptySchedulingMaps;
   const schedulingStatuses = schedulingMaps.statuses;
   const schedulingVisuals = schedulingMaps.visuals;
   const schedulingCompletion = schedulingMaps.completion;
