@@ -18,7 +18,7 @@ type DrawsDashboardResponse = {
   completedCount: number;
   houses: DrawsDashboardHouse[];
   message?: string;
-  status: "ok" | "error";
+  status: "ok" | "error" | "fallback";
   view: "active" | "completed";
 };
 
