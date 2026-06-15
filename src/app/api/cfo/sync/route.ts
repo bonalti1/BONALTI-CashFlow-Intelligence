@@ -5,6 +5,20 @@ import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-
 
 export const runtime = "nodejs";
 
+function sanitizedSyncError(error: unknown) {
+  const detail = error instanceof Error ? error.message : "";
+
+  if (
+    detail.includes("getaddrinfo") ||
+    detail.includes("ENOTFOUND") ||
+    detail.includes("DATABASE_URL")
+  ) {
+    return "Database is configured but unreachable. Fix the Render database connection, then rebuild summaries.";
+  }
+
+  return "CFO data layer sync failed.";
+}
+
 async function runCfoSync() {
   try {
     const result = await syncCfoDataLayer();
@@ -21,7 +35,7 @@ async function runCfoSync() {
       {
         status: "error",
         message: "CFO data layer sync failed.",
-        detail: error instanceof Error ? error.message : "Unknown error",
+        detail: sanitizedSyncError(error),
       },
       { status: 500 },
     );

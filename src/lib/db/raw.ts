@@ -19,3 +19,42 @@ export function sql() {
 
   return sqlClient;
 }
+
+function databaseErrorCode(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const code = "code" in error ? error.code : null;
+
+  return typeof code === "string" ? code : null;
+}
+
+export async function getDatabaseConnectionStatus() {
+  if (!hasDatabaseUrl()) {
+    return {
+      configured: false,
+      connected: false,
+      code: null,
+      message: "DATABASE_URL is not configured.",
+    };
+  }
+
+  try {
+    await sql()`select 1`;
+
+    return {
+      configured: true,
+      connected: true,
+      code: null,
+      message: "Database connection is healthy.",
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      connected: false,
+      code: databaseErrorCode(error),
+      message: "DATABASE_URL is configured, but the app cannot reach the database.",
+    };
+  }
+}
