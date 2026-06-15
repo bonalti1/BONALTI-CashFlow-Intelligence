@@ -6,6 +6,7 @@ import {
   type HouseDashboardSummaryPhase,
 } from "@/lib/dashboard/house-dashboard-summary-store";
 import type { DrawPhaseKey } from "@/lib/draws/draws-store";
+import { getSchedulingProjectVisualMap } from "@/lib/scheduling/status-store";
 
 const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
   pre: { label: "Pre", name: "Pre Phase" },
@@ -43,6 +44,20 @@ function withDashboardTimeout<T>(promise: Promise<T>, timeoutMs = 2000) {
         clearTimeout(timer);
       });
   });
+}
+
+async function withSchedulingVisuals<T extends HouseDashboardSummary & { completed: boolean }>(
+  houses: T[],
+) {
+  const emptyVisuals = new Map<string, { renderImage: string | null }>();
+  const visuals = await withDashboardTimeout(getSchedulingProjectVisualMap(houses), 1500).catch(
+    () => emptyVisuals,
+  );
+
+  return houses.map((house) => ({
+    ...house,
+    renderImageUrl: house.renderImageUrl ?? visuals.get(house.house)?.renderImage ?? null,
+  }));
 }
 
 function phaseHasMoney(phase: HouseDashboardSummaryPhase) {
@@ -116,10 +131,10 @@ export async function GET(request: Request) {
 
   try {
     const summaries = await withDashboardTimeout(getHouseDashboardSummaries());
-    const houses = summaries.map((summary) => ({
+    const houses = await withSchedulingVisuals(summaries.map((summary) => ({
       ...summary,
       completed: summaryIsCompleted(summary),
-    }));
+    })));
     const activeCount = houses.filter((house) => !house.completed).length;
     const completedCount = houses.length - activeCount;
     const visibleHouses = houses.filter((house) =>
@@ -134,7 +149,7 @@ export async function GET(request: Request) {
       view,
     });
   } catch {
-    const houses = demoSummaries();
+    const houses = await withSchedulingVisuals(demoSummaries());
     const visibleHouses = houses.filter((house) =>
       view === "completed" ? house.completed : !house.completed,
     );
