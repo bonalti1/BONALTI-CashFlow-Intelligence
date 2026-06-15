@@ -17,7 +17,11 @@ import {
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
-import { getSchedulingDashboardMaps } from "@/lib/scheduling/status-store";
+import {
+  getSchedulingDashboardMaps,
+  getSchedulingProjectVisualList,
+  type SchedulingProjectVisual,
+} from "@/lib/scheduling/status-store";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +88,25 @@ const demoHouses = [
   { house: "Valerio", city: "Alice", soldPrice: 264500, squareFootage: 2300, phaseIndex: 2, review: false },
   { house: "Vazquez", city: "Alice", soldPrice: 319000, squareFootage: 2891, phaseIndex: 1, review: false },
 ] as const;
+
+function withReportTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 2000) {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => {
+      resolve(fallback);
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        resolve(result);
+      })
+      .catch(() => {
+        resolve(fallback);
+      })
+      .finally(() => {
+        clearTimeout(timer);
+      });
+  });
+}
 
 function currency(value: number | null | undefined) {
   if (value === null || value === undefined) {
@@ -259,6 +282,41 @@ function buildDemoReportHouses(): ReportHouse[] {
   }).sort((a, b) => a.house.localeCompare(b.house));
 }
 
+function buildSchedulingReportHouses(projects: SchedulingProjectVisual[]): ReportHouse[] {
+  if (projects.length === 0) {
+    return buildDemoReportHouses();
+  }
+
+  return projects
+    .map((project, index): ReportHouse => {
+      const phases = drawPhaseKeys.map((key) => ({
+        key,
+        label: phaseLabels[key].label,
+        name: phaseLabels[key].name,
+        spent: 0,
+        budget: null,
+        status: "Open",
+        transactionCount: 0,
+        lineItems: [],
+      }));
+
+      return {
+        id: project.projectId ?? `scheduling-${index}-${project.projectName}`,
+        house: project.projectName,
+        bank: `${project.projectName} scheduling project`,
+        city: null,
+        soldPrice: null,
+        squareFootage: null,
+        totalSpent: 0,
+        currentPhase: "Pre",
+        completed: false,
+        renderImageUrl: project.renderImage,
+        phases,
+      };
+    })
+    .sort((a, b) => sortByProjectNumber(a, b));
+}
+
 async function getReportHouses() {
   const [
     snapshot,
@@ -268,12 +326,12 @@ async function getReportHouses() {
     phaseLineItemActuals,
     drawLineItemStatuses,
   ] = await Promise.all([
-    getAccountsSnapshot().catch(() => null),
-    getHouseDetailsMap(),
-    getHousePhaseActuals(),
-    getPhaseLineItemsByPhase(),
-    getPhaseLineItemActuals(),
-    getDrawLineItemStatuses(),
+    withReportTimeout(getAccountsSnapshot(), null),
+    withReportTimeout(getHouseDetailsMap(), new Map()),
+    withReportTimeout(getHousePhaseActuals(), new Map()),
+    withReportTimeout(getPhaseLineItemsByPhase(), new Map()),
+    withReportTimeout(getPhaseLineItemActuals(), new Map()),
+    withReportTimeout(getDrawLineItemStatuses(), new Map()),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses = bankAccounts
@@ -332,25 +390,26 @@ async function getReportHouses() {
     .sort((a, b) => a.house.localeCompare(b.house));
 
   if (houses.length === 0) {
-    const demo = buildDemoReportHouses();
-    const schedulingMaps = await getSchedulingDashboardMaps(demo.map((house) => ({ house: house.house }))).catch(() => ({
+    const schedulingProjects = await withReportTimeout(getSchedulingProjectVisualList(), [], 1500);
+    const fallbackHouses = buildSchedulingReportHouses(schedulingProjects);
+    const schedulingMaps = await withReportTimeout(getSchedulingDashboardMaps(fallbackHouses.map((house) => ({ house: house.house }))), {
       completion: new Map(),
       statuses: new Map(),
       visuals: new Map(),
-    }));
+    }, 1500);
 
-    return demo.map((house) => ({
+    return fallbackHouses.map((house) => ({
       ...house,
       completed: schedulingMaps.completion.get(house.house)?.completed ?? house.completed,
-      renderImageUrl: schedulingMaps.visuals.get(house.house)?.renderImage ?? house.renderImageUrl,
+      renderImageUrl: house.renderImageUrl ?? schedulingMaps.visuals.get(house.house)?.renderImage ?? null,
     }));
   }
 
-  const schedulingMaps = await getSchedulingDashboardMaps(houses.map((house) => ({ house: house.house }))).catch(() => ({
+  const schedulingMaps = await withReportTimeout(getSchedulingDashboardMaps(houses.map((house) => ({ house: house.house }))), {
     completion: new Map(),
     statuses: new Map(),
     visuals: new Map(),
-  }));
+  }, 1500);
 
   return houses.map((house) => ({
     ...house,
