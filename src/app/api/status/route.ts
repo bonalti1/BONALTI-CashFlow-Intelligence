@@ -12,8 +12,23 @@ import { getSchedulingConnectionStatus } from "@/lib/scheduling/status-store";
 
 export const runtime = "nodejs";
 
-function fallback<T>(promise: Promise<T>, value: T) {
-  return promise.catch(() => value);
+function withStatusTimeout<T>(promise: Promise<T>, value: T, timeoutMs = 2000) {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => {
+      resolve(value);
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        resolve(result);
+      })
+      .catch(() => {
+        resolve(value);
+      })
+      .finally(() => {
+        clearTimeout(timer);
+      });
+  });
 }
 
 export async function GET() {
@@ -26,18 +41,18 @@ export async function GET() {
     companyBrain,
     scheduling,
   ] = await Promise.all([
-    fallback(getDatabaseConnectionStatus(), {
+    withStatusTimeout(getDatabaseConnectionStatus(), {
       configured: Boolean(process.env.DATABASE_URL),
       connected: false,
       code: null,
       message: "Database status check failed.",
     }),
-    fallback(getQboConnectionStatus(), { connected: false }),
-    fallback(getAccountsSnapshotStatus(), { synced: false }),
-    fallback(getTransactionsSnapshotStatus(), { synced: false }),
-    fallback(getCfoDataStatus(), { synced: false }),
-    fallback(getCompanyBrainStatus(), { synced: false }),
-    fallback(getSchedulingConnectionStatus(), {
+    withStatusTimeout(getQboConnectionStatus(), { connected: false }),
+    withStatusTimeout(getAccountsSnapshotStatus(), { synced: false }),
+    withStatusTimeout(getTransactionsSnapshotStatus(), { synced: false }),
+    withStatusTimeout(getCfoDataStatus(), { synced: false }),
+    withStatusTimeout(getCompanyBrainStatus(), { synced: false }),
+    withStatusTimeout(getSchedulingConnectionStatus(), {
       connected: false,
       activeProjects: 0,
       completedProjects: 0,
