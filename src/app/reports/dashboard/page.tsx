@@ -705,6 +705,9 @@ function HouseRenderFrame({ house }: { house: ReportHouse }) {
         <img
           alt={`${house.house} render`}
           className="h-full max-h-[170px] w-full object-contain object-center p-2"
+          decoding="async"
+          fetchPriority="low"
+          loading="lazy"
           src={house.renderImageUrl}
         />
       ) : (
