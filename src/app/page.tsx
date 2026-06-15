@@ -85,7 +85,7 @@ type Bucket = {
   icon: typeof Megaphone;
 };
 
-function withDataTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 7000) {
+function withDataTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 1800) {
   let timeout: NodeJS.Timeout;
   const guarded = promise.catch(() => fallback);
 

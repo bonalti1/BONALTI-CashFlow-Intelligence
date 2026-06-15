@@ -93,7 +93,11 @@ type DrawsBudgetPageProps = {
 
 type HouseListView = "active" | "completed";
 
-function withDataTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 7000) {
+const fastDataTimeoutMs = 1200;
+const detailDataTimeoutMs = 3000;
+const schedulingTimeoutMs = 900;
+
+function withDataTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = fastDataTimeoutMs) {
   let timeout: NodeJS.Timeout;
   const guarded = promise.catch(() => fallback);
 
@@ -494,11 +498,13 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
   };
 }
 
-async function getCollapsedHouseViews() {
-  let summaries = await withDataTimeout(getHouseDashboardSummaries(), []);
+async function getCollapsedHouseViews(forceRefresh = false) {
+  let summaries = forceRefresh
+    ? []
+    : await withDataTimeout(getHouseDashboardSummaries(), []);
 
-  if (summaries.length === 0) {
-    summaries = await withDataTimeout(refreshHouseDashboardSummaries(), []);
+  if (forceRefresh) {
+    summaries = await withDataTimeout(refreshHouseDashboardSummaries(), [], detailDataTimeoutMs);
   }
 
   return summaries.map(houseViewFromSummary);
@@ -514,13 +520,13 @@ async function getDetailedHouseViews(selectedHouseId: string | null) {
     phaseLineItemsByPhase,
     phaseLineItemActuals,
   ] = await Promise.all([
-    withDataTimeout(getAccountsSnapshot(), null),
-    withDataTimeout(getHouseDetailsMap(), new Map()),
-    withDataTimeout(getDrawPhaseStatuses(), new Map<string, DrawPhaseRecord>()),
-    withDataTimeout(getHousePhaseActuals(), new Map<string, HousePhaseActual>()),
-    withDataTimeout(getDrawLineItemStatuses(), new Map<string, DrawLineItemRecord>()),
-    withDataTimeout(getPhaseLineItemsByPhase(), new Map<DrawPhaseKey, PhaseLineItem[]>()),
-    withDataTimeout(getPhaseLineItemActuals(), new Map<string, PhaseLineItemActual>()),
+    withDataTimeout(getAccountsSnapshot(), null, detailDataTimeoutMs),
+    withDataTimeout(getHouseDetailsMap(), new Map(), detailDataTimeoutMs),
+    withDataTimeout(getDrawPhaseStatuses(), new Map<string, DrawPhaseRecord>(), detailDataTimeoutMs),
+    withDataTimeout(getHousePhaseActuals(), new Map<string, HousePhaseActual>(), detailDataTimeoutMs),
+    withDataTimeout(getDrawLineItemStatuses(), new Map<string, DrawLineItemRecord>(), detailDataTimeoutMs),
+    withDataTimeout(getPhaseLineItemsByPhase(), new Map<DrawPhaseKey, PhaseLineItem[]>(), detailDataTimeoutMs),
+    withDataTimeout(getPhaseLineItemActuals(), new Map<string, PhaseLineItemActual>(), detailDataTimeoutMs),
   ]);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
   const houses = bankAccounts
@@ -612,10 +618,11 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
   const selectedHouseId = typeof params.house === "string" ? params.house : null;
   const selectedPhaseKey = isDrawPhaseKey(params.phase) ? params.phase : null;
   const detailsOpen = params.details === "1";
+  const forceRefresh = params.refresh === "1";
   const listView: HouseListView = params.view === "completed" ? "completed" : "active";
   let houses: HouseView[] = detailsOpen
     ? await getDetailedHouseViews(selectedHouseId)
-    : await getCollapsedHouseViews();
+    : await getCollapsedHouseViews(forceRefresh);
 
   if (houses.length === 0) {
     houses = buildDemoHouses();
@@ -625,11 +632,15 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
     detailsOpen && selectedHouseId
       ? houses.filter((house) => house.id === selectedHouseId)
       : houses.map((house) => ({ house: house.house }));
-  const schedulingMaps = await getSchedulingDashboardMaps(schedulingInput).catch(() => ({
-    completion: new Map(),
-    statuses: new Map(),
-    visuals: new Map(),
-  }));
+  const schedulingMaps = await withDataTimeout(
+    getSchedulingDashboardMaps(schedulingInput),
+    {
+      completion: new Map(),
+      statuses: new Map(),
+      visuals: new Map(),
+    },
+    schedulingTimeoutMs,
+  );
   const schedulingStatuses = schedulingMaps.statuses;
   const schedulingVisuals = schedulingMaps.visuals;
   const schedulingCompletion = schedulingMaps.completion;
