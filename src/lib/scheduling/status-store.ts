@@ -351,6 +351,21 @@ export async function getSchedulingProjectVisualMap(houses: Array<{ house: strin
   return buildSchedulingProjectVisualMap(await readSchedulingBoard(), houses);
 }
 
+export async function getSchedulingProjectVisualList() {
+  const board = await readSchedulingBoard();
+  const projects = board?.projects ?? [];
+
+  return projects
+    .filter((project) => project.name)
+    .map((project): SchedulingProjectVisual => ({
+      projectId: project.id ?? null,
+      projectName: project.name ?? "Unnamed project",
+      projectCode: project.code ?? null,
+      renderImage: project.renderImage ?? null,
+      renderUpdatedAt: project.renderUpdatedAt ?? null,
+    }));
+}
+
 function buildSchedulingProjectCompletionMap(
   board: SchedulingBoard | null,
   houses: Array<{ house: string }>,

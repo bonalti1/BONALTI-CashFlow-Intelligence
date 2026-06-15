@@ -6,7 +6,11 @@ import {
   type HouseDashboardSummaryPhase,
 } from "@/lib/dashboard/house-dashboard-summary-store";
 import type { DrawPhaseKey } from "@/lib/draws/draws-store";
-import { getSchedulingProjectVisualMap } from "@/lib/scheduling/status-store";
+import {
+  getSchedulingProjectVisualList,
+  getSchedulingProjectVisualMap,
+  type SchedulingProjectVisual,
+} from "@/lib/scheduling/status-store";
 
 const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
   pre: { label: "Pre", name: "Pre Phase" },
@@ -71,14 +75,23 @@ function summaryIsCompleted(summary: HouseDashboardSummary) {
   return Boolean(currentPhase && currentPhase.key === "p6" && phaseHasMoney(currentPhase));
 }
 
-function demoSummaries() {
-  return demoHouses.map((house): HouseDashboardSummary & { completed: boolean } => {
+function summaryFromFallbackHouse(
+  house: {
+    house: string;
+    city: string | null;
+    soldPrice: number | null;
+    squareFootage: number | null;
+    phaseIndex: number;
+    renderImageUrl?: string | null;
+  },
+  houseIndex: number,
+) {
     const phases = (Object.keys(phaseLabels) as DrawPhaseKey[]).map((key, index) => ({
       key,
       label: phaseLabels[key].label,
       name: phaseLabels[key].name,
       actual:
-        index <= house.phaseIndex
+        index <= house.phaseIndex && house.soldPrice
           ? {
               bankAccountQboId: `demo-${house.house}`,
               budgetAmount: Math.round(house.soldPrice * 0.1),
@@ -100,19 +113,22 @@ function demoSummaries() {
     );
 
     return {
-      id: `demo-${house.house}`,
+      id: `demo-${houseIndex}-${house.house}`,
       house: house.house,
       bank: `${house.house} demo bank account`,
       city: house.city,
       soldPrice: house.soldPrice,
       squareFootage: house.squareFootage,
       totalSpent,
-      progress: Math.min(100, Math.round((totalSpent / house.soldPrice) * 100)),
+      progress:
+        house.soldPrice && house.soldPrice > 0
+          ? Math.min(100, Math.round((totalSpent / house.soldPrice) * 100))
+          : 0,
       currentPhaseKey: phases[Math.min(house.phaseIndex, phases.length - 1)].key,
       readyPhases: 0,
       needsReview: 0,
       phases,
-      renderImageUrl: null,
+      renderImageUrl: house.renderImageUrl ?? null,
       contractFileName: null,
       contractUploadedAt: null,
       contractPrice: null,
@@ -122,7 +138,26 @@ function demoSummaries() {
       refreshedAt: new Date().toISOString(),
       completed: false,
     };
-  });
+}
+
+function demoSummaries() {
+  return demoHouses.map((house, index) => summaryFromFallbackHouse(house, index));
+}
+
+function schedulingFallbackSummaries(projects: SchedulingProjectVisual[]) {
+  return projects.map((project, index) =>
+    summaryFromFallbackHouse(
+      {
+        house: project.projectName,
+        city: null,
+        soldPrice: null,
+        squareFootage: null,
+        phaseIndex: 0,
+        renderImageUrl: project.renderImage,
+      },
+      index,
+    ),
+  );
 }
 
 export async function GET(request: Request) {
@@ -149,7 +184,13 @@ export async function GET(request: Request) {
       view,
     });
   } catch {
-    const houses = await withSchedulingVisuals(demoSummaries());
+    const schedulingHouses = await withDashboardTimeout(
+      getSchedulingProjectVisualList(),
+      1500,
+    ).catch(() => []);
+    const fallbackHouses =
+      schedulingHouses.length > 0 ? schedulingFallbackSummaries(schedulingHouses) : demoSummaries();
+    const houses = await withSchedulingVisuals(fallbackHouses);
     const visibleHouses = houses.filter((house) =>
       view === "completed" ? house.completed : !house.completed,
     );
