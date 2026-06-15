@@ -89,7 +89,7 @@ const demoHouses = [
   { house: "Vazquez", city: "Alice", soldPrice: 319000, squareFootage: 2891, phaseIndex: 1, review: false },
 ] as const;
 
-function withReportTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 2000) {
+function withReportTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 800) {
   return new Promise<T>((resolve) => {
     const timer = setTimeout(() => {
       resolve(fallback);
@@ -318,6 +318,7 @@ function buildSchedulingReportHouses(projects: SchedulingProjectVisual[]): Repor
 }
 
 async function getReportHouses() {
+  const schedulingProjectsPromise = withReportTimeout(getSchedulingProjectVisualList(), [], 1000);
   const [
     snapshot,
     houseDetails,
@@ -390,19 +391,10 @@ async function getReportHouses() {
     .sort((a, b) => a.house.localeCompare(b.house));
 
   if (houses.length === 0) {
-    const schedulingProjects = await withReportTimeout(getSchedulingProjectVisualList(), [], 1500);
+    const schedulingProjects = await schedulingProjectsPromise;
     const fallbackHouses = buildSchedulingReportHouses(schedulingProjects);
-    const schedulingMaps = await withReportTimeout(getSchedulingDashboardMaps(fallbackHouses.map((house) => ({ house: house.house }))), {
-      completion: new Map(),
-      statuses: new Map(),
-      visuals: new Map(),
-    }, 1500);
 
-    return fallbackHouses.map((house) => ({
-      ...house,
-      completed: schedulingMaps.completion.get(house.house)?.completed ?? house.completed,
-      renderImageUrl: house.renderImageUrl ?? schedulingMaps.visuals.get(house.house)?.renderImage ?? null,
-    }));
+    return fallbackHouses;
   }
 
   const schedulingMaps = await withReportTimeout(getSchedulingDashboardMaps(houses.map((house) => ({ house: house.house }))), {
