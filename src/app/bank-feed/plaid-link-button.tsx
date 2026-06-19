@@ -17,6 +17,7 @@ declare global {
             };
           },
         ) => void;
+        receivedRedirectUri?: string;
         token: string;
       }) => {
         open: () => void;
@@ -24,6 +25,8 @@ declare global {
     };
   }
 }
+
+const storedLinkTokenKey = "stb.plaid.linkToken";
 
 function loadPlaidScript() {
   return new Promise<void>((resolve, reject) => {
@@ -60,10 +63,78 @@ export function PlaidLinkButton({
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    void loadPlaidScript().catch(() => {
-      setMessage("Plaid Link could not load. Refresh and try again.");
-    });
+    async function resumeOAuthRedirect() {
+      try {
+        await loadPlaidScript();
+
+        const hasPlaidOAuthState = new URLSearchParams(window.location.search).has("oauth_state_id");
+        const storedLinkToken = window.localStorage.getItem(storedLinkTokenKey);
+
+        if (!hasPlaidOAuthState || !storedLinkToken) {
+          return;
+        }
+
+        setBusy(true);
+        setMessage("Finishing bank connection...");
+        openPlaidLink(storedLinkToken, window.location.href);
+      } catch {
+        setBusy(false);
+        setMessage("Plaid Link could not load. Refresh and try again.");
+      }
+    }
+
+    void resumeOAuthRedirect();
   }, []);
+
+  async function savePublicToken(
+    publicToken: string,
+    metadata: {
+      institution?: {
+        institution_id?: string;
+        name?: string;
+      };
+    },
+  ) {
+    const exchangeResponse = await fetch("/api/plaid/exchange", {
+      body: JSON.stringify({
+        institution: metadata.institution,
+        publicToken,
+      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+    const exchangeData = (await exchangeResponse.json()) as {
+      message?: string;
+      status: string;
+    };
+
+    if (!exchangeResponse.ok) {
+      throw new Error(exchangeData.message || "Could not save bank connection.");
+    }
+
+    window.localStorage.removeItem(storedLinkTokenKey);
+    window.location.href = "/bank-feed";
+  }
+
+  function openPlaidLink(linkToken: string, receivedRedirectUri?: string) {
+    window.Plaid?.create({
+      token: linkToken,
+      ...(receivedRedirectUri ? { receivedRedirectUri } : {}),
+      onSuccess: async (publicToken, metadata) => {
+        try {
+          await savePublicToken(publicToken, metadata);
+        } catch (error) {
+          setBusy(false);
+          setMessage(error instanceof Error ? error.message : "Could not save bank connection.");
+        }
+      },
+      onExit: () => {
+        setBusy(false);
+      },
+    }).open();
+  }
 
   async function handleConnect() {
     try {
@@ -84,39 +155,8 @@ export function PlaidLinkButton({
         throw new Error(linkData.message || "Could not start Plaid.");
       }
 
-      window.Plaid?.create({
-        token: linkData.linkToken,
-        onSuccess: async (publicToken, metadata) => {
-          try {
-            const exchangeResponse = await fetch("/api/plaid/exchange", {
-              body: JSON.stringify({
-                institution: metadata.institution,
-                publicToken,
-              }),
-              headers: {
-                "Content-Type": "application/json",
-              },
-              method: "POST",
-            });
-            const exchangeData = (await exchangeResponse.json()) as {
-              message?: string;
-              status: string;
-            };
-
-            if (!exchangeResponse.ok) {
-              throw new Error(exchangeData.message || "Could not save bank connection.");
-            }
-
-            window.location.reload();
-          } catch (error) {
-            setBusy(false);
-            setMessage(error instanceof Error ? error.message : "Could not save bank connection.");
-          }
-        },
-        onExit: () => {
-          setBusy(false);
-        },
-      }).open();
+      window.localStorage.setItem(storedLinkTokenKey, linkData.linkToken);
+      openPlaidLink(linkData.linkToken);
     } catch (error) {
       setBusy(false);
       setMessage(error instanceof Error ? error.message : "Bank connection failed.");
