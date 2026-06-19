@@ -7,7 +7,19 @@ declare global {
   interface Window {
     Plaid?: {
       create: (config: {
-        onExit?: (error: unknown, metadata: unknown) => void;
+        onExit?: (
+          error: {
+            display_message?: string | null;
+            error_code?: string | null;
+            error_message?: string | null;
+          } | null,
+          metadata: {
+            institution?: {
+              name?: string;
+            } | null;
+            status?: string | null;
+          },
+        ) => void;
         onSuccess: (
           publicToken: string,
           metadata: {
@@ -27,6 +39,29 @@ declare global {
 }
 
 const storedLinkTokenKey = "stb.plaid.linkToken";
+
+function plaidExitMessage(
+  error: {
+    display_message?: string | null;
+    error_code?: string | null;
+    error_message?: string | null;
+  } | null,
+  metadata: {
+    institution?: {
+      name?: string;
+    } | null;
+    status?: string | null;
+  },
+) {
+  if (error?.display_message || error?.error_message) {
+    return error.display_message || error.error_message || "Plaid closed before the bank connection finished.";
+  }
+
+  const institution = metadata.institution?.name ? ` for ${metadata.institution.name}` : "";
+  const status = metadata.status ? ` Status: ${metadata.status}.` : "";
+
+  return `Plaid closed before the bank connection was completed${institution}.${status} Try selecting the account and pressing Continue/Authorize.`;
+}
 
 function loadPlaidScript() {
   return new Promise<void>((resolve, reject) => {
@@ -124,14 +159,16 @@ export function PlaidLinkButton({
       ...(receivedRedirectUri ? { receivedRedirectUri } : {}),
       onSuccess: async (publicToken, metadata) => {
         try {
+          setMessage("Saving bank connection...");
           await savePublicToken(publicToken, metadata);
         } catch (error) {
           setBusy(false);
           setMessage(error instanceof Error ? error.message : "Could not save bank connection.");
         }
       },
-      onExit: () => {
+      onExit: (error, metadata) => {
         setBusy(false);
+        setMessage(plaidExitMessage(error, metadata));
       },
     }).open();
   }
