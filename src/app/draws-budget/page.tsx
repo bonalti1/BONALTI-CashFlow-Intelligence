@@ -1,13 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
-  Brain,
   ChevronDown,
-  HandCoins,
   Landmark,
-  Megaphone,
   Printer,
-  WalletCards,
 } from "lucide-react";
 
 import { saveDrawLineItemStatusAction } from "@/app/actions/draw-status";
@@ -77,15 +73,6 @@ type HouseView = {
   contractSourceStatus: string | null;
   completed: boolean;
   completedAt: string | null;
-};
-
-type InternalBucketView = {
-  label: string;
-  slug: string;
-  href: string;
-  description: string;
-  rule: string;
-  icon: typeof Megaphone;
 };
 
 type DrawsBudgetPageProps = {
@@ -259,6 +246,10 @@ function anchorIdForHouse(id: string) {
 
 function setupAnchorIdForHouse(id: string) {
   return `setup-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function sourceTruthAnchorIdForHouse(id: string) {
+  return `source-truth-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
 function isDrawPhaseKey(value: string | string[] | undefined): value is DrawPhaseKey {
@@ -614,58 +605,7 @@ async function getDetailedHouseViews(selectedHouseId: string | null) {
   return houses.sort((a, b) => b.progress - a.progress || a.house.localeCompare(b.house));
 }
 
-function internalBuckets(): InternalBucketView[] {
-  return [
-    {
-      label: "Marketing",
-      slug: "marketing",
-      href: "/buckets/marketing",
-      description: "Lead generation, ads, creative, and sales traffic.",
-      rule: "$1,500 per phase draw",
-      icon: Megaphone,
-    },
-    {
-      label: "Management",
-      slug: "management-payroll",
-      href: "/buckets/management-payroll",
-      description: "Management team and payroll operating bucket.",
-      rule: "$2,000 per phase draw",
-      icon: WalletCards,
-    },
-    {
-      label: "Operations",
-      slug: "operations",
-      href: "/buckets/operations",
-      description: "Company operations and future close-out reserve.",
-      rule: "$3,000 after closing",
-      icon: Landmark,
-    },
-    {
-      label: "Payees",
-      slug: "payees",
-      href: "/payees",
-      description: "Vendors, employees, and subcontractors ranked by paid amount.",
-      rule: "Top paid vendors",
-      icon: HandCoins,
-    },
-    {
-      label: "AI Center",
-      slug: "intelligent-center",
-      href: "/agent-health",
-      description: "AI Controller and CFO questions.",
-      rule: "AI Controller questions",
-      icon: Brain,
-    },
-  ];
-}
-
-function DrawsBudgetShell({
-  buckets,
-  children,
-}: {
-  buckets: InternalBucketView[];
-  children: React.ReactNode;
-}) {
+function DrawsBudgetShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-[#f2f1ea] text-[#1b2233] [background-image:linear-gradient(rgba(22,41,77,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(22,41,77,0.055)_1px,transparent_1px)] [background-size:34px_34px] [font-family:Barlow,system-ui,sans-serif]">
       <header className="bg-[#16294d] px-7 py-4 text-white shadow-[0_6px_22px_-10px_rgba(14,27,54,0.6)]">
@@ -727,14 +667,6 @@ function DrawsBudgetShell({
       </header>
 
       <section className="mx-auto max-w-[1240px] px-7 py-5">
-        <section className="mb-5 rounded-[14px] border border-[#e3e1d7] bg-white p-2 shadow-[0_8px_24px_-18px_rgba(14,27,54,0.45)]">
-          <div className="grid gap-2 md:grid-cols-5">
-            {buckets.map((bucket) => (
-              <InternalBucketCard bucket={bucket} key={bucket.slug} />
-            ))}
-          </div>
-        </section>
-
         {children}
 
         <p className="mt-6 text-sm text-[#69746f]">
@@ -752,11 +684,10 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
   const detailsOpen = params.details === "1";
   const forceRefresh = params.refresh === "1";
   const listView: HouseListView = params.view === "completed" ? "completed" : "active";
-  const buckets = internalBuckets();
 
   if (!detailsOpen) {
     return (
-      <DrawsBudgetShell buckets={buckets}>
+      <DrawsBudgetShell>
         <DrawsBudgetHouseLoader view={listView} />
       </DrawsBudgetShell>
     );
@@ -865,14 +796,6 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
       </header>
 
       <section className="mx-auto max-w-[1240px] px-7 py-5">
-        <section className="mb-5 rounded-[14px] border border-[#e3e1d7] bg-white p-2 shadow-[0_8px_24px_-18px_rgba(14,27,54,0.45)]">
-          <div className="grid gap-2 md:grid-cols-5">
-            {buckets.map((bucket) => (
-              <InternalBucketCard bucket={bucket} key={bucket.slug} />
-            ))}
-          </div>
-        </section>
-
         <section className="mb-5 grid gap-3 md:grid-cols-2">
           <HouseStatusCard
             active={listView === "active"}
@@ -918,28 +841,6 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
         </p>
       </section>
     </main>
-  );
-}
-
-function InternalBucketCard({ bucket }: { bucket: InternalBucketView }) {
-  const Icon = bucket.icon;
-  return (
-    <Link
-      className="group grid min-h-[86px] grid-cols-[42px_1fr] items-center gap-3 rounded-[11px] border border-[#e3e1d7] bg-white px-3 py-3 transition hover:border-[#16294d]/25 hover:bg-[#fbfaf7] hover:shadow-[0_12px_28px_-26px_rgba(14,27,54,0.7)]"
-      href={bucket.href}
-    >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] border border-[#f0d9d6] bg-[#fff8f7] text-[#e23b2a]">
-        <Icon size={16} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex h-[38px] items-center font-['Barlow_Condensed',Barlow,sans-serif] text-[22px] font-bold uppercase leading-[0.9] tracking-[0.05em] text-[#16294d]">
-          {bucket.label}
-        </div>
-        <div className="mt-1 truncate text-[11px] font-bold leading-4 text-[#7b8298]">
-          {bucket.rule}
-        </div>
-      </div>
-    </Link>
   );
 }
 
@@ -1020,6 +921,7 @@ function HouseCard({
       : null;
   const activePhase = house.currentPhase.key === "pre" ? "Pre" : `P${house.currentPhase.label}`;
   const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1`;
+  const sourceTruthHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${selectedPhase.key}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`;
   const collapseHref = "/draws-budget";
   const rowHref = showDetails ? collapseHref : detailHref;
 
@@ -1096,9 +998,9 @@ function HouseCard({
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             <Link
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
-              href={`/setup-inputs#${setupAnchorIdForHouse(house.id)}`}
+              href={sourceTruthHref}
             >
-              Contract
+              Source Truth
             </Link>
             <Link
               className={`rounded-[9px] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] ${
@@ -1119,6 +1021,8 @@ function HouseCard({
           <div className="mb-3 rounded-[12px] border border-[#e3e1d7] bg-white p-3 text-sm font-bold text-[#16294d]">
             <PhaseSelectorStrip house={house} selectedPhase={selectedPhase} />
           </div>
+
+          <SourceTruthPanel house={house} />
 
           <SelectedPhasePanel
             house={house}
@@ -1162,6 +1066,120 @@ function MiniPhaseStrip({ house }: { house: HouseView }) {
         })}
       </div>
     </div>
+  );
+}
+
+function SourceTruthPanel({ house }: { house: HouseView }) {
+  const docs = [
+    {
+      label: "Contract",
+      status: house.contractFileName ? "Added" : "Missing",
+      value: house.contractFileName ?? "Upload contract",
+      href: `/setup-inputs#${setupAnchorIdForHouse(house.id)}`,
+    },
+    {
+      label: "Draw Sheet",
+      status: "Missing",
+      value: "CFS or Rally budget sheet",
+      href: `/draws-budget?house=${encodeURIComponent(house.id)}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`,
+    },
+    {
+      label: "Bank Draw",
+      status: "Missing",
+      value: "Bank schedule and releases",
+      href: `/draws-budget?house=${encodeURIComponent(house.id)}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`,
+    },
+    {
+      label: "Holdback",
+      status: "Missing",
+      value: "Holdback amount and release trigger",
+      href: `/draws-budget?house=${encodeURIComponent(house.id)}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`,
+    },
+  ];
+  const extracted = [
+    { label: "Sold price", value: currency(house.soldPrice) },
+    {
+      label: "Square feet",
+      value: house.squareFootage ? house.squareFootage.toLocaleString() : "Pending",
+    },
+    { label: "Contract city", value: house.contractCity ?? house.city ?? "Pending" },
+    { label: "Total spent", value: currency(house.totalSpent) },
+    { label: "Current phase", value: phaseDisplayName(house.currentPhase) },
+    { label: "Reader status", value: house.contractSourceStatus ?? "Manual review" },
+  ];
+
+  return (
+    <section
+      className="mb-3 rounded-[14px] border border-[#d6dceb] bg-[#fbfaf7] p-4"
+      id={sourceTruthAnchorIdForHouse(house.id)}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#e23b2a]">
+            Source of Truth
+          </p>
+          <h3 className="mt-1 font-['Barlow_Condensed',Barlow,sans-serif] text-[28px] font-bold uppercase leading-none tracking-[0.03em] text-[#16294d]">
+            {house.house}
+          </h3>
+        </div>
+        <Link
+          className="rounded-[9px] bg-[#16294d] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.1em] text-white"
+          href={`/setup-inputs#${setupAnchorIdForHouse(house.id)}`}
+        >
+          Edit Manual Inputs
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-2 md:grid-cols-4">
+        {docs.map((doc) => (
+          <Link
+            className="rounded-[11px] border border-[#e3e1d7] bg-white p-3 transition hover:border-[#16294d]/30 hover:bg-[#fff]"
+            href={doc.href}
+            key={doc.label}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#9aa1b2]">
+                {doc.label}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] ${
+                  doc.status === "Added"
+                    ? "bg-[#eaf7f0] text-[#1f6f4b]"
+                    : "bg-[#fff6df] text-[#9a6500]"
+                }`}
+              >
+                {doc.status}
+              </span>
+            </div>
+            <p className="mt-2 min-h-10 text-sm font-bold leading-5 text-[#16294d]">{doc.value}</p>
+            <p className="mt-2 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#e23b2a]">
+              Add / Review
+            </p>
+          </Link>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-[12px] border border-[#e3e1d7] bg-white p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#9aa1b2]">
+            Extracted Numbers
+          </p>
+          <span className="rounded-full border border-[#d6dceb] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#16294d]">
+            Editable
+          </span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {extracted.map((item) => (
+            <div className="rounded-[10px] border border-[#edf0f5] bg-[#fbfaf7] px-3 py-2" key={item.label}>
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
+                {item.label}
+              </div>
+              <div className="mt-1 text-sm font-extrabold text-[#16294d]">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 

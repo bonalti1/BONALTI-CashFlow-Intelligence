@@ -56,8 +56,8 @@ function anchorIdForHouse(id: string) {
   return `house-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
-function setupAnchorIdForHouse(id: string) {
-  return `setup-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+function sourceTruthAnchorIdForHouse(id: string) {
+  return `source-truth-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
 function HouseStatusCard({
@@ -198,6 +198,7 @@ function HouseCard({ house, index }: { house: DrawsDashboardHouse; index: number
   const activePhase = currentPhase?.key === "pre" ? "Pre" : `P${currentPhase?.label ?? "1"}`;
   const detailPhase = currentPhase?.key ?? house.currentPhaseKey;
   const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${detailPhase}&details=1`;
+  const sourceTruthHref = `${detailHref}#${sourceTruthAnchorIdForHouse(house.id)}`;
 
   return (
     <article
@@ -272,9 +273,9 @@ function HouseCard({ house, index }: { house: DrawsDashboardHouse; index: number
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             <Link
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
-              href={`/setup-inputs#${setupAnchorIdForHouse(house.id)}`}
+              href={sourceTruthHref}
             >
-              Contract
+              Source Truth
             </Link>
             <Link
               className="rounded-[9px] bg-[#16294d] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white"
