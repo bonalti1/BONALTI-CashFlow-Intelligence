@@ -313,7 +313,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
   useEffect(() => {
     let active = true;
 
-    fetch(`/api/draws-dashboard?view=${view}`, { cache: "no-store" })
+    fetch(`/api/draws-dashboard?view=${view}`)
       .then(async (response) => {
         const payload = (await response.json()) as DrawsDashboardResponse;
 
@@ -339,12 +339,15 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
     };
   }, [view]);
 
-  async function loadCards() {
+  async function loadCards(force = false) {
     setRefreshing(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/draws-dashboard?view=${view}`, { cache: "no-store" });
+      const response = await fetch(
+        `/api/draws-dashboard?view=${view}${force ? `&force=1&at=${Date.now()}` : ""}`,
+        force ? { cache: "no-store" } : undefined,
+      );
       const payload = (await response.json()) as DrawsDashboardResponse;
 
       if (!response.ok || payload.status === "error") {
@@ -374,7 +377,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
       }
 
       setNotice("Summary cache rebuilt. Loading cards...");
-      await loadCards();
+      await loadCards(true);
     } catch (syncError) {
       setNotice(null);
       setError(syncError instanceof Error ? syncError.message : "Summary rebuild failed.");
@@ -432,7 +435,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
           <button
             className="h-9 rounded-[8px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d] disabled:cursor-not-allowed disabled:opacity-50"
             disabled={refreshing || syncing}
-            onClick={loadCards}
+            onClick={() => loadCards(true)}
             type="button"
           >
             {refreshing ? "Loading" : "Reload Cards"}

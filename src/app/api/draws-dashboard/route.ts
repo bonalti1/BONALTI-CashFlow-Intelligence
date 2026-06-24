@@ -8,9 +8,29 @@ import {
 import type { DrawPhaseKey } from "@/lib/draws/draws-store";
 import {
   getSchedulingProjectVisualList,
-  getSchedulingProjectVisualMap,
   type SchedulingProjectVisual,
 } from "@/lib/scheduling/status-store";
+
+export const dynamic = "force-dynamic";
+
+const dashboardCacheMs = 30_000;
+
+type DrawsDashboardPayload = {
+  activeCount: number;
+  completedCount: number;
+  houses: Array<HouseDashboardSummary & { completed: boolean }>;
+  message?: string;
+  status: "ok" | "fallback";
+  view: "active" | "completed";
+};
+
+const dashboardCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    payload: DrawsDashboardPayload;
+  }
+>();
 
 const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
   pre: { label: "Pre", name: "Pre Phase" },
@@ -48,20 +68,6 @@ function withDashboardTimeout<T>(promise: Promise<T>, timeoutMs = 2000) {
         clearTimeout(timer);
       });
   });
-}
-
-async function withSchedulingVisuals<T extends HouseDashboardSummary & { completed: boolean }>(
-  houses: T[],
-) {
-  const emptyVisuals = new Map<string, { renderImage: string | null }>();
-  const visuals = await withDashboardTimeout(getSchedulingProjectVisualMap(houses), 1500).catch(
-    () => emptyVisuals,
-  );
-
-  return houses.map((house) => ({
-    ...house,
-    renderImageUrl: house.renderImageUrl ?? visuals.get(house.house)?.renderImage ?? null,
-  }));
 }
 
 function phaseHasMoney(phase: HouseDashboardSummaryPhase) {
@@ -160,29 +166,57 @@ function schedulingFallbackSummaries(projects: SchedulingProjectVisual[]) {
   );
 }
 
+function timedJson(payload: DrawsDashboardPayload, startedAt: number, cacheStatus: "hit" | "miss") {
+  const durationMs = Math.round(performance.now() - startedAt);
+
+  return NextResponse.json(payload, {
+    headers: {
+      "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+      "Server-Timing": `draws-dashboard;dur=${durationMs};desc="${cacheStatus}"`,
+    },
+  });
+}
+
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   const { searchParams } = new URL(request.url);
   const view = searchParams.get("view") === "completed" ? "completed" : "active";
+  const force = searchParams.get("force") === "1";
+  const cacheKey = view;
+
+  if (!force) {
+    const cached = dashboardCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+      return timedJson(cached.payload, startedAt, "hit");
+    }
+  }
 
   try {
     const summaries = await withDashboardTimeout(getHouseDashboardSummaries());
-    const houses = await withSchedulingVisuals(summaries.map((summary) => ({
+    const houses = summaries.map((summary) => ({
       ...summary,
       completed: summaryIsCompleted(summary),
-    })));
+    }));
     const activeCount = houses.filter((house) => !house.completed).length;
     const completedCount = houses.length - activeCount;
     const visibleHouses = houses.filter((house) =>
       view === "completed" ? house.completed : !house.completed,
     );
-
-    return NextResponse.json({
+    const payload: DrawsDashboardPayload = {
       activeCount,
       completedCount,
       houses: visibleHouses,
       status: "ok",
       view,
+    };
+
+    dashboardCache.set(cacheKey, {
+      expiresAt: Date.now() + dashboardCacheMs,
+      payload,
     });
+
+    return timedJson(payload, startedAt, "miss");
   } catch {
     const schedulingHouses = await withDashboardTimeout(
       getSchedulingProjectVisualList(),
@@ -190,21 +224,24 @@ export async function GET(request: Request) {
     ).catch(() => []);
     const fallbackHouses =
       schedulingHouses.length > 0 ? schedulingFallbackSummaries(schedulingHouses) : demoSummaries();
-    const houses = await withSchedulingVisuals(fallbackHouses);
+    const houses = fallbackHouses;
     const visibleHouses = houses.filter((house) =>
       view === "completed" ? house.completed : !house.completed,
     );
+    const payload: DrawsDashboardPayload = {
+      activeCount: houses.filter((house) => !house.completed).length,
+      completedCount: 0,
+      houses: visibleHouses,
+      message: "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",
+      status: "fallback",
+      view,
+    };
 
-    return NextResponse.json(
-      {
-        activeCount: houses.filter((house) => !house.completed).length,
-        completedCount: 0,
-        houses: visibleHouses,
-        message: "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",
-        status: "fallback",
-        view,
-      },
-      { status: 200 },
-    );
+    dashboardCache.set(cacheKey, {
+      expiresAt: Date.now() + dashboardCacheMs,
+      payload,
+    });
+
+    return timedJson(payload, startedAt, "miss");
   }
 }
