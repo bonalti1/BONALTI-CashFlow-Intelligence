@@ -39,6 +39,7 @@ export type HouseDashboardSummary = {
   contractSquareFootage: number | null;
   contractCity: string | null;
   contractSourceStatus: string | null;
+  projectStatus: string;
   refreshedAt: string;
 };
 
@@ -110,9 +111,11 @@ async function ensureHouseDashboardSummaryTable() {
       contract_square_footage integer,
       contract_city text,
       contract_source_status text,
+      project_status text not null default 'active',
       refreshed_at timestamptz not null default now()
     )
   `;
+  await sql()`alter table house_dashboard_summaries add column if not exists project_status text not null default 'active'`;
 }
 
 export async function getHouseDashboardSummaries() {
@@ -142,6 +145,7 @@ export async function getHouseDashboardSummaries() {
       contract_square_footage: number | null;
       contract_city: string | null;
       contract_source_status: string | null;
+      project_status: string;
       refreshed_at: Date;
     }>
   >`
@@ -165,6 +169,7 @@ export async function getHouseDashboardSummaries() {
       contract_square_footage,
       contract_city,
       contract_source_status,
+      project_status,
       refreshed_at
     from house_dashboard_summaries
     order by progress desc, house_name
@@ -190,6 +195,7 @@ export async function getHouseDashboardSummaries() {
     contractSquareFootage: row.contract_square_footage,
     contractCity: row.contract_city,
     contractSourceStatus: row.contract_source_status,
+    projectStatus: row.project_status,
     refreshedAt: row.refreshed_at.toISOString(),
   }));
 }
@@ -264,6 +270,7 @@ export async function refreshHouseDashboardSummaries() {
           contract_square_footage,
           contract_city,
           contract_source_status,
+          project_status,
           refreshed_at
         )
         values (
@@ -286,6 +293,7 @@ export async function refreshHouseDashboardSummaries() {
           ${details?.contractSquareFootage ?? null},
           ${details?.contractCity ?? null},
           ${details?.contractSourceStatus ?? null},
+          ${details?.projectStatus ?? "active"},
           now()
         )
         on conflict (house_id) do update set
@@ -307,6 +315,7 @@ export async function refreshHouseDashboardSummaries() {
           contract_square_footage = excluded.contract_square_footage,
           contract_city = excluded.contract_city,
           contract_source_status = excluded.contract_source_status,
+          project_status = excluded.project_status,
           refreshed_at = now()
       `;
     }

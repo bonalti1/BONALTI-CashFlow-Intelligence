@@ -8,7 +8,9 @@ import {
   saveHouseContractSource,
   saveHouseDetail,
   saveHouseManualRenderImage,
+  saveHouseProjectStatus,
 } from "@/lib/houses/house-details-store";
+import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 
 function optionalMoney(value: FormDataEntryValue | null) {
@@ -86,6 +88,25 @@ export async function saveHouseDetailsAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/setup-inputs");
   revalidatePath("/house-accounts");
+}
+
+export async function saveHouseProjectStatusAction(formData: FormData) {
+  const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
+  const houseName = optionalText(formData.get("houseName"));
+  const projectStatus = optionalText(formData.get("projectStatus"));
+  const returnTo = safeReturnTo(formData.get("returnTo"));
+  const allowedStatuses = new Set(["active", "on_hold", "final_phase", "completed", "closed_out"]);
+
+  if (!qboBankAccountId || !houseName || !projectStatus || !allowedStatuses.has(projectStatus)) {
+    throw new Error("Choose a valid project status.");
+  }
+
+  await saveHouseProjectStatus({ qboBankAccountId, houseName, projectStatus });
+  await refreshHouseDashboardSummaries();
+  revalidatePath("/");
+  revalidatePath("/draws-budget");
+  revalidatePath("/setup-inputs");
+  redirect(returnTo);
 }
 
 export async function saveHouseRenderImageAction(formData: FormData) {

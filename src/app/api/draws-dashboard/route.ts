@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import {
   getHouseDashboardSummaries,
   type HouseDashboardSummary,
-  type HouseDashboardSummaryPhase,
 } from "@/lib/dashboard/house-dashboard-summary-store";
 import type { DrawPhaseKey } from "@/lib/draws/draws-store";
 import {
@@ -70,15 +69,8 @@ function withDashboardTimeout<T>(promise: Promise<T>, timeoutMs = 2000) {
   });
 }
 
-function phaseHasMoney(phase: HouseDashboardSummaryPhase) {
-  return (phase.actual?.spentAmount ?? 0) > 0 || (phase.actual?.transactionCount ?? 0) > 0;
-}
-
 function summaryIsCompleted(summary: HouseDashboardSummary) {
-  const currentPhase =
-    summary.phases.find((phase) => phase.key === summary.currentPhaseKey) ?? summary.phases[0];
-
-  return Boolean(currentPhase && currentPhase.key === "p6" && phaseHasMoney(currentPhase));
+  return summary.projectStatus === "completed" || summary.projectStatus === "closed_out";
 }
 
 function summaryFromFallbackHouse(
@@ -141,6 +133,7 @@ function summaryFromFallbackHouse(
       contractSquareFootage: null,
       contractCity: null,
       contractSourceStatus: null,
+      projectStatus: "active",
       refreshedAt: new Date().toISOString(),
       completed: false,
     };

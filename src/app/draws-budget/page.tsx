@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { saveDrawLineItemStatusAction } from "@/app/actions/draw-status";
+import { saveHouseProjectStatusAction } from "@/app/actions/house-details";
 import { DrawsBudgetHouseLoader } from "@/app/draws-budget/house-loader";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
 import {
@@ -31,10 +32,7 @@ import {
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
-import {
-  getSchedulingDashboardMaps,
-  type SchedulingLineStatus,
-} from "@/lib/scheduling/status-store";
+import { getSchedulingProjectVisualMap } from "@/lib/scheduling/status-store";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +69,7 @@ type HouseView = {
   contractSquareFootage: number | null;
   contractCity: string | null;
   contractSourceStatus: string | null;
+  projectStatus: string;
   completed: boolean;
   completedAt: string | null;
 };
@@ -277,7 +276,6 @@ function chargeRowsForPhase(phase: PhaseView) {
         budgetAmount: null,
         paidAmount,
         draw,
-        schedule: null as SchedulingLineStatus | null,
         payee:
           actual && actual.payeeNames.length > 0
             ? actual.payeeNames.slice(0, 2).join(", ")
@@ -310,7 +308,6 @@ function chargeRowsForPhase(phase: PhaseView) {
       budgetAmount: rowBudget,
       paidAmount,
       draw,
-      schedule: null as SchedulingLineStatus | null,
       payee: isPaid ? "QB payee mapped" : "Waiting on check",
       status: overBudget ? "Review" : isPaid ? "Completed" : "Open",
       meta: "Preview row until this phase is synced from Chart of Accounts.",
@@ -427,6 +424,7 @@ function buildDemoHouses(): HouseView[] {
       contractSquareFootage: null,
       contractCity: null,
       contractSourceStatus: null,
+      projectStatus: "active",
       completed: house.phaseIndex >= drawPhaseKeys.length - 1,
       completedAt: null,
     };
@@ -469,6 +467,7 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
     contractSquareFootage: summary.contractSquareFootage,
     contractCity: summary.contractCity,
     contractSourceStatus: summary.contractSourceStatus,
+    projectStatus: summary.projectStatus,
     completed: false,
     completedAt: null,
   };
@@ -578,6 +577,7 @@ async function getDetailedHouseViews(selectedHouseId: string | null) {
         contractSquareFootage: details?.contractSquareFootage ?? null,
         contractCity: details?.contractCity ?? null,
         contractSourceStatus: details?.contractSourceStatus ?? null,
+        projectStatus: details?.projectStatus ?? "active",
         completed: false,
         completedAt: null,
       };
@@ -695,30 +695,19 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
               },
         )
       : houses.map((house) => ({ house: house.house }));
-  const emptySchedulingMaps = {
-    completion: new Map(),
-    statuses: new Map(),
-    visuals: new Map(),
-  };
-  const schedulingMaps =
+  const schedulingVisuals =
     detailsOpen || listView === "completed"
       ? await withDataTimeout(
-          getSchedulingDashboardMaps(schedulingInput),
-          emptySchedulingMaps,
+          getSchedulingProjectVisualMap(schedulingInput),
+          new Map(),
           schedulingTimeoutMs,
         )
-      : emptySchedulingMaps;
-  const schedulingStatuses = schedulingMaps.statuses;
-  const schedulingVisuals = schedulingMaps.visuals;
-  const schedulingCompletion = schedulingMaps.completion;
+      : new Map();
 
   houses = houses.map((house) => ({
     ...house,
     renderImageUrl: house.renderImageUrl ?? schedulingVisuals.get(house.house)?.renderImage ?? null,
-    completed:
-      schedulingCompletion.get(house.house)?.completed ??
-      (house.currentPhase.key === "p6" && phaseHasMoney(house.currentPhase)),
-    completedAt: schedulingCompletion.get(house.house)?.completedAt ?? null,
+    completed: house.projectStatus === "completed" || house.projectStatus === "closed_out",
   }));
 
   const activeHouses = houses.filter((house) => !house.completed);
@@ -820,14 +809,13 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
               index={index}
               key={house.id}
               selectedPhase={selectedPhaseFromParams(house, selectedHouseId, selectedPhaseKey)}
-              schedulingStatuses={schedulingStatuses}
               showDetails={detailsOpen && selectedHouseId === house.id}
             />
           ))}
         </section>
 
         <p className="mt-6 text-sm text-[#69746f]">
-          Scheduling controls field status. Finance controls draw submitted, money received, accountant review, and budget notes.
+          QuickBooks controls actual spending. Finance controls project status, draw submission, money received, and review notes.
         </p>
       </section>
     </main>
@@ -880,13 +868,11 @@ function HouseCard({
   house,
   index,
   selectedPhase,
-  schedulingStatuses,
   showDetails,
 }: {
   house: HouseView;
   index: number;
   selectedPhase: PhaseView;
-  schedulingStatuses: Map<string, SchedulingLineStatus>;
   showDetails: boolean;
 }) {
   const accent = index % 3 === 0 ? "#e6aa14" : "#27a0bd";
@@ -1013,7 +999,6 @@ function HouseCard({
           <SelectedPhasePanel
             house={house}
             phase={selectedPhase}
-            schedulingStatuses={schedulingStatuses}
           />
 
           <SourceTruthPanel house={house} />
@@ -1104,6 +1089,13 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
     { label: "Reader status", value: house.contractSourceStatus ?? "Manual review" },
   ];
   const addedDocCount = docs.filter((doc) => doc.status === "Added").length;
+  const projectStatusLabels: Record<string, string> = {
+    active: "Active",
+    on_hold: "On hold",
+    final_phase: "Final phase",
+    completed: "Completed",
+    closed_out: "Closed out",
+  };
 
   return (
     <details
@@ -1134,6 +1126,33 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
       </summary>
 
       <div className="mt-4 flex justify-end">
+        <form action={saveHouseProjectStatusAction} className="mr-auto flex flex-wrap items-end gap-2">
+          <input name="qboBankAccountId" type="hidden" value={house.id} />
+          <input name="houseName" type="hidden" value={house.house} />
+          <input
+            name="returnTo"
+            type="hidden"
+            value={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`}
+          />
+          <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
+            Project status
+            <select
+              className="mt-1 block h-9 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold text-[#16294d]"
+              defaultValue={house.projectStatus}
+              name="projectStatus"
+            >
+              {Object.entries(projectStatusLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="h-9 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
+            type="submit"
+          >
+            Save status
+          </button>
+        </form>
         <Link
           className="rounded-[9px] bg-[#16294d] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.1em] text-white"
           href={`/setup-inputs#${setupAnchorIdForHouse(house.id)}`}
@@ -1239,16 +1258,11 @@ function SummaryMetric({
 function SelectedPhasePanel({
   house,
   phase,
-  schedulingStatuses,
 }: {
   house: HouseView;
   phase: PhaseView;
-  schedulingStatuses: Map<string, SchedulingLineStatus>;
 }) {
-  const chargeRows = chargeRowsForPhase(phase).map((row) => ({
-    ...row,
-    schedule: schedulingStatuses.get(`${house.house}:${phase.key}:${row.item}`) ?? null,
-  }));
+  const chargeRows = chargeRowsForPhase(phase);
   const phaseSpent = phase.actual?.spentAmount ?? 0;
   const spentPerSqft =
     house.squareFootage && house.squareFootage > 0 ? phaseSpent / house.squareFootage : null;
@@ -1305,11 +1319,10 @@ function SelectedPhasePanel({
       </div>
       <div className="p-3">
         <div className="overflow-hidden rounded-[10px] border border-[#e3e1d7]">
-          <div className="grid grid-cols-[2fr_1fr_1fr_1.1fr_1.2fr_1fr_112px_52px] border-b border-[#e3e1d7] bg-[#fbfaf7] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
+          <div className="grid grid-cols-[2.2fr_1fr_1fr_1.25fr_1fr_112px_52px] border-b border-[#e3e1d7] bg-[#fbfaf7] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
             <span>Line item</span>
             <span>Budget</span>
             <span>Spent</span>
-            <span>Schedule</span>
             <span>Draw submitted</span>
             <span>Received</span>
             <span>Status</span>
@@ -1345,20 +1358,9 @@ function PhaseLineItemRow({
       : row.status === "Review"
         ? "border-[#ffc7bf] bg-[#fdebea] text-[#9d251c]"
         : "border-[#f4d48a] bg-[#fff6df] text-[#9a6500]";
-  const scheduleTone =
-    row.schedule?.status === "done"
-      ? "border-[#b9dec9] bg-[#eaf7f0] text-[#1f6f4b]"
-      : row.schedule?.status === "today"
-        ? "border-[#c8cdd6] bg-[#f4f5f7] text-[#16294d]"
-        : row.schedule?.status === "scheduled"
-          ? "border-[#f4d48a] bg-[#fff6df] text-[#9a6500]"
-          : row.schedule?.status === "alert"
-            ? "border-[#ffc7bf] bg-[#fdebea] text-[#9d251c]"
-            : "border-[#e3e1d7] bg-white text-[#7b8298]";
-
   return (
     <details className="group border-b border-[#f0eee6] last:border-b-0">
-      <summary className="grid cursor-pointer list-none grid-cols-[2fr_1fr_1fr_1.1fr_1.2fr_1fr_112px_52px] items-center px-3 py-2 text-sm transition hover:bg-[#fbfaf7]">
+      <summary className="grid cursor-pointer list-none grid-cols-[2.2fr_1fr_1fr_1.25fr_1fr_112px_52px] items-center px-3 py-2 text-sm transition hover:bg-[#fbfaf7]">
         <div className="flex items-center gap-2">
           <span
             className={`grid h-6 w-6 place-items-center rounded-[7px] border text-sm font-extrabold ${
@@ -1375,14 +1377,6 @@ function PhaseLineItemRow({
         </div>
         <span className="font-semibold text-[#1b2233]">{currency(row.budgetAmount)}</span>
         <span className="font-semibold text-[#1b2233]">{currency(row.paidAmount)}</span>
-        <span>
-          <span className={`inline-flex rounded-[7px] border px-2 py-1 text-[11px] font-extrabold ${scheduleTone}`}>
-            {row.schedule?.label ?? "Not linked"}
-          </span>
-          <span className="mt-0.5 block truncate text-[10px] font-bold text-[#9aa1b2]">
-            {row.schedule?.taskName ?? "Scheduling app"}
-          </span>
-        </span>
         <span className={submitted ? "font-extrabold text-[#1f6f4b]" : "font-bold text-[#7b8298]"}>
           {submitted ? "Submitted" : "Not sent"}
           <span className="mt-0.5 block text-[10px] font-bold text-[#9aa1b2]">

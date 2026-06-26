@@ -18,6 +18,7 @@ export type HouseDetail = {
   contractSquareFootage: number | null;
   contractCity: string | null;
   contractSourceStatus: string | null;
+  projectStatus: string;
   changeOrderTotal: number;
   currentContractPrice: number | null;
   updatedAt: string;
@@ -54,6 +55,7 @@ async function ensureHouseDetailsTable() {
       contract_square_footage integer,
       contract_city text,
       contract_source_status text,
+      project_status text not null default 'active',
       updated_at timestamptz not null default now()
     )
   `;
@@ -70,6 +72,7 @@ async function ensureHouseDetailsTable() {
   await sql()`alter table house_details add column if not exists contract_square_footage integer`;
   await sql()`alter table house_details add column if not exists contract_city text`;
   await sql()`alter table house_details add column if not exists contract_source_status text`;
+  await sql()`alter table house_details add column if not exists project_status text not null default 'active'`;
 }
 
 async function ensureHouseChangeOrdersTable() {
@@ -115,6 +118,7 @@ export async function getHouseDetailsMap() {
       contract_square_footage: number | null;
       contract_city: string | null;
       contract_source_status: string | null;
+      project_status: string;
       change_order_total: string | null;
       updated_at: Date;
     }>
@@ -137,6 +141,7 @@ export async function getHouseDetailsMap() {
       h.contract_square_footage,
       h.contract_city,
       h.contract_source_status,
+      h.project_status,
       coalesce(sum(c.amount), 0) as change_order_total,
       h.updated_at
     from house_details h
@@ -160,6 +165,7 @@ export async function getHouseDetailsMap() {
       h.contract_square_footage,
       h.contract_city,
       h.contract_source_status,
+      h.project_status,
       h.updated_at
     order by h.house_name
   `;
@@ -186,6 +192,7 @@ export async function getHouseDetailsMap() {
       contractSquareFootage: row.contract_square_footage,
       contractCity: row.contract_city,
       contractSourceStatus: row.contract_source_status,
+      projectStatus: row.project_status,
       changeOrderTotal,
       currentContractPrice: contractPrice === null ? null : contractPrice + changeOrderTotal,
       updatedAt: row.updated_at.toISOString(),
@@ -502,6 +509,40 @@ export async function saveHouseDetail({
       sold_price = excluded.sold_price,
       square_footage = excluded.square_footage,
       city = excluded.city,
+      updated_at = now()
+  `;
+}
+
+export async function saveHouseProjectStatus({
+  qboBankAccountId,
+  houseName,
+  projectStatus,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  projectStatus: string;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to save project status.");
+  }
+
+  await ensureHouseDetailsTable();
+  await sql()`
+    insert into house_details (
+      qbo_bank_account_id,
+      house_name,
+      project_status,
+      updated_at
+    )
+    values (
+      ${qboBankAccountId},
+      ${houseName},
+      ${projectStatus},
+      now()
+    )
+    on conflict (qbo_bank_account_id) do update set
+      house_name = excluded.house_name,
+      project_status = excluded.project_status,
       updated_at = now()
   `;
 }
