@@ -896,14 +896,14 @@ function HouseCard({
       ? Math.round((remainingMoney / house.soldPrice) * 100)
       : null;
   const activePhase = house.currentPhase.key === "pre" ? "Pre" : `P${house.currentPhase.label}`;
-  const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1`;
+  const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1#${anchorId}`;
   const sourceTruthHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${selectedPhase.key}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`;
-  const collapseHref = "/draws-budget";
+  const collapseHref = `/draws-budget#${anchorId}`;
   const rowHref = showDetails ? collapseHref : detailHref;
 
   return (
     <article
-      className="overflow-hidden rounded-[14px] border border-[#e3e1d7] bg-white shadow-[0_8px_24px_-18px_rgba(14,27,54,0.45)]"
+      className="scroll-mt-4 overflow-hidden rounded-[14px] border border-[#e3e1d7] bg-white shadow-[0_8px_24px_-18px_rgba(14,27,54,0.45)]"
       id={anchorId}
     >
       <div className="relative block px-4 py-4 transition hover:bg-[#fbfaf7]">
@@ -1037,7 +1037,7 @@ function MiniPhaseStrip({
               className={`grid h-8 place-items-center rounded-[7px] border text-[10px] font-extrabold ${
                 isSelected ? "ring-2 ring-[#16294d] ring-offset-1" : ""
               } ${toneClassName} transition hover:border-[#16294d]/40 hover:bg-white`}
-              href={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${phase.key}&details=1`}
+              href={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${phase.key}&details=1#${anchorIdForHouse(house.id)}`}
               key={phase.key}
               prefetch={false}
             >

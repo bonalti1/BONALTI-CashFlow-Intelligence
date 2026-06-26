@@ -332,11 +332,11 @@ function HouseCard({
       : null;
   const activePhase = currentPhase?.key === "pre" ? "Pre" : `P${currentPhase?.label ?? "1"}`;
   const detailPhase = currentPhase?.key ?? house.currentPhaseKey;
-  const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${detailPhase}&details=1`;
+  const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${detailPhase}&details=1#${anchorIdForHouse(house.id)}`;
 
   return (
     <article
-      className="overflow-hidden rounded-[14px] border border-[#e3e1d7] bg-white shadow-[0_8px_24px_-18px_rgba(14,27,54,0.45)]"
+      className="scroll-mt-4 overflow-hidden rounded-[14px] border border-[#e3e1d7] bg-white shadow-[0_8px_24px_-18px_rgba(14,27,54,0.45)]"
       id={anchorIdForHouse(house.id)}
     >
       <div className="relative block px-4 py-4 transition hover:bg-[#fbfaf7]">
