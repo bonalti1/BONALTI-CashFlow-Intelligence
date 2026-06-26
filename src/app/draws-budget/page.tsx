@@ -1010,8 +1010,6 @@ function HouseCard({
 
       {showDetails ? (
         <div className="border-t border-[#e3e1d7] px-4 pb-4 pt-3">
-          <SourceTruthPanel house={house} />
-
           <SelectedPhasePanel
             house={house}
             phase={selectedPhase}
@@ -1019,6 +1017,8 @@ function HouseCard({
           />
 
           <PhaseSelectorStrip house={house} selectedPhase={selectedPhase} />
+
+          <SourceTruthPanel house={house} />
         </div>
       ) : null}
     </article>
