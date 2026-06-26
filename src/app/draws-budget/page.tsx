@@ -318,22 +318,6 @@ function chargeRowsForPhase(phase: PhaseView) {
   });
 }
 
-function phasePercentOfSale(phase: PhaseView, soldPrice: number | null) {
-  if (!soldPrice || soldPrice <= 0) {
-    return null;
-  }
-
-  return ((phase.actual?.spentAmount ?? 0) / soldPrice) * 100;
-}
-
-function phaseCostPerSqft(phase: PhaseView, squareFootage: number | null) {
-  if (!squareFootage || squareFootage <= 0) {
-    return null;
-  }
-
-  return (phase.actual?.spentAmount ?? 0) / squareFootage;
-}
-
 const demoHouses = [
   { house: "Cepeda", city: "Alice", soldPrice: 429900, squareFootage: 3391, phaseIndex: 4, review: true },
   { house: "Charles", city: "Alice", soldPrice: 200000, squareFootage: 2000, phaseIndex: 1, review: false },
@@ -1026,10 +1010,6 @@ function HouseCard({
 
       {showDetails ? (
         <div className="border-t border-[#e3e1d7] px-4 pb-4 pt-3">
-          <div className="mb-3 rounded-[12px] border border-[#e3e1d7] bg-white p-3 text-sm font-bold text-[#16294d]">
-            <PhaseSelectorStrip house={house} selectedPhase={selectedPhase} />
-          </div>
-
           <SourceTruthPanel house={house} />
 
           <SelectedPhasePanel
@@ -1037,6 +1017,8 @@ function HouseCard({
             phase={selectedPhase}
             schedulingStatuses={schedulingStatuses}
           />
+
+          <PhaseSelectorStrip house={house} selectedPhase={selectedPhase} />
         </div>
       ) : null}
     </article>
@@ -1255,73 +1237,79 @@ function PhaseSelectorStrip({
   house: HouseView;
   selectedPhase: PhaseView;
 }) {
-  return (
-    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
-      {house.phases.map((phase) => {
-        const isSelected = phase.key === selectedPhase.key;
-        const label = phase.key === "pre" ? "Pre" : `P${phase.label}`;
-        const hasMoney = phaseHasMoney(phase);
-        const overBudget = isPhaseOverBudget(phase);
-        const spentAmount = phase.actual?.spentAmount ?? 0;
-        const budgetAmount = phase.actual?.budgetAmount ?? null;
-        const percentOfSale = phasePercentOfSale(phase, house.soldPrice);
-        const costPerSqft = phaseCostPerSqft(phase, house.squareFootage);
-        const dotClassName = overBudget
-          ? "bg-[#e23b2a]"
-          : hasMoney
-            ? "bg-[#2e9166]"
-            : "bg-[#c7c9c1]";
-        const cardTone = hasMoney
-          ? "border-2 border-[#2e9166] bg-white"
-          : "border border-[#e3e1d7] bg-white";
+  const selectedLabel = selectedPhase.key === "pre" ? "Pre" : `P${selectedPhase.label}`;
+  const selectedSpent = selectedPhase.actual?.spentAmount ?? 0;
 
-        return (
-          <Link
-            className={`rounded-[10px] px-3 py-2.5 transition hover:border-[#16294d]/40 hover:bg-white ${
-              isSelected
-                ? "border-2 border-[#16294d] bg-white shadow-[0_12px_26px_-22px_rgba(14,27,54,0.75)]"
-                : cardTone
-            }`}
-            href={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${phase.key}&details=1`}
-            key={phase.key}
-            prefetch={false}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${dotClassName}`} />
-                <span className="font-['Barlow_Condensed',Barlow,sans-serif] text-lg font-bold text-[#16294d]">
-                  {label}
+  return (
+    <details className="group mt-3 rounded-[12px] border border-[#e3e1d7] bg-white p-3 [&>summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#9aa1b2]">
+            All phases
+          </p>
+          <p className="mt-1 text-sm font-extrabold text-[#16294d]">
+            Viewing {selectedLabel} · {selectedPhase.name} · {currency(selectedSpent)} spent
+          </p>
+        </div>
+        <span className="rounded-full bg-[#16294d] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white">
+          <span className="group-open:hidden">Change phase</span>
+          <span className="hidden group-open:inline">Close phases</span>
+        </span>
+      </summary>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+        {house.phases.map((phase) => {
+          const isSelected = phase.key === selectedPhase.key;
+          const label = phase.key === "pre" ? "Pre" : `P${phase.label}`;
+          const hasMoney = phaseHasMoney(phase);
+          const overBudget = isPhaseOverBudget(phase);
+          const spentAmount = phase.actual?.spentAmount ?? 0;
+          const dotClassName = overBudget
+            ? "bg-[#e23b2a]"
+            : hasMoney
+              ? "bg-[#2e9166]"
+              : "bg-[#c7c9c1]";
+          const statusLabel = isSelected ? "Open" : overBudget ? "Review" : hasMoney ? "Spent" : "Empty";
+          const statusClassName = isSelected
+            ? "bg-[#16294d] text-white"
+            : overBudget
+              ? "bg-[#fdebea] text-[#9d251c]"
+              : hasMoney
+                ? "bg-[#eaf7f0] text-[#1f6f4b]"
+                : "bg-[#f2f1ea] text-[#7b8298]";
+
+          return (
+            <Link
+              className={`rounded-[10px] border bg-white px-3 py-2.5 transition hover:border-[#16294d]/40 hover:bg-[#fbfaf7] ${
+                isSelected
+                  ? "border-[#16294d] shadow-[0_12px_26px_-22px_rgba(14,27,54,0.75)] ring-2 ring-[#16294d]/10"
+                  : "border-[#e3e1d7]"
+              }`}
+              href={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${phase.key}&details=1`}
+              key={phase.key}
+              prefetch={false}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${dotClassName}`} />
+                  <span className="font-['Barlow_Condensed',Barlow,sans-serif] text-lg font-bold text-[#16294d]">
+                    {label}
+                  </span>
                 </span>
-              </span>
-              {isSelected ? (
-                <span className="rounded-full bg-[#16294d] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-white">
-                  Open
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] ${statusClassName}`}>
+                  {statusLabel}
                 </span>
-              ) : null}
-            </div>
-            <div className="mt-1 truncate text-[11px] font-bold text-[#69746f]">{phase.name}</div>
-            <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#9aa1b2]">
-              <span>Spent</span>
-              <span>Budget</span>
-              <strong className="text-[12px] normal-case tracking-normal text-[#16294d]">
-                {currency(spentAmount)}
-              </strong>
-              <strong className="text-[12px] normal-case tracking-normal text-[#16294d]">
-                {currency(budgetAmount)}
-              </strong>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <span className="rounded-full border border-[#d6dceb] bg-white px-2 py-1 text-[10px] font-extrabold text-[#16294d]">
-                {percentOfSale === null ? "% pending" : `${percentOfSale.toFixed(1)}% sale`}
-              </span>
-              <span className="rounded-full border border-[#d6dceb] bg-white px-2 py-1 text-[10px] font-extrabold text-[#16294d]">
-                {costPerSqft === null ? "$/sqft pending" : `${currency(costPerSqft)}/sqft`}
-              </span>
-            </div>
-          </Link>
-        );
-      })}
-    </div>
+              </div>
+              <div className="mt-1 truncate text-[11px] font-bold text-[#69746f]">{phase.name}</div>
+              <div className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#9aa1b2]">
+                Spent
+              </div>
+              <div className="mt-1 text-sm font-extrabold text-[#16294d]">{currency(spentAmount)}</div>
+            </Link>
+          );
+        })}
+      </div>
+    </details>
   );
 }
 
@@ -1341,6 +1329,24 @@ function SelectedPhasePanel({
 
   return (
     <section className="mt-3 overflow-hidden rounded-[12px] border border-[#e3e1d7] bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e3e1d7] bg-[#fbfaf7] px-3 py-3">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#e23b2a]">
+            Current phase
+          </p>
+          <h3 className="mt-1 font-['Barlow_Condensed',Barlow,sans-serif] text-2xl font-bold uppercase leading-none text-[#16294d]">
+            {phase.key === "pre" ? "Pre" : `P${phase.label}`} · {phase.name}
+          </h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#16294d]">
+            {currency(phase.actual?.spentAmount ?? 0)} spent
+          </span>
+          <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#16294d]">
+            {chargeRows.length} line items
+          </span>
+        </div>
+      </div>
       <div className="p-3">
         <div className="overflow-hidden rounded-[10px] border border-[#e3e1d7]">
           <div className="grid grid-cols-[2fr_1fr_1fr_1.1fr_1.2fr_1fr_112px_52px] border-b border-[#e3e1d7] bg-[#fbfaf7] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
