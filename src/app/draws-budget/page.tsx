@@ -983,7 +983,7 @@ function HouseCard({
             }
             emphasis={remainingMoney !== null && remainingMoney < 0 ? "alert" : "secondary"}
           />
-          <MiniPhaseStrip house={house} />
+          <MiniPhaseStrip house={house} selectedPhase={selectedPhase} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             <Link
@@ -1016,8 +1016,6 @@ function HouseCard({
             schedulingStatuses={schedulingStatuses}
           />
 
-          <PhaseSelectorStrip house={house} selectedPhase={selectedPhase} />
-
           <SourceTruthPanel house={house} />
         </div>
       ) : null}
@@ -1025,7 +1023,13 @@ function HouseCard({
   );
 }
 
-function MiniPhaseStrip({ house }: { house: HouseView }) {
+function MiniPhaseStrip({
+  house,
+  selectedPhase,
+}: {
+  house: HouseView;
+  selectedPhase: PhaseView;
+}) {
   return (
     <div className="rounded-[10px] border border-[#e3e1d7] bg-white px-3 py-2">
       <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
@@ -1034,7 +1038,7 @@ function MiniPhaseStrip({ house }: { house: HouseView }) {
       <div className="mt-2 grid grid-cols-7 gap-1.5">
         {house.phases.map((phase) => {
           const label = phase.key === "pre" ? "Pre" : `P${phase.label}`;
-          const isCurrent = phase.key === house.currentPhase.key;
+          const isSelected = phase.key === selectedPhase.key;
           const overBudget = isPhaseOverBudget(phase);
           const hasMoney = phaseHasMoney(phase);
           const toneClassName = overBudget
@@ -1044,14 +1048,16 @@ function MiniPhaseStrip({ house }: { house: HouseView }) {
               : "border-[#e3e1d7] bg-[#fbfaf7] text-[#7b8298]";
 
           return (
-            <span
+            <Link
               className={`grid h-8 place-items-center rounded-[7px] border text-[10px] font-extrabold ${
-                isCurrent ? "ring-2 ring-[#16294d] ring-offset-1" : ""
-              } ${toneClassName}`}
+                isSelected ? "ring-2 ring-[#16294d] ring-offset-1" : ""
+              } ${toneClassName} transition hover:border-[#16294d]/40 hover:bg-white`}
+              href={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${phase.key}&details=1`}
               key={phase.key}
+              prefetch={false}
             >
               {label}
-            </span>
+            </Link>
           );
         })}
       </div>
@@ -1227,89 +1233,6 @@ function SummaryMetric({
         <div className="mt-1 text-[11px] font-bold text-[#7b8298]">{subValue}</div>
       ) : null}
     </div>
-  );
-}
-
-function PhaseSelectorStrip({
-  house,
-  selectedPhase,
-}: {
-  house: HouseView;
-  selectedPhase: PhaseView;
-}) {
-  const selectedLabel = selectedPhase.key === "pre" ? "Pre" : `P${selectedPhase.label}`;
-  const selectedSpent = selectedPhase.actual?.spentAmount ?? 0;
-
-  return (
-    <details className="group mt-3 rounded-[12px] border border-[#e3e1d7] bg-white p-3 [&>summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#9aa1b2]">
-            All phases
-          </p>
-          <p className="mt-1 text-sm font-extrabold text-[#16294d]">
-            Viewing {selectedLabel} · {selectedPhase.name} · {currency(selectedSpent)} spent
-          </p>
-        </div>
-        <span className="rounded-full bg-[#16294d] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white">
-          <span className="group-open:hidden">Change phase</span>
-          <span className="hidden group-open:inline">Close phases</span>
-        </span>
-      </summary>
-
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
-        {house.phases.map((phase) => {
-          const isSelected = phase.key === selectedPhase.key;
-          const label = phase.key === "pre" ? "Pre" : `P${phase.label}`;
-          const hasMoney = phaseHasMoney(phase);
-          const overBudget = isPhaseOverBudget(phase);
-          const spentAmount = phase.actual?.spentAmount ?? 0;
-          const dotClassName = overBudget
-            ? "bg-[#e23b2a]"
-            : hasMoney
-              ? "bg-[#2e9166]"
-              : "bg-[#c7c9c1]";
-          const statusLabel = isSelected ? "Open" : overBudget ? "Review" : hasMoney ? "Spent" : "Empty";
-          const statusClassName = isSelected
-            ? "bg-[#16294d] text-white"
-            : overBudget
-              ? "bg-[#fdebea] text-[#9d251c]"
-              : hasMoney
-                ? "bg-[#eaf7f0] text-[#1f6f4b]"
-                : "bg-[#f2f1ea] text-[#7b8298]";
-
-          return (
-            <Link
-              className={`rounded-[10px] border bg-white px-3 py-2.5 transition hover:border-[#16294d]/40 hover:bg-[#fbfaf7] ${
-                isSelected
-                  ? "border-[#16294d] shadow-[0_12px_26px_-22px_rgba(14,27,54,0.75)] ring-2 ring-[#16294d]/10"
-                  : "border-[#e3e1d7]"
-              }`}
-              href={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${phase.key}&details=1`}
-              key={phase.key}
-              prefetch={false}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${dotClassName}`} />
-                  <span className="font-['Barlow_Condensed',Barlow,sans-serif] text-lg font-bold text-[#16294d]">
-                    {label}
-                  </span>
-                </span>
-                <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] ${statusClassName}`}>
-                  {statusLabel}
-                </span>
-              </div>
-              <div className="mt-1 truncate text-[11px] font-bold text-[#69746f]">{phase.name}</div>
-              <div className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#9aa1b2]">
-                Spent
-              </div>
-              <div className="mt-1 text-sm font-extrabold text-[#16294d]">{currency(spentAmount)}</div>
-            </Link>
-          );
-        })}
-      </div>
-    </details>
   );
 }
 
