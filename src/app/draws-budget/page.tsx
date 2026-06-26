@@ -999,6 +999,7 @@ function HouseCard({
             <Link
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
               href={sourceTruthHref}
+              prefetch={false}
             >
               Source Truth
             </Link>
@@ -1009,6 +1010,7 @@ function HouseCard({
                   : "bg-[#16294d] text-white"
               }`}
               href={rowHref}
+              prefetch={false}
             >
               {showDetails ? "Collapse" : "Open Details"}
             </Link>
@@ -1260,6 +1262,7 @@ function PhaseSelectorStrip({
             }`}
             href={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${phase.key}&details=1`}
             key={phase.key}
+            prefetch={false}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2">

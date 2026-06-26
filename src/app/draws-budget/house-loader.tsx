@@ -56,10 +56,6 @@ function anchorIdForHouse(id: string) {
   return `house-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
-function sourceTruthAnchorIdForHouse(id: string) {
-  return `source-truth-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-}
-
 function HouseStatusCard({
   active,
   count,
@@ -177,7 +173,133 @@ function MiniPhaseStrip({ house }: { house: DrawsDashboardHouse }) {
   );
 }
 
-function HouseCard({ house, index }: { house: DrawsDashboardHouse; index: number }) {
+function SourceTruthValue({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-[10px] border border-[#e3e1d7] bg-[#fbfaf7] px-3 py-2">
+      <div className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#9aa1b2]">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-extrabold text-[#16294d]">{value}</div>
+    </div>
+  );
+}
+
+function SourceTruthQuickPanel({
+  house,
+  onClose,
+}: {
+  house: DrawsDashboardHouse;
+  onClose: () => void;
+}) {
+  const currentPhase = currentPhaseFor(house);
+  const docs = [
+    {
+      label: "Contract",
+      status: house.contractFileName ? "Added" : "Missing",
+      value: house.contractFileName ?? "Upload contract",
+    },
+    {
+      label: "Draw Sheet",
+      status: "Next",
+      value: "Add CFS or Rally sheet",
+    },
+    {
+      label: "Bank Draw",
+      status: "Next",
+      value: "Add bank draw schedule",
+    },
+    {
+      label: "Holdback",
+      status: "Next",
+      value: "Add holdback rule",
+    },
+  ];
+
+  return (
+    <div className="border-t border-[#e3e1d7] bg-[#fbfaf7] px-4 pb-4 pt-3">
+      <div className="rounded-[14px] border border-[#d6dceb] bg-white p-4 shadow-[0_10px_28px_-24px_rgba(14,27,54,0.55)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#e23b2a]">
+              Source of Truth
+            </div>
+            <h3 className="mt-1 font-['Barlow_Condensed',Barlow,sans-serif] text-[26px] font-bold uppercase leading-none tracking-[0.03em] text-[#16294d]">
+              {house.house}
+            </h3>
+            <p className="mt-1 text-sm font-bold text-[#7b8298]">
+              Fast read from cached project data. Full setup stays available when needed.
+            </p>
+          </div>
+          <button
+            className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2 md:grid-cols-4">
+          {docs.map((doc) => (
+            <div
+              className="rounded-[11px] border border-[#e3e1d7] bg-white p-3"
+              key={doc.label}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#9aa1b2]">
+                  {doc.label}
+                </div>
+                <span
+                  className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.08em] ${
+                    doc.status === "Added"
+                      ? "bg-[#eaf7f0] text-[#1f6f4b]"
+                      : "bg-[#fff6df] text-[#9a6500]"
+                  }`}
+                >
+                  {doc.status}
+                </span>
+              </div>
+              <div className="mt-2 text-sm font-extrabold text-[#16294d]">{doc.value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 grid gap-2 md:grid-cols-3 lg:grid-cols-6">
+          <SourceTruthValue label="Sold price" value={currency(house.soldPrice)} />
+          <SourceTruthValue
+            label="Square feet"
+            value={house.squareFootage ? house.squareFootage.toLocaleString() : "Pending"}
+          />
+          <SourceTruthValue label="City" value={house.contractCity ?? house.city ?? "Pending"} />
+          <SourceTruthValue label="Total spent" value={currency(house.totalSpent)} />
+          <SourceTruthValue label="Current phase" value={phaseDisplayName(currentPhase)} />
+          <SourceTruthValue
+            label="Reader status"
+            value={house.contractSourceStatus ?? "Manual review"}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HouseCard({
+  house,
+  index,
+  onToggleSourceTruth,
+  sourceTruthOpen,
+}: {
+  house: DrawsDashboardHouse;
+  index: number;
+  onToggleSourceTruth: () => void;
+  sourceTruthOpen: boolean;
+}) {
   const accent = index % 3 === 0 ? "#e6aa14" : "#27a0bd";
   const currentPhase = currentPhaseFor(house);
   const pricePerSqft =
@@ -198,7 +320,6 @@ function HouseCard({ house, index }: { house: DrawsDashboardHouse; index: number
   const activePhase = currentPhase?.key === "pre" ? "Pre" : `P${currentPhase?.label ?? "1"}`;
   const detailPhase = currentPhase?.key ?? house.currentPhaseKey;
   const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${detailPhase}&details=1`;
-  const sourceTruthHref = `${detailHref}#${sourceTruthAnchorIdForHouse(house.id)}`;
 
   return (
     <article
@@ -271,21 +392,26 @@ function HouseCard({ house, index }: { house: DrawsDashboardHouse; index: number
           <MiniPhaseStrip house={house} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <Link
+            <button
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
-              href={sourceTruthHref}
+              onClick={onToggleSourceTruth}
+              type="button"
             >
-              Source Truth
-            </Link>
+              {sourceTruthOpen ? "Hide Truth" : "Source Truth"}
+            </button>
             <Link
               className="rounded-[9px] bg-[#16294d] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white"
               href={detailHref}
+              prefetch={false}
             >
               Open Details
             </Link>
           </div>
         </div>
       </div>
+      {sourceTruthOpen ? (
+        <SourceTruthQuickPanel house={house} onClose={onToggleSourceTruth} />
+      ) : null}
     </article>
   );
 }
@@ -307,6 +433,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
   const [data, setData] = useState<DrawsDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [sourceTruthHouseId, setSourceTruthHouseId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -470,7 +597,15 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
       {data && data.houses.length > 0 ? (
         <section className="space-y-4">
           {data.houses.map((house, index) => (
-            <HouseCard house={house} index={index} key={house.id} />
+            <HouseCard
+              house={house}
+              index={index}
+              key={house.id}
+              onToggleSourceTruth={() =>
+                setSourceTruthHouseId((current) => (current === house.id ? null : house.id))
+              }
+              sourceTruthOpen={sourceTruthHouseId === house.id}
+            />
           ))}
         </section>
       ) : null}
