@@ -1326,10 +1326,15 @@ function SelectedPhasePanel({
     ...row,
     schedule: schedulingStatuses.get(`${house.house}:${phase.key}:${row.item}`) ?? null,
   }));
+  const phaseSpent = phase.actual?.spentAmount ?? 0;
+  const spentPerSqft =
+    house.squareFootage && house.squareFootage > 0 ? phaseSpent / house.squareFootage : null;
+  const percentOfSold =
+    house.soldPrice && house.soldPrice > 0 ? (phaseSpent / house.soldPrice) * 100 : null;
 
   return (
     <section className="mt-3 overflow-hidden rounded-[12px] border border-[#e3e1d7] bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e3e1d7] bg-[#fbfaf7] px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e3e1d7] bg-[#fbfaf7] px-3 py-3">
         <div>
           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#e23b2a]">
             Current phase
@@ -1338,13 +1343,41 @@ function SelectedPhasePanel({
             {phase.key === "pre" ? "Pre" : `P${phase.label}`} · {phase.name}
           </h3>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#16294d]">
-            {currency(phase.actual?.spentAmount ?? 0)} spent
-          </span>
-          <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#16294d]">
-            {chargeRows.length} line items
-          </span>
+        <div className="flex flex-wrap items-stretch gap-2">
+          <div className="min-w-[172px] rounded-[12px] border border-[#d6dceb] bg-white px-4 py-2 shadow-[0_10px_22px_-20px_rgba(14,27,54,0.65)]">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#9aa1b2]">
+              Spent
+            </div>
+            <div className="mt-1 text-2xl font-extrabold leading-none text-[#16294d]">
+              {currency(phaseSpent)}
+            </div>
+          </div>
+          <div className="grid min-w-[250px] grid-cols-2 gap-2">
+            <div className="rounded-[12px] border border-[#d6dceb] bg-white px-3 py-2">
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
+                Per sqft
+              </div>
+              <div className="mt-1 text-sm font-extrabold text-[#16294d]">
+                {spentPerSqft === null ? "Pending" : `${currency(spentPerSqft)}/sqft`}
+              </div>
+            </div>
+            <div className="rounded-[12px] border border-[#d6dceb] bg-white px-3 py-2">
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
+                Of sold
+              </div>
+              <div className="mt-1 text-sm font-extrabold text-[#16294d]">
+                {percentOfSold === null ? "Pending" : `${percentOfSold.toFixed(1)}%`}
+              </div>
+            </div>
+          </div>
+          <div className="rounded-[12px] border border-[#d6dceb] bg-white px-3 py-2">
+            <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
+              Items
+            </div>
+            <div className="mt-1 text-sm font-extrabold text-[#16294d]">
+              {chargeRows.length}
+            </div>
+          </div>
         </div>
       </div>
       <div className="p-3">
