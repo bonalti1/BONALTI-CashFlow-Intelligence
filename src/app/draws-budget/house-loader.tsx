@@ -22,6 +22,17 @@ type DrawsDashboardResponse = {
   view: "active" | "completed";
 };
 
+type DrawsRendersResponse = {
+  renders: Array<{
+    houseId: string;
+    house: string;
+    renderImageUrl: string | null;
+    source: "manual" | "scheduling" | "missing";
+    updatedAt: string | null;
+  }>;
+  status: "ok";
+};
+
 type HouseListView = "active" | "completed";
 
 function currency(value: number | null | undefined) {
@@ -291,11 +302,13 @@ function SourceTruthQuickPanel({
 
 function HouseCard({
   house,
+  imageUrl,
   index,
   onToggleSourceTruth,
   sourceTruthOpen,
 }: {
   house: DrawsDashboardHouse;
+  imageUrl: string | null;
   index: number;
   onToggleSourceTruth: () => void;
   sourceTruthOpen: boolean;
@@ -336,7 +349,7 @@ function HouseCard({
             contractPrice={house.contractPrice}
             contractSquareFootage={house.contractSquareFootage}
             contractSourceStatus={house.contractSourceStatus}
-            imageUrl={house.renderImageUrl}
+            imageUrl={imageUrl}
             qboBankAccountId={house.id}
             returnTo={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${detailPhase}&details=0`}
           />
@@ -433,6 +446,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
   const [data, setData] = useState<DrawsDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [renderUrls, setRenderUrls] = useState<Record<string, string | null>>({});
   const [sourceTruthHouseId, setSourceTruthHouseId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -465,6 +479,43 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
       active = false;
     };
   }, [view]);
+
+  useEffect(() => {
+    if (!data?.houses.length) {
+      return;
+    }
+
+    let active = true;
+
+    fetch("/api/draws-renders")
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        return (await response.json()) as DrawsRendersResponse;
+      })
+      .then((payload) => {
+        if (!active || !payload) {
+          return;
+        }
+
+        setRenderUrls(
+          Object.fromEntries(
+            payload.renders.map((render) => [render.houseId, render.renderImageUrl]),
+          ),
+        );
+      })
+      .catch(() => {
+        if (active) {
+          setRenderUrls({});
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [data?.houses]);
 
   async function loadCards(force = false) {
     setRefreshing(true);
@@ -599,6 +650,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
           {data.houses.map((house, index) => (
             <HouseCard
               house={house}
+              imageUrl={house.renderImageUrl ?? renderUrls[house.id] ?? null}
               index={index}
               key={house.id}
               onToggleSourceTruth={() =>
