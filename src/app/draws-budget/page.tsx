@@ -1115,13 +1115,14 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
     { label: "Current phase", value: phaseDisplayName(house.currentPhase) },
     { label: "Reader status", value: house.contractSourceStatus ?? "Manual review" },
   ];
+  const addedDocCount = docs.filter((doc) => doc.status === "Added").length;
 
   return (
-    <section
-      className="mb-3 rounded-[14px] border border-[#d6dceb] bg-[#fbfaf7] p-4"
+    <details
+      className="group mb-3 rounded-[14px] border border-[#d6dceb] bg-[#fbfaf7] p-4 [&>summary::-webkit-details-marker]:hidden"
       id={sourceTruthAnchorIdForHouse(house.id)}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#e23b2a]">
             Source of Truth
@@ -1130,6 +1131,21 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
             {house.house}
           </h3>
         </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#16294d]">
+            {addedDocCount}/{docs.length} docs
+          </span>
+          <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#16294d]">
+            {currency(house.soldPrice)}
+          </span>
+          <span className="rounded-full bg-[#16294d] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white">
+            <span className="group-open:hidden">Open</span>
+            <span className="hidden group-open:inline">Close</span>
+          </span>
+        </div>
+      </summary>
+
+      <div className="mt-4 flex justify-end">
         <Link
           className="rounded-[9px] bg-[#16294d] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.1em] text-white"
           href={`/setup-inputs#${setupAnchorIdForHouse(house.id)}`}
@@ -1187,7 +1203,7 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
           ))}
         </div>
       </div>
-    </section>
+    </details>
   );
 }
 
