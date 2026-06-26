@@ -703,7 +703,13 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
 
   const schedulingInput =
     detailsOpen && selectedHouseId
-      ? houses.filter((house) => house.id === selectedHouseId)
+      ? houses.map((house) =>
+          house.id === selectedHouseId
+            ? house
+            : {
+                house: house.house,
+              },
+        )
       : houses.map((house) => ({ house: house.house }));
   const emptySchedulingMaps = {
     completion: new Map(),
