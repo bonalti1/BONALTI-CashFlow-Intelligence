@@ -206,33 +206,38 @@ export async function getHouseDashboardSummaries() {
     order by project_number asc nulls last, house_name
   `;
 
-  return rows.map((row): HouseDashboardSummary => ({
-    id: row.house_id,
-    house: row.house_name,
-    displayName: row.display_name,
-    bank: row.bank_name,
-    city: row.city,
-    soldPrice: row.sold_price === null ? null : Number(row.sold_price),
-    squareFootage: row.square_footage,
-    totalSpent: Number(row.total_spent),
-    progress: row.progress,
-    currentPhaseKey: row.current_phase_key,
-    readyPhases: row.ready_phases,
-    needsReview: row.needs_review,
-    phases: row.phases,
-    renderImageUrl: row.render_image_url,
-    contractFileName: row.contract_file_name,
-    contractUploadedAt: row.contract_uploaded_at?.toISOString() ?? null,
-    contractPrice: row.contract_price === null ? null : Number(row.contract_price),
-    contractSquareFootage: row.contract_square_footage,
-    contractCity: row.contract_city,
-    contractSourceStatus: row.contract_source_status,
-    projectStatus: row.project_status,
-    projectNumber: row.project_number,
-    holdbackAmount: row.holdback_amount === null ? null : Number(row.holdback_amount),
-    holdbackNotes: row.holdback_notes,
-    refreshedAt: row.refreshed_at.toISOString(),
-  }));
+  return rows.map((row): HouseDashboardSummary => {
+    const hasContractSource = Boolean(row.contract_file_name);
+
+    return {
+      id: row.house_id,
+      house: row.house_name,
+      displayName: row.display_name,
+      bank: row.bank_name,
+      city: hasContractSource ? row.contract_city : null,
+      soldPrice:
+        hasContractSource && row.sold_price !== null ? Number(row.sold_price) : null,
+      squareFootage: hasContractSource ? row.contract_square_footage : null,
+      totalSpent: Number(row.total_spent),
+      progress: row.progress,
+      currentPhaseKey: row.current_phase_key,
+      readyPhases: row.ready_phases,
+      needsReview: row.needs_review,
+      phases: row.phases,
+      renderImageUrl: row.render_image_url,
+      contractFileName: row.contract_file_name,
+      contractUploadedAt: row.contract_uploaded_at?.toISOString() ?? null,
+      contractPrice: row.contract_price === null ? null : Number(row.contract_price),
+      contractSquareFootage: row.contract_square_footage,
+      contractCity: row.contract_city,
+      contractSourceStatus: row.contract_source_status,
+      projectStatus: row.project_status,
+      projectNumber: row.project_number,
+      holdbackAmount: row.holdback_amount === null ? null : Number(row.holdback_amount),
+      holdbackNotes: row.holdback_notes,
+      refreshedAt: row.refreshed_at.toISOString(),
+    };
+  });
 }
 
 export async function updateHouseDashboardProjectIdentity({
