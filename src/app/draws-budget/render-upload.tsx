@@ -154,7 +154,7 @@ export function ProjectRenderUpload({
         type="file"
       />
       <button
-        className={`relative block h-[76px] w-full overflow-hidden rounded-[10px] border bg-white text-left shadow-[0_8px_18px_-20px_rgba(14,27,54,0.65)] transition ${
+        className={`relative block h-[84px] w-full overflow-hidden rounded-[10px] border bg-white text-left shadow-[0_8px_18px_-20px_rgba(14,27,54,0.65)] transition ${
           isDragging ? "border-[#2f9b72] ring-2 ring-[#2f9b72]/25" : "border-[#d8d5ca]"
         }`}
         onClick={() => inputRef.current?.click()}

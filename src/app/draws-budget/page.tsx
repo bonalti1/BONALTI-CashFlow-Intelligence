@@ -868,7 +868,7 @@ function HouseCard({
     >
       <div className="relative block px-4 py-4 transition hover:bg-[#fbfaf7]">
         <div className="absolute bottom-0 left-0 top-0 w-1" style={{ backgroundColor: accent }} />
-        <div className="grid gap-3 lg:grid-cols-[104px_1.1fr_0.72fr_0.72fr_0.72fr_1.25fr_130px] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[116px_1.1fr_0.72fr_0.72fr_0.72fr_1.25fr_116px] lg:items-center">
           <ProjectRenderUpload
             houseName={house.house}
             contractCity={house.contractCity}
@@ -883,7 +883,7 @@ function HouseCard({
 
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-extrabold text-[#16294d]">
+              <h2 className="text-[22px] font-extrabold leading-tight text-[#16294d]">
                 {house.displayName ?? house.house}
               </h2>
               {house.projectNumber ? (
@@ -937,10 +937,13 @@ function HouseCard({
           <MiniPhaseStrip house={house} selectedPhase={selectedPhase} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <span className="w-full rounded-[9px] border border-[#b9dec9] bg-[#eaf7f0] px-3 py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#1f6f4b]">
-              {house.actualBankBalance === null
-                ? "Bank not mapped"
-                : `Bank balance ${currency(house.actualBankBalance)}`}
+            <span className="w-full rounded-[8px] border border-[#b9dec9] bg-[#eaf7f0] px-2 py-1.5 text-center uppercase text-[#1f6f4b]">
+              <span className="block text-[8px] font-extrabold tracking-[0.1em]">Plaid balance</span>
+              <span className="mt-0.5 block text-[10px] font-extrabold tracking-[0.04em]">
+                {house.actualBankBalance === null
+                  ? "Not mapped"
+                  : currency(house.actualBankBalance)}
+              </span>
             </span>
             <Link
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
