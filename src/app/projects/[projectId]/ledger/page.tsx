@@ -3,6 +3,7 @@ import {
   ArrowDownLeft,
   ArrowLeft,
   ArrowUpRight,
+  BadgeDollarSign,
   CircleDollarSign,
   RefreshCw,
 } from "lucide-react";
@@ -17,7 +18,10 @@ export const dynamic = "force-dynamic";
 
 type ProjectLedgerPageProps = {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ view?: string }>;
 };
+
+type LedgerView = "all" | "expenses" | "transfer_in" | "transfer_out";
 
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -44,8 +48,19 @@ function transactionTone(transaction: ProjectLedgerTransaction) {
   return "border-[#d6dceb] bg-[#f5f7fb] text-[#16294d]";
 }
 
-export default async function ProjectLedgerPage({ params }: ProjectLedgerPageProps) {
+export default async function ProjectLedgerPage({
+  params,
+  searchParams,
+}: ProjectLedgerPageProps) {
   const { projectId } = await params;
+  const query = await searchParams;
+  const requestedView = query.view;
+  const view: LedgerView =
+    requestedView === "expenses" ||
+    requestedView === "transfer_in" ||
+    requestedView === "transfer_out"
+      ? requestedView
+      : "all";
   const decodedProjectId = decodeURIComponent(projectId);
   const [summaries, transactions] = await Promise.all([
     getHouseDashboardSummaries(),
@@ -65,6 +80,27 @@ export default async function ProjectLedgerPage({ params }: ProjectLedgerPagePro
     .reduce((total, transaction) => total + Math.abs(transaction.totalAmount), 0);
   const projectName = project?.displayName ?? project?.house ?? "Project";
   const returnHref = `/draws-budget#house-${decodedProjectId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const visibleTransactions =
+    view === "all"
+      ? transactions
+      : view === "expenses"
+        ? expenseTransactions
+        : transactions.filter((transaction) => transaction.direction === view);
+  const ledgerBaseHref = `/projects/${encodeURIComponent(decodedProjectId)}/ledger`;
+  const ledgerViews: Array<{ label: string; value: LedgerView; count: number }> = [
+    { label: "All activity", value: "all", count: transactions.length },
+    { label: "Expenses", value: "expenses", count: expenseTransactions.length },
+    {
+      label: "Transfers in",
+      value: "transfer_in",
+      count: transactions.filter((transaction) => transaction.direction === "transfer_in").length,
+    },
+    {
+      label: "Transfers out",
+      value: "transfer_out",
+      count: transactions.filter((transaction) => transaction.direction === "transfer_out").length,
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-[#f6f5ef] text-[#16294d]">
@@ -106,7 +142,15 @@ export default async function ProjectLedgerPage({ params }: ProjectLedgerPagePro
       </header>
 
       <div className="mx-auto max-w-[1180px] px-5 py-6">
-        <section className="grid gap-3 md:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric
+            detail="Contract or approved manual source"
+            icon={BadgeDollarSign}
+            label="Sold price"
+            value={project?.soldPrice === null || project?.soldPrice === undefined
+              ? "Pending"
+              : currency(project.soldPrice)}
+          />
           <Metric
             detail={`${expenseTransactions.length} cost transactions`}
             icon={CircleDollarSign}
@@ -131,17 +175,38 @@ export default async function ProjectLedgerPage({ params }: ProjectLedgerPagePro
 
         <section className="mt-5 overflow-hidden rounded-[12px] border border-[#e3e1d7] bg-white">
           <div className="border-b border-[#e3e1d7] px-5 py-4">
-            <h2 className="text-lg font-extrabold">All QuickBooks activity</h2>
-            <p className="mt-1 text-sm font-semibold text-[#7b8298]">
-              Expenses affect Project Spent. Transfers only explain where cash moved.
-            </p>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-extrabold">QuickBooks activity</h2>
+                <p className="mt-1 text-sm font-semibold text-[#7b8298]">
+                  Expenses affect Project Spent. Transfers only explain where cash moved.
+                </p>
+              </div>
+              <nav aria-label="Transaction filters" className="flex flex-wrap gap-2">
+                {ledgerViews.map((ledgerView) => (
+                  <Link
+                    className={`rounded-[8px] border px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.08em] ${
+                      view === ledgerView.value
+                        ? "border-[#16294d] bg-[#16294d] text-white"
+                        : "border-[#d6dceb] bg-white text-[#556078]"
+                    }`}
+                    href={ledgerView.value === "all"
+                      ? ledgerBaseHref
+                      : `${ledgerBaseHref}?view=${ledgerView.value}`}
+                    key={ledgerView.value}
+                  >
+                    {ledgerView.label} · {ledgerView.count}
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
 
-          {transactions.length === 0 ? (
+          {visibleTransactions.length === 0 ? (
             <div className="px-5 py-12 text-center">
-              <p className="font-extrabold">No synced transactions found for this project account.</p>
+              <p className="font-extrabold">No transactions found in this filter.</p>
               <p className="mt-2 text-sm font-semibold text-[#7b8298]">
-                Sync QuickBooks to pull the latest checks, expenses, and transfers.
+                Sync QuickBooks if you expect newer checks, expenses, or transfers.
               </p>
             </div>
           ) : (
@@ -159,7 +224,7 @@ export default async function ProjectLedgerPage({ params }: ProjectLedgerPagePro
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((transaction) => (
+                  {visibleTransactions.map((transaction) => (
                     <tr
                       className="border-t border-[#ece9df] text-sm"
                       key={`${transaction.source}-${transaction.id}`}
