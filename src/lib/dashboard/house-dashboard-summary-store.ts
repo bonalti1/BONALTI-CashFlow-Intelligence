@@ -89,7 +89,9 @@ function drawIsReady(draw: DrawPhaseRecord | null) {
   );
 }
 
-async function ensureHouseDashboardSummaryTable() {
+let houseDashboardSummaryTableReady: Promise<void> | null = null;
+
+async function initializeHouseDashboardSummaryTable() {
   await sql()`
     create table if not exists house_dashboard_summaries (
       house_id text primary key,
@@ -116,6 +118,15 @@ async function ensureHouseDashboardSummaryTable() {
     )
   `;
   await sql()`alter table house_dashboard_summaries add column if not exists project_status text not null default 'active'`;
+}
+
+function ensureHouseDashboardSummaryTable() {
+  houseDashboardSummaryTableReady ??= initializeHouseDashboardSummaryTable().catch((error) => {
+    houseDashboardSummaryTableReady = null;
+    throw error;
+  });
+
+  return houseDashboardSummaryTableReady;
 }
 
 export async function getHouseDashboardSummaries() {

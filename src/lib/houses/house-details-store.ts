@@ -35,7 +35,10 @@ export type HouseChangeOrder = {
   createdAt: string;
 };
 
-async function ensureHouseDetailsTable() {
+let houseDetailsTableReady: Promise<void> | null = null;
+let houseChangeOrdersTableReady: Promise<void> | null = null;
+
+async function initializeHouseDetailsTable() {
   await sql()`
     create table if not exists house_details (
       qbo_bank_account_id text primary key,
@@ -75,7 +78,16 @@ async function ensureHouseDetailsTable() {
   await sql()`alter table house_details add column if not exists project_status text not null default 'active'`;
 }
 
-async function ensureHouseChangeOrdersTable() {
+function ensureHouseDetailsTable() {
+  houseDetailsTableReady ??= initializeHouseDetailsTable().catch((error) => {
+    houseDetailsTableReady = null;
+    throw error;
+  });
+
+  return houseDetailsTableReady;
+}
+
+async function initializeHouseChangeOrdersTable() {
   await sql()`
     create table if not exists house_change_orders (
       id bigserial primary key,
@@ -88,6 +100,15 @@ async function ensureHouseChangeOrdersTable() {
       created_at timestamptz not null default now()
     )
   `;
+}
+
+function ensureHouseChangeOrdersTable() {
+  houseChangeOrdersTableReady ??= initializeHouseChangeOrdersTable().catch((error) => {
+    houseChangeOrdersTableReady = null;
+    throw error;
+  });
+
+  return houseChangeOrdersTableReady;
 }
 
 export async function getHouseDetailsMap() {

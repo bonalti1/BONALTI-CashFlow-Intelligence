@@ -107,7 +107,9 @@ async function writeLocalDrawStore(store: LocalDrawStore) {
   await writeFile(localDrawStorePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
 }
 
-async function ensureDrawTables() {
+let drawTablesReady: Promise<void> | null = null;
+
+async function initializeDrawTables() {
   await sql()`
     create table if not exists draw_phase_statuses (
       qbo_bank_account_id text not null,
@@ -161,6 +163,15 @@ async function ensureDrawTables() {
   await sql()`alter table draw_line_item_statuses add column if not exists received_at timestamptz`;
   await sql()`alter table draw_line_item_statuses add column if not exists notes text`;
   await sql()`alter table draw_line_item_statuses add column if not exists updated_at timestamptz not null default now()`;
+}
+
+function ensureDrawTables() {
+  drawTablesReady ??= initializeDrawTables().catch((error) => {
+    drawTablesReady = null;
+    throw error;
+  });
+
+  return drawTablesReady;
 }
 
 function isDrawPhaseKey(value: string): value is DrawPhaseKey {
@@ -315,6 +326,79 @@ export async function getDrawLineItemStatuses() {
       updated_at
     from draw_line_item_statuses
     order by house_name, phase_key, line_item_name
+  `;
+
+  for (const row of rows) {
+    statuses.set(`${row.qbo_bank_account_id}:${row.phase_key}:${row.line_item_key}`, {
+      qboBankAccountId: row.qbo_bank_account_id,
+      houseName: row.house_name,
+      phaseKey: row.phase_key,
+      lineItemKey: row.line_item_key,
+      lineItemName: row.line_item_name,
+      drawSubmitted: row.draw_submitted,
+      submittedAt: row.submitted_at?.toISOString() ?? null,
+      requestedAmount: numberOrNull(row.requested_amount),
+      drawReceived: row.draw_received,
+      receivedAmount: numberOrNull(row.received_amount),
+      receivedAt: row.received_at?.toISOString() ?? null,
+      notes: row.notes,
+      updatedAt: row.updated_at.toISOString(),
+    });
+  }
+
+  return statuses;
+}
+
+export async function getDrawLineItemStatusesForHouse(qboBankAccountId: string) {
+  const statuses = new Map<string, DrawLineItemRecord>();
+
+  if (!hasDatabaseUrl()) {
+    const allStatuses = await getDrawLineItemStatuses();
+
+    for (const [key, row] of allStatuses) {
+      if (row.qboBankAccountId === qboBankAccountId) {
+        statuses.set(key, row);
+      }
+    }
+
+    return statuses;
+  }
+
+  await ensureDrawTables();
+  const rows = await sql()<
+    Array<{
+      qbo_bank_account_id: string;
+      house_name: string;
+      phase_key: DrawPhaseKey;
+      line_item_key: string;
+      line_item_name: string;
+      draw_submitted: boolean;
+      submitted_at: Date | null;
+      requested_amount: string | null;
+      draw_received: boolean;
+      received_amount: string | null;
+      received_at: Date | null;
+      notes: string | null;
+      updated_at: Date;
+    }>
+  >`
+    select
+      qbo_bank_account_id,
+      house_name,
+      phase_key,
+      line_item_key,
+      line_item_name,
+      draw_submitted,
+      submitted_at,
+      requested_amount,
+      draw_received,
+      received_amount,
+      received_at,
+      notes,
+      updated_at
+    from draw_line_item_statuses
+    where qbo_bank_account_id = ${qboBankAccountId}
+    order by phase_key, line_item_name
   `;
 
   for (const row of rows) {
@@ -569,6 +653,71 @@ export async function getPhaseLineItemActuals() {
     qboFinancialSummaryTtlMs,
     loadPhaseLineItemActuals,
   );
+}
+
+export async function getPhaseLineItemActualsForHouse(
+  qboBankAccountId: string,
+  phaseKey: DrawPhaseKey,
+) {
+  const actuals = new Map<string, PhaseLineItemActual>();
+
+  if (!hasDatabaseUrl()) {
+    const allActuals = await getPhaseLineItemActuals();
+
+    for (const [key, row] of allActuals) {
+      if (row.bankAccountQboId === qboBankAccountId && row.phaseKey === phaseKey) {
+        actuals.set(key, row);
+      }
+    }
+
+    return actuals;
+  }
+
+  const rows = await sql()<
+    Array<{
+      bank_account_qbo_id: string;
+      phase_key: string;
+      qbo_account_id: string;
+      spent_amount: string;
+      transaction_count: number;
+      payee_names: string[];
+      last_txn_date: Date | null;
+    }>
+  >`
+    select
+      t.bank_account_qbo_id,
+      l.phase_key,
+      l.qbo_account_id,
+      sum(abs(t.total_amount)) as spent_amount,
+      count(*)::int as transaction_count,
+      array_remove(array_agg(distinct t.payee_name), null) as payee_names,
+      max(t.txn_date) as last_txn_date
+    from qbo_money_transactions t
+    join cfo_phase_line_items l
+      on l.qbo_account_id = any(t.expense_account_ids)
+    where t.bank_account_qbo_id = ${qboBankAccountId}
+      and l.phase_key = ${phaseKey}
+      and l.active = true
+    group by t.bank_account_qbo_id, l.phase_key, l.qbo_account_id
+  `;
+
+  for (const row of rows) {
+    if (!isDrawPhaseKey(row.phase_key)) {
+      continue;
+    }
+
+    actuals.set(`${row.bank_account_qbo_id}:${row.phase_key}:${row.qbo_account_id}`, {
+      bankAccountQboId: row.bank_account_qbo_id,
+      phaseKey: row.phase_key,
+      qboAccountId: row.qbo_account_id,
+      spentAmount: Number(row.spent_amount),
+      transactionCount: row.transaction_count,
+      payeeNames: row.payee_names ?? [],
+      lastTxnDate: row.last_txn_date?.toISOString().slice(0, 10) ?? null,
+    });
+  }
+
+  return actuals;
 }
 
 export async function saveDrawPhaseStatus({

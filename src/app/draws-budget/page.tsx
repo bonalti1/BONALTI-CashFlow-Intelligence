@@ -17,10 +17,8 @@ import {
 } from "@/lib/dashboard/house-dashboard-summary-store";
 import {
   drawPhaseKeys,
-  getDrawLineItemStatuses,
-  getDrawPhaseStatuses,
-  getHousePhaseActuals,
-  getPhaseLineItemActuals,
+  getDrawLineItemStatusesForHouse,
+  getPhaseLineItemActualsForHouse,
   getPhaseLineItemsByPhase,
   type DrawLineItemRecord,
   type DrawPhaseKey,
@@ -29,10 +27,6 @@ import {
   type PhaseLineItem,
   type PhaseLineItemActual,
 } from "@/lib/draws/draws-store";
-import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
-import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
-import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
-import { getSchedulingProjectVisualMap } from "@/lib/scheduling/status-store";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +76,6 @@ type HouseListView = "active" | "completed";
 
 const fastDataTimeoutMs = 1200;
 const detailDataTimeoutMs = 3000;
-const schedulingTimeoutMs = 900;
 
 function withDataTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = fastDataTimeoutMs) {
   let timeout: NodeJS.Timeout;
@@ -167,10 +160,6 @@ function shortDate(value: string | null | undefined) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-function accountName(account: QboAccount) {
-  return account.FullyQualifiedName ?? account.Name;
 }
 
 function scheduleStatusFor(actual: HousePhaseActual | null) {
@@ -485,108 +474,73 @@ async function getCollapsedHouseViews(forceRefresh = false) {
   return summaries.map(houseViewFromSummary);
 }
 
-async function getDetailedHouseViews(selectedHouseId: string | null) {
-  const [
-    snapshot,
-    houseDetails,
-    drawStatusesByPhase,
-    actualsByPhase,
-    drawLineItemStatuses,
-    phaseLineItemsByPhase,
-    phaseLineItemActuals,
-  ] = await Promise.all([
-    withDataTimeout(getAccountsSnapshot(), null, detailDataTimeoutMs),
-    withDataTimeout(getHouseDetailsMap(), new Map(), detailDataTimeoutMs),
-    withDataTimeout(getDrawPhaseStatuses(), new Map<string, DrawPhaseRecord>(), detailDataTimeoutMs),
-    withDataTimeout(getHousePhaseActuals(), new Map<string, HousePhaseActual>(), detailDataTimeoutMs),
-    withDataTimeout(getDrawLineItemStatuses(), new Map<string, DrawLineItemRecord>(), detailDataTimeoutMs),
-    withDataTimeout(getPhaseLineItemsByPhase(), new Map<DrawPhaseKey, PhaseLineItem[]>(), detailDataTimeoutMs),
-    withDataTimeout(getPhaseLineItemActuals(), new Map<string, PhaseLineItemActual>(), detailDataTimeoutMs),
+async function getDetailedHouseViews(
+  selectedHouseId: string | null,
+  requestedPhaseKey: DrawPhaseKey | null,
+) {
+  const summaries = await withDataTimeout(
+    getHouseDashboardSummaries(),
+    [],
+    detailDataTimeoutMs,
+  );
+  const houses = summaries.map(houseViewFromSummary);
+  const selectedHouse = houses.find((house) => house.id === selectedHouseId);
+
+  if (!selectedHouse) {
+    return houses;
+  }
+
+  const phaseKey =
+    requestedPhaseKey && selectedHouse.phases.some((phase) => phase.key === requestedPhaseKey)
+      ? requestedPhaseKey
+      : selectedHouse.currentPhase.key;
+  const [drawLineItemStatuses, phaseLineItemsByPhase, phaseLineItemActuals] = await Promise.all([
+    withDataTimeout(
+      getDrawLineItemStatusesForHouse(selectedHouse.id),
+      new Map<string, DrawLineItemRecord>(),
+      detailDataTimeoutMs,
+    ),
+    withDataTimeout(
+      getPhaseLineItemsByPhase(),
+      new Map<DrawPhaseKey, PhaseLineItem[]>(),
+      detailDataTimeoutMs,
+    ),
+    withDataTimeout(
+      getPhaseLineItemActualsForHouse(selectedHouse.id, phaseKey),
+      new Map<string, PhaseLineItemActual>(),
+      detailDataTimeoutMs,
+    ),
   ]);
-  const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
-  const houses = bankAccounts
-    .map((account) => {
-      const house = getConfirmedHouseName(account);
+  const phases = selectedHouse.phases.map((phase) => {
+    if (phase.key !== phaseKey) {
+      return phase;
+    }
 
-      if (!house) {
-        return null;
-      }
+    const lineItems = phaseLineItemsByPhase.get(phase.key) ?? [];
 
-      const details = houseDetails.get(account.Id);
-      const phases: PhaseView[] = drawPhaseKeys.map((key) => {
-        const actual = actualsByPhase.get(`${account.Id}:${key}`) ?? null;
-        const lineItems =
-          account.Id === selectedHouseId
-            ? phaseLineItemsByPhase.get(key) ?? []
-            : [];
+    return {
+      ...phase,
+      lineItems,
+      lineItemActuals: lineItems
+        .map((lineItem) =>
+          phaseLineItemActuals.get(`${selectedHouse.id}:${phase.key}:${lineItem.qboAccountId}`),
+        )
+        .filter((lineActual): lineActual is PhaseLineItemActual => Boolean(lineActual)),
+      lineItemDraws: lineItems
+        .map((lineItem) =>
+          drawLineItemStatuses.get(`${selectedHouse.id}:${phase.key}:${lineItem.qboAccountId}`),
+        )
+        .filter((lineDraw): lineDraw is DrawLineItemRecord => Boolean(lineDraw)),
+    };
+  });
+  const detailedHouse = {
+    ...selectedHouse,
+    phases,
+    currentPhase:
+      phases.find((phase) => phase.key === selectedHouse.currentPhase.key) ?? phases[0],
+  };
 
-        return {
-          key,
-          label: phaseLabels[key].label,
-          name: actual?.phaseName ?? phaseLabels[key].name,
-          scheduleStatus: scheduleStatusFor(actual),
-          actual,
-          lineItems,
-          lineItemActuals: lineItems
-            .map((lineItem) =>
-              phaseLineItemActuals.get(`${account.Id}:${key}:${lineItem.qboAccountId}`),
-            )
-            .filter((lineActual): lineActual is PhaseLineItemActual => Boolean(lineActual)),
-          lineItemDraws: lineItems
-            .map((lineItem) =>
-              drawLineItemStatuses.get(`${account.Id}:${key}:${lineItem.qboAccountId}`),
-            )
-            .filter((lineDraw): lineDraw is DrawLineItemRecord => Boolean(lineDraw)),
-          draw: drawStatusesByPhase.get(`${account.Id}:${key}`) ?? null,
-        };
-      });
-      const totalSpent = phases.reduce((total, phase) => total + (phase.actual?.spentAmount ?? 0), 0);
-      const readyPhases = phases.filter((phase) =>
-        phase.draw?.drawStatus === "ready" ||
-        phase.draw?.drawStatus === "submitted" ||
-        phase.draw?.drawStatus === "received"
-      ).length;
-      const needsReview = phases.filter((phase) =>
-        phase.actual?.status === "over_budget" || phase.actual?.status === "needs_house_setup"
-      ).length;
-      const currentPhase = currentPhaseFor(phases);
-
-      const contractSoldPrice = details?.currentContractPrice ?? details?.contractPrice ?? null;
-      const sourceSoldPrice = contractSoldPrice ?? details?.soldPrice ?? null;
-      const sourceSquareFootage = details?.contractSquareFootage ?? details?.squareFootage ?? null;
-      const sourceCity = details?.contractCity ?? details?.city ?? null;
-
-      const houseView: HouseView = {
-        id: account.Id,
-        house,
-        bank: accountName(account),
-        city: sourceCity,
-        soldPrice: sourceSoldPrice,
-        squareFootage: sourceSquareFootage,
-        totalSpent,
-        progress: progressFor(phases, sourceSoldPrice, totalSpent),
-        currentPhase,
-        readyPhases,
-        needsReview,
-        phases,
-        scheduleUrl: scheduleUrl(house),
-        renderImageUrl: details?.manualRenderImageUrl ?? null,
-        contractFileName: details?.contractFileName ?? null,
-        contractUploadedAt: details?.contractUploadedAt ?? null,
-        contractPrice: details?.contractPrice ?? null,
-        contractSquareFootage: details?.contractSquareFootage ?? null,
-        contractCity: details?.contractCity ?? null,
-        contractSourceStatus: details?.contractSourceStatus ?? null,
-        projectStatus: details?.projectStatus ?? "active",
-        completed: false,
-        completedAt: null,
-      };
-
-      return houseView;
-    })
-    .filter((house): house is HouseView => Boolean(house));
-
-  return houses.sort((a, b) => b.progress - a.progress || a.house.localeCompare(b.house));
+  return houses.map((house) => (house.id === detailedHouse.id ? detailedHouse : house));
 }
 
 function DrawsBudgetShell({ children }: { children: React.ReactNode }) {
@@ -678,35 +632,15 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
   }
 
   let houses: HouseView[] = detailsOpen
-    ? await getDetailedHouseViews(selectedHouseId)
+    ? await getDetailedHouseViews(selectedHouseId, selectedPhaseKey)
     : await getCollapsedHouseViews(forceRefresh);
 
   if (houses.length === 0) {
     houses = buildDemoHouses();
   }
 
-  const schedulingInput =
-    detailsOpen && selectedHouseId
-      ? houses.map((house) =>
-          house.id === selectedHouseId
-            ? house
-            : {
-                house: house.house,
-              },
-        )
-      : houses.map((house) => ({ house: house.house }));
-  const schedulingVisuals =
-    detailsOpen || listView === "completed"
-      ? await withDataTimeout(
-          getSchedulingProjectVisualMap(schedulingInput),
-          new Map(),
-          schedulingTimeoutMs,
-        )
-      : new Map();
-
   houses = houses.map((house) => ({
     ...house,
-    renderImageUrl: house.renderImageUrl ?? schedulingVisuals.get(house.house)?.renderImage ?? null,
     completed: house.projectStatus === "completed" || house.projectStatus === "closed_out",
   }));
 

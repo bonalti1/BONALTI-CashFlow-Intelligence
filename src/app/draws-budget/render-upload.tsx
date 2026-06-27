@@ -33,6 +33,8 @@ export function ProjectRenderUpload({
   const [isContractUploading, setIsContractUploading] = useState(false);
   const [showContractFields, setShowContractFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchedImageUrl, setFetchedImageUrl] = useState<string | null>(null);
+  const resolvedImageUrl = imageUrl ?? fetchedImageUrl;
   const contractIsReading = contractSourceStatus === "reading";
   const contractNeedsReview = contractSourceStatus === "needs_review";
   const contractButtonLabel = isContractUploading
@@ -58,6 +60,27 @@ export function ProjectRenderUpload({
 
     return () => window.clearTimeout(timeout);
   }, [contractIsReading]);
+
+  useEffect(() => {
+    if (imageUrl) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    fetch("/api/draws-renders", { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { renders?: Array<{ houseId: string; renderImageUrl: string | null }> } | null) => {
+        const render = payload?.renders?.find((item) => item.houseId === qboBankAccountId);
+
+        if (render?.renderImageUrl) {
+          setFetchedImageUrl(render.renderImageUrl);
+        }
+      })
+      .catch(() => null);
+
+    return () => controller.abort();
+  }, [imageUrl, qboBankAccountId]);
 
   function confirmContractFile(file: File) {
     return window.confirm(
@@ -283,12 +306,12 @@ export function ProjectRenderUpload({
         title={`Add render for ${houseName}`}
         type="button"
       >
-        {imageUrl ? (
+        {resolvedImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             alt={`${houseName} render`}
             className="h-full w-full object-contain object-center p-1.5"
-            src={imageUrl}
+            src={resolvedImageUrl}
           />
         ) : (
           <span className="grid h-full place-items-center px-2 text-center text-[10px] font-extrabold uppercase leading-4 tracking-[0.08em] text-[#9aa1b2]">
