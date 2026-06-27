@@ -4,7 +4,7 @@ import {
   getHouseDetailsMap,
   getHouseProjectDocuments,
 } from "@/lib/houses/house-details-store";
-import { createSupabaseStorageSignedUrl } from "@/lib/storage/supabase-storage";
+import { downloadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 
 const projectDocumentTypes = new Set(["bank_draw", "baseline", "supporting"]);
 
@@ -19,6 +19,20 @@ function dataUrlResponse(dataUrl: string, fileName: string, fileType: string | n
     headers: {
       "Content-Disposition": `inline; filename="${fileName.replaceAll('"', "")}"`,
       "Content-Type": fileType ?? match[1] ?? "application/octet-stream",
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
+
+function documentResponse(
+  bytes: ArrayBuffer,
+  fileName: string,
+  contentType: string,
+) {
+  return new Response(bytes, {
+    headers: {
+      "Content-Disposition": `inline; filename="${fileName.replaceAll('"', "")}"`,
+      "Content-Type": contentType,
       "Cache-Control": "private, no-store",
     },
   });
@@ -41,13 +55,17 @@ export async function GET(request: Request) {
     }
 
     if (detail.contractStoragePath) {
-      const signedUrl = await createSupabaseStorageSignedUrl({
+      const stored = await downloadSupabaseStorageObject({
         bucket: process.env.SUPABASE_CONTRACT_BUCKET ?? "house-contracts",
         path: detail.contractStoragePath,
       });
 
-      if (signedUrl) {
-        return NextResponse.redirect(signedUrl);
+      if (stored) {
+        return documentResponse(
+          stored.bytes,
+          detail.contractFileName,
+          detail.contractFileType ?? stored.contentType,
+        );
       }
     }
 
@@ -74,12 +92,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Document is not available." }, { status: 404 });
   }
 
-  const signedUrl = await createSupabaseStorageSignedUrl({
+  const stored = await downloadSupabaseStorageObject({
     bucket: process.env.SUPABASE_PROJECT_DOCUMENT_BUCKET ?? "project-documents",
     path: document.storagePath,
   });
 
-  return signedUrl
-    ? NextResponse.redirect(signedUrl)
+  return stored
+    ? documentResponse(stored.bytes, document.fileName, document.fileType || stored.contentType)
     : NextResponse.json({ message: "Document file could not be opened." }, { status: 404 });
 }

@@ -51,6 +51,7 @@ type HouseView = {
   house: string;
   displayName: string | null;
   bank: string;
+  bankBalance: number | null;
   city: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
@@ -401,6 +402,7 @@ function buildDemoHouses(): HouseView[] {
       house: house.house,
       displayName: null,
       bank: `${house.house} demo bank account`,
+      bankBalance: null,
       city: house.city,
       soldPrice: house.soldPrice,
       squareFootage: house.squareFootage,
@@ -448,6 +450,7 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
     house: summary.house,
     displayName: summary.displayName,
     bank: summary.bank,
+    bankBalance: summary.bankBalance,
     city: summary.city,
     soldPrice: summary.soldPrice,
     squareFootage: summary.squareFootage,
@@ -928,6 +931,9 @@ function HouseCard({
           <MiniPhaseStrip house={house} selectedPhase={selectedPhase} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <span className="w-full rounded-[9px] border border-[#b9dec9] bg-[#eaf7f0] px-3 py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#1f6f4b]">
+              QB balance {currency(house.bankBalance)}
+            </span>
             <Link
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
               href={sourceTruthHref}

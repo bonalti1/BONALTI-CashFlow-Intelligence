@@ -203,3 +203,36 @@ export async function createSupabaseStorageSignedUrl({
     ? signedPath
     : `${config.supabaseUrl}/storage/v1${signedPath.startsWith("/") ? "" : "/"}${signedPath}`;
 }
+
+export async function downloadSupabaseStorageObject({
+  bucket,
+  path,
+}: {
+  bucket: string;
+  path: string;
+}) {
+  const config = storageConfig();
+
+  if (!config) {
+    return null;
+  }
+
+  const response = await fetch(
+    `${config.supabaseUrl}/storage/v1/object/${bucket}/${path}`,
+    {
+      headers: {
+        apikey: config.serviceRoleKey,
+        Authorization: `Bearer ${config.serviceRoleKey}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return {
+    bytes: await response.arrayBuffer(),
+    contentType: response.headers.get("content-type") ?? "application/octet-stream",
+  };
+}

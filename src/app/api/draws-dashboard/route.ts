@@ -116,6 +116,7 @@ function summaryFromFallbackHouse(
       house: house.house,
       displayName: null,
       bank: `${house.house} demo bank account`,
+      bankBalance: null,
       city: house.city,
       soldPrice: house.soldPrice,
       squareFootage: house.squareFootage,

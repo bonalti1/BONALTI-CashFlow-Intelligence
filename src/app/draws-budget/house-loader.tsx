@@ -479,6 +479,9 @@ function HouseCard({
           <MiniPhaseStrip house={house} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <span className="w-full rounded-[9px] border border-[#b9dec9] bg-[#eaf7f0] px-3 py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#1f6f4b]">
+              QB balance {currency(house.bankBalance)}
+            </span>
             <button
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
               onClick={onToggleSourceTruth}

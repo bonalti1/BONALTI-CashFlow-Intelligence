@@ -24,6 +24,7 @@ export type HouseDashboardSummary = {
   house: string;
   displayName: string | null;
   bank: string;
+  bankBalance: number | null;
   city: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
@@ -102,6 +103,7 @@ async function initializeHouseDashboardSummaryTable() {
       house_name text not null,
       display_name text,
       bank_name text not null,
+      bank_balance numeric,
       city text,
       sold_price numeric,
       square_footage integer,
@@ -128,6 +130,7 @@ async function initializeHouseDashboardSummaryTable() {
   await sql()`alter table house_dashboard_summaries add column if not exists project_status text not null default 'active'`;
   await sql()`alter table house_dashboard_summaries add column if not exists project_number integer`;
   await sql()`alter table house_dashboard_summaries add column if not exists display_name text`;
+  await sql()`alter table house_dashboard_summaries add column if not exists bank_balance numeric`;
   await sql()`alter table house_dashboard_summaries add column if not exists holdback_amount numeric`;
   await sql()`alter table house_dashboard_summaries add column if not exists holdback_notes text`;
 }
@@ -153,6 +156,7 @@ export async function getHouseDashboardSummaries() {
       house_name: string;
       display_name: string | null;
       bank_name: string;
+      bank_balance: string | null;
       city: string | null;
       sold_price: string | null;
       square_footage: number | null;
@@ -181,6 +185,7 @@ export async function getHouseDashboardSummaries() {
       house_name,
       display_name,
       bank_name,
+      bank_balance,
       city,
       sold_price,
       square_footage,
@@ -214,6 +219,7 @@ export async function getHouseDashboardSummaries() {
       house: row.house_name,
       displayName: row.display_name,
       bank: row.bank_name,
+      bankBalance: row.bank_balance === null ? null : Number(row.bank_balance),
       city: hasContractSource ? row.contract_city : null,
       soldPrice:
         hasContractSource && row.sold_price !== null ? Number(row.sold_price) : null,
@@ -322,6 +328,7 @@ export async function refreshHouseDashboardSummaries() {
           house_name,
           display_name,
           bank_name,
+          bank_balance,
           city,
           sold_price,
           square_footage,
@@ -349,6 +356,7 @@ export async function refreshHouseDashboardSummaries() {
           ${house},
           ${details?.displayName ?? null},
           ${accountName(account)},
+          ${account.CurrentBalance ?? null},
           ${city},
           ${soldPrice},
           ${squareFootage},
@@ -375,6 +383,7 @@ export async function refreshHouseDashboardSummaries() {
           house_name = excluded.house_name,
           display_name = excluded.display_name,
           bank_name = excluded.bank_name,
+          bank_balance = excluded.bank_balance,
           city = excluded.city,
           sold_price = excluded.sold_price,
           square_footage = excluded.square_footage,
