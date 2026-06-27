@@ -8,9 +8,8 @@ import {
 
 import { saveDrawLineItemStatusAction } from "@/app/actions/draw-status";
 import {
-  saveHouseProjectNumberAction,
+  saveHouseProjectIdentityAction,
   saveHouseSourceFactsAction,
-  saveHouseProjectStatusAction,
 } from "@/app/actions/house-details";
 import { DrawsBudgetHouseLoader } from "@/app/draws-budget/house-loader";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
@@ -50,6 +49,7 @@ type PhaseView = {
 type HouseView = {
   id: string;
   house: string;
+  displayName: string | null;
   bank: string;
   city: string | null;
   soldPrice: number | null;
@@ -399,6 +399,7 @@ function buildDemoHouses(): HouseView[] {
     return {
       id: `demo-${house.house}`,
       house: house.house,
+      displayName: null,
       bank: `${house.house} demo bank account`,
       city: house.city,
       soldPrice: house.soldPrice,
@@ -445,6 +446,7 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
   return {
     id: summary.id,
     house: summary.house,
+    displayName: summary.displayName,
     bank: summary.bank,
     city: summary.city,
     soldPrice: summary.soldPrice,
@@ -749,6 +751,10 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
         <section className="space-y-4">
           {visibleHouses.map((house, index) => (
             <HouseCard
+              assignedProjectNumbers={houses
+                .filter((candidate) => candidate.id !== house.id)
+                .map((candidate) => candidate.projectNumber)
+                .filter((projectNumber): projectNumber is number => projectNumber !== null)}
               house={house}
               index={index}
               key={house.id}
@@ -809,11 +815,13 @@ function HouseStatusCard({
 }
 
 function HouseCard({
+  assignedProjectNumbers,
   house,
   index,
   selectedPhase,
   showDetails,
 }: {
+  assignedProjectNumbers: number[];
   house: HouseView;
   index: number;
   selectedPhase: PhaseView;
@@ -868,7 +876,7 @@ function HouseCard({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-extrabold text-[#16294d]">
-                {house.house}{house.projectNumber ? ` (${house.projectNumber})` : ""}
+                {house.displayName ?? house.house}{house.projectNumber ? ` (${house.projectNumber})` : ""}
               </h2>
               <span className="rounded-[7px] bg-[#eaf2ff] px-2.5 py-1 text-xs font-extrabold text-[#16294d]">
                 {activePhase}
@@ -947,7 +955,10 @@ function HouseCard({
             phase={selectedPhase}
           />
 
-          <SourceTruthPanel house={house} />
+          <SourceTruthPanel
+            assignedProjectNumbers={assignedProjectNumbers}
+            house={house}
+          />
         </div>
       ) : null}
     </article>
@@ -996,7 +1007,13 @@ function MiniPhaseStrip({
   );
 }
 
-function SourceTruthPanel({ house }: { house: HouseView }) {
+function SourceTruthPanel({
+  assignedProjectNumbers,
+  house,
+}: {
+  assignedProjectNumbers: number[];
+  house: HouseView;
+}) {
   const extracted = [
     { label: "Sold price", value: currency(house.soldPrice) },
     {
@@ -1015,6 +1032,12 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
     completed: "Completed",
     closed_out: "Closed out",
   };
+  const assignedProjectNumberSet = new Set(assignedProjectNumbers);
+  const highestProjectNumber = Math.max(120, house.projectNumber ?? 101, ...assignedProjectNumbers);
+  const projectNumberOptions = Array.from(
+    { length: Math.min(899, highestProjectNumber - 100 + 20) },
+    (_, index) => index + 101,
+  );
 
   return (
     <details
@@ -1027,7 +1050,7 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
             Source of Truth
           </p>
           <h3 className="mt-1 font-['Barlow_Condensed',Barlow,sans-serif] text-[28px] font-bold uppercase leading-none tracking-[0.03em] text-[#16294d]">
-            {house.house}{house.projectNumber ? ` (${house.projectNumber})` : ""}
+            {house.displayName ?? house.house}{house.projectNumber ? ` (${house.projectNumber})` : ""}
           </h3>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1047,12 +1070,20 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
       <SourceTruthDocuments
         contractFileName={house.contractFileName}
         houseName={house.house}
-        projectLabel={`${house.house}${house.projectNumber ? ` (${house.projectNumber})` : ""}`}
+        projectLabel={`${house.displayName ?? house.house}${house.projectNumber ? ` (${house.projectNumber})` : ""}`}
         qboBankAccountId={house.id}
       />
 
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <form action={saveHouseProjectNumberAction} className="mr-2 flex flex-wrap items-end gap-2">
+      <div className="mt-4 rounded-[12px] border border-[#d6dceb] bg-white p-4">
+        <div className="mb-3">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#e23b2a]">
+            Project Identity
+          </p>
+          <p className="mt-1 text-xs font-bold text-[#7b8298]">
+            The display name can change. QuickBooks stays linked to {house.house}.
+          </p>
+        </div>
+        <form action={saveHouseProjectIdentityAction} className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_150px_180px_auto] md:items-end">
           <input name="qboBankAccountId" type="hidden" value={house.id} />
           <input name="houseName" type="hidden" value={house.house} />
           <input
@@ -1061,36 +1092,39 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
             value={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`}
           />
           <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
-            Project number
+            Display name
             <input
-              className="mt-1 block h-9 w-28 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold text-[#16294d]"
-              defaultValue={house.projectNumber ?? ""}
-              inputMode="numeric"
-              min="101"
-              name="projectNumber"
-              placeholder="101"
-              type="number"
+              className="mt-1 block h-10 w-full rounded-[9px] border border-[#d6dceb] bg-[#fbfaf7] px-3 text-sm font-extrabold text-[#16294d]"
+              defaultValue={house.displayName ?? house.house}
+              maxLength={80}
+              name="displayName"
+              required
             />
           </label>
-          <button
-            className="h-9 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
-            type="submit"
-          >
-            Save number
-          </button>
-        </form>
-        <form action={saveHouseProjectStatusAction} className="mr-auto flex flex-wrap items-end gap-2">
-          <input name="qboBankAccountId" type="hidden" value={house.id} />
-          <input name="houseName" type="hidden" value={house.house} />
-          <input
-            name="returnTo"
-            type="hidden"
-            value={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`}
-          />
+          <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
+            Project number
+            <select
+              className="mt-1 block h-10 w-full rounded-[9px] border border-[#d6dceb] bg-[#fbfaf7] px-3 text-sm font-extrabold text-[#16294d]"
+              defaultValue={house.projectNumber ?? ""}
+              name="projectNumber"
+              required
+            >
+              <option disabled value="">Choose</option>
+              {projectNumberOptions.map((projectNumber) => (
+                <option
+                  disabled={assignedProjectNumberSet.has(projectNumber)}
+                  key={projectNumber}
+                  value={projectNumber}
+                >
+                  {projectNumber}{assignedProjectNumberSet.has(projectNumber) ? " · assigned" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
             Project status
             <select
-              className="mt-1 block h-9 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold text-[#16294d]"
+              className="mt-1 block h-10 w-full rounded-[9px] border border-[#d6dceb] bg-[#fbfaf7] px-3 text-sm font-extrabold text-[#16294d]"
               defaultValue={house.projectStatus}
               name="projectStatus"
             >
@@ -1100,10 +1134,10 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
             </select>
           </label>
           <button
-            className="h-9 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
+            className="h-10 rounded-[9px] bg-[#16294d] px-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white"
             type="submit"
           >
-            Save status
+            Save identity
           </button>
         </form>
       </div>

@@ -22,6 +22,7 @@ export type HouseDashboardSummaryPhase = {
 export type HouseDashboardSummary = {
   id: string;
   house: string;
+  displayName: string | null;
   bank: string;
   city: string | null;
   soldPrice: number | null;
@@ -99,6 +100,7 @@ async function initializeHouseDashboardSummaryTable() {
     create table if not exists house_dashboard_summaries (
       house_id text primary key,
       house_name text not null,
+      display_name text,
       bank_name text not null,
       city text,
       sold_price numeric,
@@ -125,6 +127,7 @@ async function initializeHouseDashboardSummaryTable() {
   `;
   await sql()`alter table house_dashboard_summaries add column if not exists project_status text not null default 'active'`;
   await sql()`alter table house_dashboard_summaries add column if not exists project_number integer`;
+  await sql()`alter table house_dashboard_summaries add column if not exists display_name text`;
   await sql()`alter table house_dashboard_summaries add column if not exists holdback_amount numeric`;
   await sql()`alter table house_dashboard_summaries add column if not exists holdback_notes text`;
 }
@@ -148,6 +151,7 @@ export async function getHouseDashboardSummaries() {
     Array<{
       house_id: string;
       house_name: string;
+      display_name: string | null;
       bank_name: string;
       city: string | null;
       sold_price: string | null;
@@ -175,6 +179,7 @@ export async function getHouseDashboardSummaries() {
     select
       house_id,
       house_name,
+      display_name,
       bank_name,
       city,
       sold_price,
@@ -204,6 +209,7 @@ export async function getHouseDashboardSummaries() {
   return rows.map((row): HouseDashboardSummary => ({
     id: row.house_id,
     house: row.house_name,
+    displayName: row.display_name,
     bank: row.bank_name,
     city: row.city,
     soldPrice: row.sold_price === null ? null : Number(row.sold_price),
@@ -282,6 +288,7 @@ export async function refreshHouseDashboardSummaries() {
         insert into house_dashboard_summaries (
           house_id,
           house_name,
+          display_name,
           bank_name,
           city,
           sold_price,
@@ -308,6 +315,7 @@ export async function refreshHouseDashboardSummaries() {
         values (
           ${account.Id},
           ${house},
+          ${details?.displayName ?? null},
           ${accountName(account)},
           ${city},
           ${soldPrice},
@@ -333,6 +341,7 @@ export async function refreshHouseDashboardSummaries() {
         )
         on conflict (house_id) do update set
           house_name = excluded.house_name,
+          display_name = excluded.display_name,
           bank_name = excluded.bank_name,
           city = excluded.city,
           sold_price = excluded.sold_price,

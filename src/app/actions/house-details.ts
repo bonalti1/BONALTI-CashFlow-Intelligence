@@ -11,6 +11,7 @@ import {
   saveHouseHoldback,
   saveHouseProjectStatus,
   saveHouseProjectNumber,
+  saveHouseDisplayName,
 } from "@/lib/houses/house-details-store";
 import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
@@ -158,6 +159,43 @@ export async function saveHouseProjectNumberAction(formData: FormData) {
   }
 
   await saveHouseProjectNumber({ qboBankAccountId, houseName, projectNumber });
+  await refreshHouseDashboardSummaries();
+  revalidatePath("/");
+  revalidatePath("/draws-budget");
+  revalidatePath("/setup-inputs");
+  redirect(returnTo);
+}
+
+export async function saveHouseProjectIdentityAction(formData: FormData) {
+  const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
+  const houseName = optionalText(formData.get("houseName"));
+  const displayName = optionalText(formData.get("displayName"));
+  const projectNumber = optionalInteger(formData.get("projectNumber"));
+  const projectStatus = optionalText(formData.get("projectStatus"));
+  const returnTo = safeReturnTo(formData.get("returnTo"));
+  const allowedStatuses = new Set(["active", "on_hold", "final_phase", "completed", "closed_out"]);
+
+  if (!qboBankAccountId || !houseName) {
+    throw new Error("House account is missing.");
+  }
+
+  if (!displayName || displayName.length > 80) {
+    throw new Error("Enter a project name up to 80 characters.");
+  }
+
+  if (projectNumber === null || projectNumber < 101 || projectNumber > 999) {
+    throw new Error("Choose a project number between 101 and 999.");
+  }
+
+  if (!projectStatus || !allowedStatuses.has(projectStatus)) {
+    throw new Error("Choose a valid project status.");
+  }
+
+  await saveHouseProjectNumber({ qboBankAccountId, houseName, projectNumber });
+  await Promise.all([
+    saveHouseDisplayName({ qboBankAccountId, houseName, displayName }),
+    saveHouseProjectStatus({ qboBankAccountId, houseName, projectStatus }),
+  ]);
   await refreshHouseDashboardSummaries();
   revalidatePath("/");
   revalidatePath("/draws-budget");

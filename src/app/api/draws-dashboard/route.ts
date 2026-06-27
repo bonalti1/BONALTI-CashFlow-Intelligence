@@ -113,6 +113,7 @@ function summaryFromFallbackHouse(
     return {
       id: `demo-${houseIndex}-${house.house}`,
       house: house.house,
+      displayName: null,
       bank: `${house.house} demo bank account`,
       city: house.city,
       soldPrice: house.soldPrice,

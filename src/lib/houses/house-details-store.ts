@@ -3,6 +3,7 @@ import { hasDatabaseUrl, sql } from "@/lib/db/raw";
 export type HouseDetail = {
   qboBankAccountId: string;
   houseName: string;
+  displayName: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
   city: string | null;
@@ -59,6 +60,7 @@ async function initializeHouseDetailsTable() {
     create table if not exists house_details (
       qbo_bank_account_id text primary key,
       house_name text not null,
+      display_name text,
       sold_price numeric,
       square_footage integer,
       city text,
@@ -96,6 +98,7 @@ async function initializeHouseDetailsTable() {
   await sql()`alter table house_details add column if not exists contract_source_status text`;
   await sql()`alter table house_details add column if not exists project_status text not null default 'active'`;
   await sql()`alter table house_details add column if not exists project_number integer`;
+  await sql()`alter table house_details add column if not exists display_name text`;
   await sql()`alter table house_details add column if not exists holdback_amount numeric`;
   await sql()`alter table house_details add column if not exists holdback_notes text`;
 }
@@ -294,6 +297,7 @@ export async function getHouseDetailsMap() {
       contract_source_status: string | null;
       project_status: string;
       project_number: number | null;
+      display_name: string | null;
       holdback_amount: string | null;
       holdback_notes: string | null;
       change_order_total: string | null;
@@ -320,6 +324,7 @@ export async function getHouseDetailsMap() {
       h.contract_source_status,
       h.project_status,
       h.project_number,
+      h.display_name,
       h.holdback_amount,
       h.holdback_notes,
       coalesce(sum(c.amount), 0) as change_order_total,
@@ -347,6 +352,7 @@ export async function getHouseDetailsMap() {
       h.contract_source_status,
       h.project_status,
       h.project_number,
+      h.display_name,
       h.holdback_amount,
       h.holdback_notes,
       h.updated_at
@@ -377,6 +383,7 @@ export async function getHouseDetailsMap() {
       contractSourceStatus: row.contract_source_status,
       projectStatus: row.project_status,
       projectNumber: row.project_number,
+      displayName: row.display_name,
       holdbackAmount: row.holdback_amount === null ? null : Number(row.holdback_amount),
       holdbackNotes: row.holdback_notes,
       changeOrderTotal,
@@ -778,6 +785,40 @@ export async function saveHouseProjectNumber({
     on conflict (qbo_bank_account_id) do update set
       house_name = excluded.house_name,
       project_number = excluded.project_number,
+      updated_at = now()
+  `;
+}
+
+export async function saveHouseDisplayName({
+  qboBankAccountId,
+  houseName,
+  displayName,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  displayName: string | null;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to save project names.");
+  }
+
+  await ensureHouseDetailsTable();
+  await sql()`
+    insert into house_details (
+      qbo_bank_account_id,
+      house_name,
+      display_name,
+      updated_at
+    )
+    values (
+      ${qboBankAccountId},
+      ${houseName},
+      ${displayName},
+      now()
+    )
+    on conflict (qbo_bank_account_id) do update set
+      house_name = excluded.house_name,
+      display_name = excluded.display_name,
       updated_at = now()
   `;
 }
