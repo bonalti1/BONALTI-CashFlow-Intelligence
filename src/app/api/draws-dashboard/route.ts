@@ -16,6 +16,7 @@ const dashboardCacheMs = 30_000;
 
 type DrawsDashboardPayload = {
   activeCount: number;
+  assignedProjectNumbers: number[];
   completedCount: number;
   houses: Array<HouseDashboardSummary & { completed: boolean }>;
   message?: string;
@@ -202,6 +203,9 @@ export async function GET(request: Request) {
     );
     const payload: DrawsDashboardPayload = {
       activeCount,
+      assignedProjectNumbers: houses
+        .map((house) => house.projectNumber)
+        .filter((projectNumber): projectNumber is number => projectNumber !== null),
       completedCount,
       houses: visibleHouses,
       status: "ok",
@@ -227,6 +231,7 @@ export async function GET(request: Request) {
     );
     const payload: DrawsDashboardPayload = {
       activeCount: houses.filter((house) => !house.completed).length,
+      assignedProjectNumbers: [],
       completedCount: 0,
       houses: visibleHouses,
       message: "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",

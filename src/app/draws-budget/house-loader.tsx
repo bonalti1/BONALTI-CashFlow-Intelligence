@@ -17,6 +17,7 @@ type DrawsDashboardHouse = HouseDashboardSummary & {
 
 type DrawsDashboardResponse = {
   activeCount: number;
+  assignedProjectNumbers: number[];
   completedCount: number;
   houses: DrawsDashboardHouse[];
   message?: string;
@@ -639,10 +640,9 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
         <section className="space-y-4">
           {data.houses.map((house, index) => (
             <HouseCard
-              assignedProjectNumbers={data.houses
-                .filter((candidate) => candidate.id !== house.id)
-                .map((candidate) => candidate.projectNumber)
-                .filter((projectNumber): projectNumber is number => projectNumber !== null)}
+              assignedProjectNumbers={data.assignedProjectNumbers.filter(
+                (projectNumber) => projectNumber !== house.projectNumber,
+              )}
               house={house}
               imageUrl={house.renderImageUrl ?? renderUrls[house.id] ?? null}
               index={index}
