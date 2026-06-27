@@ -847,7 +847,6 @@ function HouseCard({
     house.soldPrice && house.soldPrice > 0 && remainingMoney !== null
       ? Math.round((remainingMoney / house.soldPrice) * 100)
       : null;
-  const activePhase = house.currentPhase.key === "pre" ? "Pre" : `P${house.currentPhase.label}`;
   const detailHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1#${anchorId}`;
   const sourceTruthHref = `/draws-budget?house=${encodeURIComponent(house.id)}&phase=${selectedPhase.key}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`;
   const collapseHref = `/draws-budget#${anchorId}`;
@@ -883,9 +882,6 @@ function HouseCard({
                   Project {house.projectNumber}
                 </span>
               ) : null}
-              <span className="rounded-[7px] bg-[#eaf2ff] px-2.5 py-1 text-xs font-extrabold text-[#16294d]">
-                {activePhase}
-              </span>
             </div>
             <p className="mt-1 text-xs font-bold text-[#7b8298]">
               {house.city ?? "City missing"} · Current phase {phaseDisplayName(house.currentPhase)}
