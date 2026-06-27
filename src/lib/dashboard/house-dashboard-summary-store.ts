@@ -8,6 +8,10 @@ import {
 } from "@/lib/draws/draws-store";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
 import { getHouseDetailsMap } from "@/lib/houses/house-details-store";
+import {
+  getPlaidBankAccounts,
+  type PlaidBankAccount,
+} from "@/lib/plaid/bank-store";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
 
@@ -24,7 +28,9 @@ export type HouseDashboardSummary = {
   house: string;
   displayName: string | null;
   bank: string;
-  bankBalance: number | null;
+  actualBankBalance: number | null;
+  actualBankAvailableBalance: number | null;
+  actualBankAccountName: string | null;
   city: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
@@ -60,6 +66,40 @@ const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
 
 function accountName(account: QboAccount) {
   return account.FullyQualifiedName ?? account.Name;
+}
+
+function plaidAccountForHouse(
+  accounts: PlaidBankAccount[],
+  qboBankAccountId: string,
+  houseName: string,
+) {
+  const explicitlyMapped = accounts.find(
+    (account) => account.qboBankAccountId === qboBankAccountId,
+  );
+
+  if (explicitlyMapped) {
+    return explicitlyMapped;
+  }
+
+  const manuallyNamed = accounts.filter(
+    (account) => account.houseName?.toLowerCase() === houseName.toLowerCase(),
+  );
+
+  if (manuallyNamed.length === 1) {
+    return manuallyNamed[0];
+  }
+
+  const inferred = accounts.filter((account) => {
+    const inferredHouse = getConfirmedHouseName({
+      Id: account.id,
+      Name: `${account.name} ${account.officialName ?? ""}`,
+      AccountType: "Bank",
+    });
+
+    return inferredHouse?.toLowerCase() === houseName.toLowerCase();
+  });
+
+  return inferred.length === 1 ? inferred[0] : null;
 }
 
 function phaseHasMoney(phase: HouseDashboardSummaryPhase) {
@@ -210,16 +250,24 @@ export async function getHouseDashboardSummaries() {
     from house_dashboard_summaries
     order by project_number asc nulls last, house_name
   `;
+  const plaidAccounts = await getPlaidBankAccounts().catch(() => []);
 
   return rows.map((row): HouseDashboardSummary => {
     const hasContractSource = Boolean(row.contract_file_name);
+    const plaidAccount = plaidAccountForHouse(
+      plaidAccounts,
+      row.house_id,
+      row.house_name,
+    );
 
     return {
       id: row.house_id,
       house: row.house_name,
       displayName: row.display_name,
       bank: row.bank_name,
-      bankBalance: row.bank_balance === null ? null : Number(row.bank_balance),
+      actualBankBalance: plaidAccount?.currentBalance ?? null,
+      actualBankAvailableBalance: plaidAccount?.availableBalance ?? null,
+      actualBankAccountName: plaidAccount?.name ?? null,
       city: hasContractSource ? row.contract_city : null,
       soldPrice:
         hasContractSource && row.sold_price !== null ? Number(row.sold_price) : null,
