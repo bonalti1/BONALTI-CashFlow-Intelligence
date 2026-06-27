@@ -28,11 +28,20 @@ export type QboMoneyTransaction = {
   PrivateNote?: string;
   PaymentType?: string;
   TotalAmt?: number;
+  Amount?: number;
   AccountRef?: {
     value?: string;
     name?: string;
   };
   BankAccountRef?: {
+    value?: string;
+    name?: string;
+  };
+  FromAccountRef?: {
+    value?: string;
+    name?: string;
+  };
+  ToAccountRef?: {
     value?: string;
     name?: string;
   };
@@ -188,7 +197,7 @@ export function normalizeQboTransaction({
     bankAccountId: bankAccountRef?.value ?? null,
     bankAccountName: bankAccountRef?.name ?? null,
     payeeName: payee?.name ?? null,
-    totalAmount: transaction.TotalAmt ?? 0,
+    totalAmount: transaction.TotalAmt ?? transaction.Amount ?? 0,
     paymentType: transaction.PaymentType ?? null,
     docNumber: transaction.DocNumber ?? null,
     memo: transaction.PrivateNote ?? null,
@@ -395,4 +404,91 @@ export async function getTransactionsByBankAccount() {
   }
 
   return grouped;
+}
+
+export type ProjectLedgerTransaction = SavedQboTransaction & {
+  direction: "expense" | "transfer_in" | "transfer_out";
+  countsTowardSpend: boolean;
+};
+
+export async function getProjectLedgerTransactions(qboBankAccountId: string) {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  await ensureTransactionTables();
+  const rows = await sql()<
+    Array<{
+      qbo_id: string;
+      source: string;
+      realm_id: string;
+      txn_date: Date | null;
+      bank_account_qbo_id: string | null;
+      bank_account_name: string | null;
+      payee_name: string | null;
+      total_amount: string;
+      payment_type: string | null;
+      doc_number: string | null;
+      memo: string | null;
+      cleared_status: "cleared" | "not_cleared" | "unknown";
+      cleared_status_raw: string | null;
+      expense_account_ids: string[];
+      expense_account_names: string[];
+      raw: QboMoneyTransaction;
+    }>
+  >`
+    select
+      qbo_id,
+      source,
+      realm_id,
+      txn_date,
+      bank_account_qbo_id,
+      bank_account_name,
+      payee_name,
+      total_amount,
+      payment_type,
+      doc_number,
+      memo,
+      cleared_status,
+      cleared_status_raw,
+      expense_account_ids,
+      expense_account_names,
+      raw
+    from qbo_money_transactions
+    where bank_account_qbo_id = ${qboBankAccountId}
+      or (
+        source = 'Transfer'
+        and (
+          raw -> 'FromAccountRef' ->> 'value' = ${qboBankAccountId}
+          or raw -> 'ToAccountRef' ->> 'value' = ${qboBankAccountId}
+        )
+      )
+    order by txn_date desc nulls last, updated_at desc
+  `;
+
+  return rows.map((row): ProjectLedgerTransaction => {
+    const isTransfer = row.source === "Transfer";
+    const transferIn = isTransfer && row.raw.ToAccountRef?.value === qboBankAccountId;
+
+    return {
+      source: row.source,
+      id: row.qbo_id,
+      realmId: row.realm_id,
+      txnDate: row.txn_date?.toISOString().slice(0, 10) ?? null,
+      bankAccountId: row.bank_account_qbo_id,
+      bankAccountName: row.bank_account_name,
+      payeeName: row.payee_name,
+      totalAmount: Number(row.total_amount),
+      paymentType: row.payment_type,
+      docNumber: row.doc_number,
+      memo: row.memo,
+      clearedStatus: row.cleared_status,
+      clearedStatusRaw: row.cleared_status_raw,
+      expenseAccountIds: row.expense_account_ids,
+      expenseAccountNames: row.expense_account_names,
+      raw: row.raw,
+      direction: isTransfer ? (transferIn ? "transfer_in" : "transfer_out") : "expense",
+      countsTowardSpend: !isTransfer,
+    };
+  });
 }

@@ -14,7 +14,7 @@ type MoneyTransactionQueryResponse = {
   QueryResponse?: Record<string, QboMoneyTransaction[] | number | undefined>;
 };
 
-const moneyTransactionSources = ["Purchase", "Check"];
+const moneyTransactionSources = ["Purchase", "Check", "Transfer"];
 
 async function queryMoneyTransactions({
   connection,

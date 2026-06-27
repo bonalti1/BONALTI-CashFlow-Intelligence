@@ -898,6 +898,7 @@ function HouseCard({
             emphasis="primary"
           />
           <SummaryMetric
+            href={`/projects/${encodeURIComponent(house.id)}/ledger`}
             label="Project spent"
             subValue={[
               projectSpendPercent === null ? null : `${projectSpendPercent}% spent`,
@@ -1233,11 +1234,13 @@ function EditableSourceValue({
 
 function SummaryMetric({
   emphasis = "quiet",
+  href,
   label,
   subValue,
   value,
 }: {
   emphasis?: "primary" | "secondary" | "quiet" | "alert";
+  href?: string;
   label: string;
   subValue?: string;
   value: string;
@@ -1257,7 +1260,7 @@ function SummaryMetric({
         ? "border-t-[#e23b2a]"
         : "border-t-[#d6dceb]";
 
-  return (
+  const content = (
     <div className={`flex h-[74px] min-w-[132px] flex-col justify-center rounded-[10px] border border-[#e3e1d7] border-t-4 ${accentClassName} bg-white px-3 py-2 shadow-[0_8px_20px_-20px_rgba(14,27,54,0.55)]`}>
       <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
         {label}
@@ -1270,6 +1273,15 @@ function SummaryMetric({
       ) : null}
     </div>
   );
+
+  return href ? (
+    <Link
+      className="rounded-[10px] transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#16294d]"
+      href={href}
+    >
+      {content}
+    </Link>
+  ) : content;
 }
 
 function SelectedPhasePanel({
