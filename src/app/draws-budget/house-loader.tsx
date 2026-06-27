@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { saveHouseProjectIdentityAction } from "@/app/actions/house-details";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
 import { SourceTruthDocuments } from "@/app/draws-budget/source-truth-documents";
 import type {
@@ -203,13 +204,29 @@ function SourceTruthValue({
 }
 
 function SourceTruthQuickPanel({
+  assignedProjectNumbers,
   house,
   onClose,
 }: {
+  assignedProjectNumbers: number[];
   house: DrawsDashboardHouse;
   onClose: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const currentPhase = currentPhaseFor(house);
+  const assignedProjectNumberSet = new Set(assignedProjectNumbers);
+  const highestProjectNumber = Math.max(120, house.projectNumber ?? 101, ...assignedProjectNumbers);
+  const projectNumberOptions = Array.from(
+    { length: Math.min(899, highestProjectNumber - 100 + 20) },
+    (_, index) => index + 101,
+  );
+  const projectStatusLabels: Record<string, string> = {
+    active: "Active",
+    on_hold: "On hold",
+    final_phase: "Final phase",
+    completed: "Completed",
+    closed_out: "Closed out",
+  };
 
   return (
     <div className="border-t border-[#e3e1d7] bg-[#fbfaf7] px-4 pb-4 pt-3">
@@ -226,14 +243,92 @@ function SourceTruthQuickPanel({
               Fast read from cached project data. Full setup stays available when needed.
             </p>
           </div>
-          <button
-            className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={`rounded-[9px] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] ${
+                editing
+                  ? "bg-[#e23b2a] text-white"
+                  : "border border-[#d6dceb] bg-white text-[#16294d]"
+              }`}
+              onClick={() => setEditing((current) => !current)}
+              type="button"
+            >
+              {editing ? "Cancel Edit" : "Edit File"}
+            </button>
+            <button
+              aria-label="Close source of truth"
+              className="grid h-9 w-9 place-items-center rounded-[9px] border border-[#e3e1d7] bg-white text-lg font-bold text-[#16294d]"
+              onClick={onClose}
+              title="Close"
+              type="button"
+            >
+              ×
+            </button>
+          </div>
         </div>
+
+        {editing ? (
+          <form
+            action={saveHouseProjectIdentityAction}
+            className="mt-4 grid gap-3 rounded-[12px] border border-[#d6dceb] bg-[#fbfaf7] p-4 md:grid-cols-[minmax(220px,1fr)_150px_180px_auto] md:items-end"
+          >
+            <input name="qboBankAccountId" type="hidden" value={house.id} />
+            <input name="houseName" type="hidden" value={house.house} />
+            <input
+              name="returnTo"
+              type="hidden"
+              value={`/draws-budget#${anchorIdForHouse(house.id)}`}
+            />
+            <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
+              Project name
+              <input
+                className="mt-1 block h-10 w-full rounded-[9px] border border-[#d6dceb] bg-white px-3 text-sm font-extrabold text-[#16294d]"
+                defaultValue={house.displayName ?? house.house}
+                maxLength={80}
+                name="displayName"
+                required
+              />
+            </label>
+            <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
+              Project number
+              <select
+                className="mt-1 block h-10 w-full rounded-[9px] border border-[#d6dceb] bg-white px-3 text-sm font-extrabold text-[#16294d]"
+                defaultValue={house.projectNumber ?? ""}
+                name="projectNumber"
+                required
+              >
+                <option disabled value="">Choose</option>
+                {projectNumberOptions.map((projectNumber) => (
+                  <option
+                    disabled={assignedProjectNumberSet.has(projectNumber)}
+                    key={projectNumber}
+                    value={projectNumber}
+                  >
+                    {projectNumber}{assignedProjectNumberSet.has(projectNumber) ? " · assigned" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
+              Project status
+              <select
+                className="mt-1 block h-10 w-full rounded-[9px] border border-[#d6dceb] bg-white px-3 text-sm font-extrabold text-[#16294d]"
+                defaultValue={house.projectStatus}
+                name="projectStatus"
+              >
+                {Object.entries(projectStatusLabels).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="h-10 rounded-[9px] bg-[#16294d] px-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white"
+              type="submit"
+            >
+              Save
+            </button>
+          </form>
+        ) : null}
 
         <SourceTruthDocuments
           contractFileName={house.contractFileName}
@@ -262,12 +357,14 @@ function SourceTruthQuickPanel({
 }
 
 function HouseCard({
+  assignedProjectNumbers,
   house,
   imageUrl,
   index,
   onToggleSourceTruth,
   sourceTruthOpen,
 }: {
+  assignedProjectNumbers: number[];
   house: DrawsDashboardHouse;
   imageUrl: string | null;
   index: number;
@@ -386,7 +483,11 @@ function HouseCard({
         </div>
       </div>
       {sourceTruthOpen ? (
-        <SourceTruthQuickPanel house={house} onClose={onToggleSourceTruth} />
+        <SourceTruthQuickPanel
+          assignedProjectNumbers={assignedProjectNumbers}
+          house={house}
+          onClose={onToggleSourceTruth}
+        />
       ) : null}
     </article>
   );
@@ -537,6 +638,10 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
         <section className="space-y-4">
           {data.houses.map((house, index) => (
             <HouseCard
+              assignedProjectNumbers={data.houses
+                .filter((candidate) => candidate.id !== house.id)
+                .map((candidate) => candidate.projectNumber)
+                .filter((projectNumber): projectNumber is number => projectNumber !== null)}
               house={house}
               imageUrl={house.renderImageUrl ?? renderUrls[house.id] ?? null}
               index={index}
