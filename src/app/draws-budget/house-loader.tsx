@@ -408,38 +408,48 @@ function LoadingRows() {
 export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
   const [data, setData] = useState<DrawsDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [renderUrls, setRenderUrls] = useState<Record<string, string | null>>({});
   const [sourceTruthHouseId, setSourceTruthHouseId] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    fetch(`/api/draws-dashboard?view=${view}`)
-      .then(async (response) => {
+    async function refreshCards() {
+      try {
+        const response = await fetch(`/api/draws-dashboard?view=${view}`, {
+          cache: "no-store",
+        });
         const payload = (await response.json()) as DrawsDashboardResponse;
 
         if (!response.ok || payload.status === "error") {
           throw new Error(payload.message ?? "Unable to load houses.");
         }
 
-        return payload;
-      })
-      .then((payload) => {
         if (active) {
           setData(payload);
+          setError(null);
         }
-      })
-      .catch((loadError) => {
+      } catch (loadError) {
         if (active) {
           setError(loadError instanceof Error ? loadError.message : "Unable to load houses.");
         }
-      });
+      }
+    }
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        void refreshCards();
+      }
+    }
+
+    void refreshCards();
+    const interval = window.setInterval(refreshCards, 60_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [view]);
 
@@ -480,53 +490,6 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
     };
   }, [data?.houses]);
 
-  async function loadCards(force = false) {
-    setRefreshing(true);
-    setError(null);
-
-    try {
-      const response = await fetch(
-        `/api/draws-dashboard?view=${view}${force ? `&force=1&at=${Date.now()}` : ""}`,
-        force ? { cache: "no-store" } : undefined,
-      );
-      const payload = (await response.json()) as DrawsDashboardResponse;
-
-      if (!response.ok || payload.status === "error") {
-        throw new Error(payload.message ?? "Unable to load houses.");
-      }
-
-      setData(payload);
-      setNotice(payload.status === "fallback" ? payload.message ?? null : "Cards refreshed.");
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load houses.");
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  async function rebuildSummaries() {
-    setSyncing(true);
-    setError(null);
-    setNotice("Rebuilding cached draw summaries...");
-
-    try {
-      const response = await fetch("/api/cfo/sync", { method: "POST" });
-      const payload = (await response.json().catch(() => null)) as { message?: string; detail?: string } | null;
-
-      if (!response.ok) {
-        throw new Error(payload?.detail ?? payload?.message ?? "Summary rebuild failed.");
-      }
-
-      setNotice("Summary cache rebuilt. Loading cards...");
-      await loadCards(true);
-    } catch (syncError) {
-      setNotice(null);
-      setError(syncError instanceof Error ? syncError.message : "Summary rebuild failed.");
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   const counts = useMemo(
     () => ({
       active: data?.activeCount ?? 0,
@@ -552,44 +515,6 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
           label="Completed Houses"
           note="Closed projects kept for final cost, payee history, and profit review."
         />
-      </section>
-
-      <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[13px] border border-[#e3e1d7] bg-white px-4 py-3 shadow-[0_8px_24px_-20px_rgba(14,27,54,0.35)]">
-        <div>
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#e23b2a]">
-            Draw Dashboard Data
-          </div>
-          <div className="mt-1 text-sm font-bold text-[#16294d]">
-            {data?.status === "fallback"
-              ? "Using fallback cards until the live database connection is fixed."
-              : data
-                ? "Loaded from cached draw summaries."
-                : "Loading cached draw summaries..."}
-          </div>
-          {notice || data?.message ? (
-            <div className="mt-1 text-xs font-semibold text-[#7b8298]">
-              {notice ?? data?.message}
-            </div>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="h-9 rounded-[8px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d] disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={refreshing || syncing}
-            onClick={() => loadCards(true)}
-            type="button"
-          >
-            {refreshing ? "Loading" : "Reload Cards"}
-          </button>
-          <button
-            className="h-9 rounded-[8px] bg-[#16294d] px-3 text-xs font-extrabold uppercase tracking-[0.08em] text-white disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={refreshing || syncing}
-            onClick={rebuildSummaries}
-            type="button"
-          >
-            {syncing ? "Rebuilding" : "Rebuild Summaries"}
-          </button>
-        </div>
       </section>
 
       {error ? (
