@@ -876,8 +876,13 @@ function HouseCard({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-extrabold text-[#16294d]">
-                {house.displayName ?? house.house}{house.projectNumber ? ` (${house.projectNumber})` : ""}
+                {house.displayName ?? house.house}
               </h2>
+              {house.projectNumber ? (
+                <span className="rounded-[7px] border border-[#d6dceb] bg-white px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#7b8298]">
+                  Project {house.projectNumber}
+                </span>
+              ) : null}
               <span className="rounded-[7px] bg-[#eaf2ff] px-2.5 py-1 text-xs font-extrabold text-[#16294d]">
                 {activePhase}
               </span>
