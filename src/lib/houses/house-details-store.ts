@@ -20,6 +20,8 @@ export type HouseDetail = {
   contractSourceStatus: string | null;
   projectStatus: string;
   projectNumber: number | null;
+  holdbackAmount: number | null;
+  holdbackNotes: string | null;
   changeOrderTotal: number;
   currentContractPrice: number | null;
   updatedAt: string;
@@ -36,8 +38,21 @@ export type HouseChangeOrder = {
   createdAt: string;
 };
 
+export type HouseProjectDocument = {
+  id: number;
+  qboBankAccountId: string;
+  houseName: string;
+  documentType: string;
+  fileName: string;
+  fileType: string;
+  fileUrl: string | null;
+  storagePath: string | null;
+  uploadedAt: string;
+};
+
 let houseDetailsTableReady: Promise<void> | null = null;
 let houseChangeOrdersTableReady: Promise<void> | null = null;
+let houseProjectDocumentsTableReady: Promise<void> | null = null;
 
 async function initializeHouseDetailsTable() {
   await sql()`
@@ -61,6 +76,8 @@ async function initializeHouseDetailsTable() {
       contract_source_status text,
       project_status text not null default 'active',
       project_number integer,
+      holdback_amount numeric,
+      holdback_notes text,
       updated_at timestamptz not null default now()
     )
   `;
@@ -79,6 +96,8 @@ async function initializeHouseDetailsTable() {
   await sql()`alter table house_details add column if not exists contract_source_status text`;
   await sql()`alter table house_details add column if not exists project_status text not null default 'active'`;
   await sql()`alter table house_details add column if not exists project_number integer`;
+  await sql()`alter table house_details add column if not exists holdback_amount numeric`;
+  await sql()`alter table house_details add column if not exists holdback_notes text`;
 }
 
 function ensureHouseDetailsTable() {
@@ -114,6 +133,137 @@ function ensureHouseChangeOrdersTable() {
   return houseChangeOrdersTableReady;
 }
 
+async function initializeHouseProjectDocumentsTable() {
+  await sql()`
+    create table if not exists house_project_documents (
+      id bigserial primary key,
+      qbo_bank_account_id text not null,
+      house_name text not null,
+      document_type text not null,
+      file_name text not null,
+      file_type text not null,
+      file_url text,
+      storage_path text,
+      uploaded_at timestamptz not null default now()
+    )
+  `;
+  await sql()`
+    create index if not exists house_project_documents_house_type_idx
+    on house_project_documents (qbo_bank_account_id, document_type, uploaded_at desc)
+  `;
+}
+
+function ensureHouseProjectDocumentsTable() {
+  houseProjectDocumentsTableReady ??= initializeHouseProjectDocumentsTable().catch((error) => {
+    houseProjectDocumentsTableReady = null;
+    throw error;
+  });
+
+  return houseProjectDocumentsTableReady;
+}
+
+export async function getHouseProjectDocuments(qboBankAccountId: string) {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  await ensureHouseProjectDocumentsTable();
+  const rows = await sql()<
+    Array<{
+      id: string;
+      qbo_bank_account_id: string;
+      house_name: string;
+      document_type: string;
+      file_name: string;
+      file_type: string;
+      file_url: string | null;
+      storage_path: string | null;
+      uploaded_at: Date;
+    }>
+  >`
+    select
+      id,
+      qbo_bank_account_id,
+      house_name,
+      document_type,
+      file_name,
+      file_type,
+      file_url,
+      storage_path,
+      uploaded_at
+    from house_project_documents
+    where qbo_bank_account_id = ${qboBankAccountId}
+    order by uploaded_at desc
+  `;
+
+  return rows.map((row): HouseProjectDocument => ({
+    id: Number(row.id),
+    qboBankAccountId: row.qbo_bank_account_id,
+    houseName: row.house_name,
+    documentType: row.document_type,
+    fileName: row.file_name,
+    fileType: row.file_type,
+    fileUrl: row.file_url,
+    storagePath: row.storage_path,
+    uploadedAt: row.uploaded_at.toISOString(),
+  }));
+}
+
+export async function saveHouseProjectDocument({
+  qboBankAccountId,
+  houseName,
+  documentType,
+  fileName,
+  fileType,
+  fileUrl,
+  storagePath,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  documentType: string;
+  fileName: string;
+  fileType: string;
+  fileUrl: string | null;
+  storagePath: string | null;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to save project documents.");
+  }
+
+  await ensureHouseProjectDocumentsTable();
+
+  if (documentType !== "supporting") {
+    await sql()`
+      delete from house_project_documents
+      where qbo_bank_account_id = ${qboBankAccountId}
+        and document_type = ${documentType}
+    `;
+  }
+
+  await sql()`
+    insert into house_project_documents (
+      qbo_bank_account_id,
+      house_name,
+      document_type,
+      file_name,
+      file_type,
+      file_url,
+      storage_path,
+      uploaded_at
+    )
+    values (
+      ${qboBankAccountId},
+      ${houseName},
+      ${documentType},
+      ${fileName},
+      ${fileType},
+      ${fileUrl},
+      ${storagePath},
+      now()
+    )
+  `;
+}
+
 export async function getHouseDetailsMap() {
   const details = new Map<string, HouseDetail>();
 
@@ -144,6 +294,8 @@ export async function getHouseDetailsMap() {
       contract_source_status: string | null;
       project_status: string;
       project_number: number | null;
+      holdback_amount: string | null;
+      holdback_notes: string | null;
       change_order_total: string | null;
       updated_at: Date;
     }>
@@ -168,6 +320,8 @@ export async function getHouseDetailsMap() {
       h.contract_source_status,
       h.project_status,
       h.project_number,
+      h.holdback_amount,
+      h.holdback_notes,
       coalesce(sum(c.amount), 0) as change_order_total,
       h.updated_at
     from house_details h
@@ -193,6 +347,8 @@ export async function getHouseDetailsMap() {
       h.contract_source_status,
       h.project_status,
       h.project_number,
+      h.holdback_amount,
+      h.holdback_notes,
       h.updated_at
     order by h.house_name
   `;
@@ -221,6 +377,8 @@ export async function getHouseDetailsMap() {
       contractSourceStatus: row.contract_source_status,
       projectStatus: row.project_status,
       projectNumber: row.project_number,
+      holdbackAmount: row.holdback_amount === null ? null : Number(row.holdback_amount),
+      holdbackNotes: row.holdback_notes,
       changeOrderTotal,
       currentContractPrice: contractPrice === null ? null : contractPrice + changeOrderTotal,
       updatedAt: row.updated_at.toISOString(),
@@ -620,6 +778,45 @@ export async function saveHouseProjectNumber({
     on conflict (qbo_bank_account_id) do update set
       house_name = excluded.house_name,
       project_number = excluded.project_number,
+      updated_at = now()
+  `;
+}
+
+export async function saveHouseHoldback({
+  qboBankAccountId,
+  houseName,
+  holdbackAmount,
+  holdbackNotes,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  holdbackAmount: number | null;
+  holdbackNotes: string | null;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to save holdback details.");
+  }
+
+  await ensureHouseDetailsTable();
+  await sql()`
+    insert into house_details (
+      qbo_bank_account_id,
+      house_name,
+      holdback_amount,
+      holdback_notes,
+      updated_at
+    )
+    values (
+      ${qboBankAccountId},
+      ${houseName},
+      ${holdbackAmount},
+      ${holdbackNotes},
+      now()
+    )
+    on conflict (qbo_bank_account_id) do update set
+      house_name = excluded.house_name,
+      holdback_amount = excluded.holdback_amount,
+      holdback_notes = excluded.holdback_notes,
       updated_at = now()
   `;
 }

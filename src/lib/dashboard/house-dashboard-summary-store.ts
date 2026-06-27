@@ -41,6 +41,8 @@ export type HouseDashboardSummary = {
   contractSourceStatus: string | null;
   projectStatus: string;
   projectNumber: number | null;
+  holdbackAmount: number | null;
+  holdbackNotes: string | null;
   refreshedAt: string;
 };
 
@@ -116,11 +118,15 @@ async function initializeHouseDashboardSummaryTable() {
       contract_source_status text,
       project_status text not null default 'active',
       project_number integer,
+      holdback_amount numeric,
+      holdback_notes text,
       refreshed_at timestamptz not null default now()
     )
   `;
   await sql()`alter table house_dashboard_summaries add column if not exists project_status text not null default 'active'`;
   await sql()`alter table house_dashboard_summaries add column if not exists project_number integer`;
+  await sql()`alter table house_dashboard_summaries add column if not exists holdback_amount numeric`;
+  await sql()`alter table house_dashboard_summaries add column if not exists holdback_notes text`;
 }
 
 function ensureHouseDashboardSummaryTable() {
@@ -161,6 +167,8 @@ export async function getHouseDashboardSummaries() {
       contract_source_status: string | null;
       project_status: string;
       project_number: number | null;
+      holdback_amount: string | null;
+      holdback_notes: string | null;
       refreshed_at: Date;
     }>
   >`
@@ -186,6 +194,8 @@ export async function getHouseDashboardSummaries() {
       contract_source_status,
       project_status,
       project_number,
+      holdback_amount,
+      holdback_notes,
       refreshed_at
     from house_dashboard_summaries
     order by project_number asc nulls last, house_name
@@ -213,6 +223,8 @@ export async function getHouseDashboardSummaries() {
     contractSourceStatus: row.contract_source_status,
     projectStatus: row.project_status,
     projectNumber: row.project_number,
+    holdbackAmount: row.holdback_amount === null ? null : Number(row.holdback_amount),
+    holdbackNotes: row.holdback_notes,
     refreshedAt: row.refreshed_at.toISOString(),
   }));
 }
@@ -289,6 +301,8 @@ export async function refreshHouseDashboardSummaries() {
           contract_source_status,
           project_status,
           project_number,
+          holdback_amount,
+          holdback_notes,
           refreshed_at
         )
         values (
@@ -313,6 +327,8 @@ export async function refreshHouseDashboardSummaries() {
           ${details?.contractSourceStatus ?? null},
           ${details?.projectStatus ?? "active"},
           ${details?.projectNumber ?? null},
+          ${details?.holdbackAmount ?? null},
+          ${details?.holdbackNotes ?? null},
           now()
         )
         on conflict (house_id) do update set
@@ -336,6 +352,8 @@ export async function refreshHouseDashboardSummaries() {
           contract_source_status = excluded.contract_source_status,
           project_status = excluded.project_status,
           project_number = excluded.project_number,
+          holdback_amount = excluded.holdback_amount,
+          holdback_notes = excluded.holdback_notes,
           refreshed_at = now()
       `;
     }

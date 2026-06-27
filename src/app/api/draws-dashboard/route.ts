@@ -135,6 +135,8 @@ function summaryFromFallbackHouse(
       contractSourceStatus: null,
       projectStatus: "active",
       projectNumber: null,
+      holdbackAmount: null,
+      holdbackNotes: null,
       refreshedAt: new Date().toISOString(),
       completed: false,
     };

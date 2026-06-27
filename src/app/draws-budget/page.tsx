@@ -9,10 +9,12 @@ import {
 import { saveDrawLineItemStatusAction } from "@/app/actions/draw-status";
 import {
   saveHouseProjectNumberAction,
+  saveHouseSourceFactsAction,
   saveHouseProjectStatusAction,
 } from "@/app/actions/house-details";
 import { DrawsBudgetHouseLoader } from "@/app/draws-budget/house-loader";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
+import { SourceTruthDocuments } from "@/app/draws-budget/source-truth-documents";
 import {
   getHouseDashboardSummaries,
   refreshHouseDashboardSummaries,
@@ -68,6 +70,8 @@ type HouseView = {
   contractSourceStatus: string | null;
   projectStatus: string;
   projectNumber: number | null;
+  holdbackAmount: number | null;
+  holdbackNotes: string | null;
   completed: boolean;
   completedAt: string | null;
 };
@@ -234,10 +238,6 @@ function selectedPhaseFromParams(
 
 function anchorIdForHouse(id: string) {
   return `house-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-}
-
-function setupAnchorIdForHouse(id: string) {
-  return `setup-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
 function sourceTruthAnchorIdForHouse(id: string) {
@@ -419,6 +419,8 @@ function buildDemoHouses(): HouseView[] {
       contractSourceStatus: null,
       projectStatus: "active",
       projectNumber: null,
+      holdbackAmount: null,
+      holdbackNotes: null,
       completed: house.phaseIndex >= drawPhaseKeys.length - 1,
       completedAt: null,
     };
@@ -463,6 +465,8 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
     contractSourceStatus: summary.contractSourceStatus,
     projectStatus: summary.projectStatus,
     projectNumber: summary.projectNumber,
+    holdbackAmount: summary.holdbackAmount,
+    holdbackNotes: summary.holdbackNotes,
     completed: false,
     completedAt: null,
   };
@@ -993,32 +997,6 @@ function MiniPhaseStrip({
 }
 
 function SourceTruthPanel({ house }: { house: HouseView }) {
-  const docs = [
-    {
-      label: "Contract",
-      status: house.contractFileName ? "Added" : "Missing",
-      value: house.contractFileName ?? "Upload contract",
-      href: `/setup-inputs#${setupAnchorIdForHouse(house.id)}`,
-    },
-    {
-      label: "Draw Sheet",
-      status: "Missing",
-      value: "CFS or Rally budget sheet",
-      href: `/draws-budget?house=${encodeURIComponent(house.id)}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`,
-    },
-    {
-      label: "Bank Draw",
-      status: "Missing",
-      value: "Bank schedule and releases",
-      href: `/draws-budget?house=${encodeURIComponent(house.id)}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`,
-    },
-    {
-      label: "Holdback",
-      status: "Missing",
-      value: "Holdback amount and release trigger",
-      href: `/draws-budget?house=${encodeURIComponent(house.id)}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`,
-    },
-  ];
   const extracted = [
     { label: "Sold price", value: currency(house.soldPrice) },
     {
@@ -1030,7 +1008,6 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
     { label: "Current phase", value: phaseDisplayName(house.currentPhase) },
     { label: "Reader status", value: house.contractSourceStatus ?? "Manual review" },
   ];
-  const addedDocCount = docs.filter((doc) => doc.status === "Added").length;
   const projectStatusLabels: Record<string, string> = {
     active: "Active",
     on_hold: "On hold",
@@ -1055,7 +1032,7 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#16294d]">
-            {addedDocCount}/{docs.length} docs
+            Project files
           </span>
           <span className="rounded-full border border-[#d6dceb] bg-white px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#16294d]">
             {currency(house.soldPrice)}
@@ -1067,7 +1044,13 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
         </div>
       </summary>
 
-      <div className="mt-4 flex justify-end">
+      <SourceTruthDocuments
+        contractFileName={house.contractFileName}
+        houseName={house.house}
+        qboBankAccountId={house.id}
+      />
+
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
         <form action={saveHouseProjectNumberAction} className="mr-2 flex flex-wrap items-end gap-2">
           <input name="qboBankAccountId" type="hidden" value={house.id} />
           <input name="houseName" type="hidden" value={house.house} />
@@ -1122,41 +1105,6 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
             Save status
           </button>
         </form>
-        <Link
-          className="rounded-[9px] bg-[#16294d] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.1em] text-white"
-          href={`/setup-inputs#${setupAnchorIdForHouse(house.id)}`}
-        >
-          Edit Manual Inputs
-        </Link>
-      </div>
-
-      <div className="mt-4 grid gap-2 md:grid-cols-4">
-        {docs.map((doc) => (
-          <Link
-            className="rounded-[11px] border border-[#e3e1d7] bg-white p-3 transition hover:border-[#16294d]/30 hover:bg-[#fff]"
-            href={doc.href}
-            key={doc.label}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#9aa1b2]">
-                {doc.label}
-              </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em] ${
-                  doc.status === "Added"
-                    ? "bg-[#eaf7f0] text-[#1f6f4b]"
-                    : "bg-[#fff6df] text-[#9a6500]"
-                }`}
-              >
-                {doc.status}
-              </span>
-            </div>
-            <p className="mt-2 min-h-10 text-sm font-bold leading-5 text-[#16294d]">{doc.value}</p>
-            <p className="mt-2 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#e23b2a]">
-              Add / Review
-            </p>
-          </Link>
-        ))}
       </div>
 
       <div className="mt-4 rounded-[12px] border border-[#e3e1d7] bg-white p-3">
@@ -1168,8 +1116,40 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
             Editable
           </span>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {extracted.map((item) => (
+        <form action={saveHouseSourceFactsAction} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <input name="qboBankAccountId" type="hidden" value={house.id} />
+          <input name="houseName" type="hidden" value={house.house} />
+          <EditableSourceValue
+            defaultValue={house.soldPrice ?? ""}
+            label="Sold price"
+            name="contractPrice"
+            placeholder="Pending"
+          />
+          <EditableSourceValue
+            defaultValue={house.squareFootage ?? ""}
+            label="Square feet"
+            name="contractSquareFootage"
+            placeholder="Pending"
+          />
+          <EditableSourceValue
+            defaultValue={house.contractCity ?? house.city ?? ""}
+            label="Contract city"
+            name="contractCity"
+            placeholder="Pending"
+          />
+          <EditableSourceValue
+            defaultValue={house.holdbackAmount ?? ""}
+            label="Holdback amount"
+            name="holdbackAmount"
+            placeholder="Pending"
+          />
+          <EditableSourceValue
+            defaultValue={house.holdbackNotes ?? ""}
+            label="Holdback rule"
+            name="holdbackNotes"
+            placeholder="Release trigger"
+          />
+          {extracted.slice(3).map((item) => (
             <div className="rounded-[10px] border border-[#edf0f5] bg-[#fbfaf7] px-3 py-2" key={item.label}>
               <div className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
                 {item.label}
@@ -1177,9 +1157,41 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
               <div className="mt-1 text-sm font-extrabold text-[#16294d]">{item.value}</div>
             </div>
           ))}
-        </div>
+          <button
+            className="h-9 rounded-[9px] bg-[#16294d] px-4 text-xs font-extrabold uppercase tracking-[0.1em] text-white sm:col-span-2 lg:col-span-3"
+            type="submit"
+          >
+            Save edited facts
+          </button>
+        </form>
       </div>
     </details>
+  );
+}
+
+function EditableSourceValue({
+  defaultValue,
+  label,
+  name,
+  placeholder,
+}: {
+  defaultValue: string | number;
+  label: string;
+  name: string;
+  placeholder: string;
+}) {
+  return (
+    <label className="rounded-[10px] border border-[#edf0f5] bg-[#fbfaf7] px-3 py-2">
+      <span className="text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#9aa1b2]">
+        {label}
+      </span>
+      <input
+        className="mt-1 block h-7 w-full border-0 bg-transparent p-0 text-sm font-extrabold text-[#16294d] outline-none"
+        defaultValue={defaultValue}
+        name={name}
+        placeholder={placeholder}
+      />
+    </label>
   );
 }
 

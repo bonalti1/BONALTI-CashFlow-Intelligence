@@ -8,6 +8,7 @@ import {
   saveHouseContractSource,
   saveHouseDetail,
   saveHouseManualRenderImage,
+  saveHouseHoldback,
   saveHouseProjectStatus,
   saveHouseProjectNumber,
 } from "@/lib/houses/house-details-store";
@@ -89,6 +90,38 @@ export async function saveHouseDetailsAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/setup-inputs");
   revalidatePath("/house-accounts");
+}
+
+export async function saveHouseSourceFactsAction(formData: FormData) {
+  const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
+  const houseName = optionalText(formData.get("houseName"));
+
+  if (!qboBankAccountId || !houseName) {
+    throw new Error("House account is missing.");
+  }
+
+  await Promise.all([
+    saveHouseContractSource({
+      qboBankAccountId,
+      houseName,
+      contractFileName: null,
+      contractFileType: null,
+      contractFileDataUrl: null,
+      contractPrice: optionalMoney(formData.get("contractPrice")),
+      contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
+      contractCity: optionalText(formData.get("contractCity")),
+    }),
+    saveHouseHoldback({
+      qboBankAccountId,
+      houseName,
+      holdbackAmount: optionalMoney(formData.get("holdbackAmount")),
+      holdbackNotes: optionalText(formData.get("holdbackNotes")),
+    }),
+  ]);
+  await refreshHouseDashboardSummaries();
+  revalidatePath("/");
+  revalidatePath("/draws-budget");
+  revalidatePath("/setup-inputs");
 }
 
 export async function saveHouseProjectStatusAction(formData: FormData) {
