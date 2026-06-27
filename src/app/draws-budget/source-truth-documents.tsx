@@ -14,6 +14,7 @@ type SourceTruthDocumentsProps = {
   qboBankAccountId: string;
   houseName: string;
   contractFileName: string | null;
+  projectLabel?: string;
 };
 
 const documentCards = [
@@ -43,6 +44,7 @@ export function SourceTruthDocuments({
   qboBankAccountId,
   houseName,
   contractFileName,
+  projectLabel = houseName,
 }: SourceTruthDocumentsProps) {
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
 
@@ -93,6 +95,7 @@ export function SourceTruthDocuments({
           documentType={card.type}
           emptyLabel={card.empty}
           houseName={houseName}
+          projectLabel={projectLabel}
           key={card.type}
           label={card.label}
           onUploaded={(document) => {
@@ -116,6 +119,7 @@ export function SourceTruthDocuments({
 function DocumentUploadCard({
   qboBankAccountId,
   houseName,
+  projectLabel,
   documentType,
   label,
   emptyLabel,
@@ -125,6 +129,7 @@ function DocumentUploadCard({
 }: {
   qboBankAccountId: string;
   houseName: string;
+  projectLabel: string;
   documentType: string;
   label: string;
   emptyLabel: string;
@@ -273,7 +278,7 @@ function DocumentUploadCard({
               Confirm source of truth
             </p>
             <h3 className="mt-2 text-xl font-extrabold text-[#16294d]">
-              Upload {label} to {houseName}?
+              Upload {label} to {projectLabel}?
             </h3>
             <p className="mt-2 break-all rounded-[9px] bg-[#f5f4ef] px-3 py-2 text-sm font-bold text-[#596176]">
               {pendingFile.name}

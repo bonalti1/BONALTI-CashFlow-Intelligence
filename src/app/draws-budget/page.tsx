@@ -1047,6 +1047,7 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
       <SourceTruthDocuments
         contractFileName={house.contractFileName}
         houseName={house.house}
+        projectLabel={`${house.house}${house.projectNumber ? ` (${house.projectNumber})` : ""}`}
         qboBankAccountId={house.id}
       />
 

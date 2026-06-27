@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
+import { SourceTruthDocuments } from "@/app/draws-budget/source-truth-documents";
 import type {
   HouseDashboardSummary,
   HouseDashboardSummaryPhase,
@@ -209,28 +210,6 @@ function SourceTruthQuickPanel({
   onClose: () => void;
 }) {
   const currentPhase = currentPhaseFor(house);
-  const docs = [
-    {
-      label: "Contract",
-      status: house.contractFileName ? "Added" : "Missing",
-      value: house.contractFileName ?? "Upload contract",
-    },
-    {
-      label: "Draw Sheet",
-      status: "Next",
-      value: "Add CFS or Rally sheet",
-    },
-    {
-      label: "Bank Draw",
-      status: "Next",
-      value: "Add bank draw schedule",
-    },
-    {
-      label: "Holdback",
-      status: "Next",
-      value: "Add holdback rule",
-    },
-  ];
 
   return (
     <div className="border-t border-[#e3e1d7] bg-[#fbfaf7] px-4 pb-4 pt-3">
@@ -256,30 +235,12 @@ function SourceTruthQuickPanel({
           </button>
         </div>
 
-        <div className="mt-4 grid gap-2 md:grid-cols-4">
-          {docs.map((doc) => (
-            <div
-              className="rounded-[11px] border border-[#e3e1d7] bg-white p-3"
-              key={doc.label}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#9aa1b2]">
-                  {doc.label}
-                </div>
-                <span
-                  className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.08em] ${
-                    doc.status === "Added"
-                      ? "bg-[#eaf7f0] text-[#1f6f4b]"
-                      : "bg-[#fff6df] text-[#9a6500]"
-                  }`}
-                >
-                  {doc.status}
-                </span>
-              </div>
-              <div className="mt-2 text-sm font-extrabold text-[#16294d]">{doc.value}</div>
-            </div>
-          ))}
-        </div>
+        <SourceTruthDocuments
+          contractFileName={house.contractFileName}
+          houseName={house.house}
+          projectLabel={`${house.house}${house.projectNumber ? ` (${house.projectNumber})` : ""}`}
+          qboBankAccountId={house.id}
+        />
 
         <div className="mt-3 grid gap-2 md:grid-cols-3 lg:grid-cols-6">
           <SourceTruthValue label="Sold price" value={currency(house.soldPrice)} />
