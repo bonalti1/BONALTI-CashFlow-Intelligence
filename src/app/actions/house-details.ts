@@ -11,9 +11,12 @@ import {
   saveHouseHoldback,
   saveHouseProjectStatus,
   saveHouseProjectNumber,
-  saveHouseDisplayName,
+  saveHouseProjectIdentity,
 } from "@/lib/houses/house-details-store";
-import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
+import {
+  refreshHouseDashboardSummaries,
+  updateHouseDashboardProjectIdentity,
+} from "@/lib/dashboard/house-dashboard-summary-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 
 function optionalMoney(value: FormDataEntryValue | null) {
@@ -191,12 +194,19 @@ export async function saveHouseProjectIdentityAction(formData: FormData) {
     throw new Error("Choose a valid project status.");
   }
 
-  await saveHouseProjectNumber({ qboBankAccountId, houseName, projectNumber });
-  await Promise.all([
-    saveHouseDisplayName({ qboBankAccountId, houseName, displayName }),
-    saveHouseProjectStatus({ qboBankAccountId, houseName, projectStatus }),
-  ]);
-  await refreshHouseDashboardSummaries();
+  await saveHouseProjectIdentity({
+    qboBankAccountId,
+    houseName,
+    displayName,
+    projectNumber,
+    projectStatus,
+  });
+  await updateHouseDashboardProjectIdentity({
+    qboBankAccountId,
+    displayName,
+    projectNumber,
+    projectStatus,
+  });
   revalidatePath("/");
   revalidatePath("/draws-budget");
   revalidatePath("/setup-inputs");

@@ -823,6 +823,64 @@ export async function saveHouseDisplayName({
   `;
 }
 
+export async function saveHouseProjectIdentity({
+  qboBankAccountId,
+  houseName,
+  displayName,
+  projectNumber,
+  projectStatus,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  displayName: string;
+  projectNumber: number;
+  projectStatus: string;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to save project identity.");
+  }
+
+  await ensureHouseDetailsTable();
+  await sql().begin(async (transaction) => {
+    const duplicate = await transaction<Array<{ house_name: string }>>`
+      select house_name
+      from house_details
+      where project_number = ${projectNumber}
+        and qbo_bank_account_id <> ${qboBankAccountId}
+      limit 1
+    `;
+
+    if (duplicate[0]) {
+      throw new Error(`Project ${projectNumber} is already assigned to ${duplicate[0].house_name}.`);
+    }
+
+    await transaction`
+      insert into house_details (
+        qbo_bank_account_id,
+        house_name,
+        display_name,
+        project_number,
+        project_status,
+        updated_at
+      )
+      values (
+        ${qboBankAccountId},
+        ${houseName},
+        ${displayName},
+        ${projectNumber},
+        ${projectStatus},
+        now()
+      )
+      on conflict (qbo_bank_account_id) do update set
+        house_name = excluded.house_name,
+        display_name = excluded.display_name,
+        project_number = excluded.project_number,
+        project_status = excluded.project_status,
+        updated_at = now()
+    `;
+  });
+}
+
 export async function saveHouseHoldback({
   qboBankAccountId,
   houseName,

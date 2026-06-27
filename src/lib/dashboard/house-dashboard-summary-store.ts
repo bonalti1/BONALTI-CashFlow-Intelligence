@@ -235,6 +235,33 @@ export async function getHouseDashboardSummaries() {
   }));
 }
 
+export async function updateHouseDashboardProjectIdentity({
+  qboBankAccountId,
+  displayName,
+  projectNumber,
+  projectStatus,
+}: {
+  qboBankAccountId: string;
+  displayName: string;
+  projectNumber: number;
+  projectStatus: string;
+}) {
+  if (!hasDatabaseUrl()) {
+    return;
+  }
+
+  await ensureHouseDashboardSummaryTable();
+  await sql()`
+    update house_dashboard_summaries
+    set
+      display_name = ${displayName},
+      project_number = ${projectNumber},
+      project_status = ${projectStatus},
+      refreshed_at = now()
+    where house_id = ${qboBankAccountId}
+  `;
+}
+
 export async function refreshHouseDashboardSummaries() {
   if (!hasDatabaseUrl()) {
     return [];
