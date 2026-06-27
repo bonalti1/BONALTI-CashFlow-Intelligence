@@ -7,7 +7,10 @@ import {
 } from "lucide-react";
 
 import { saveDrawLineItemStatusAction } from "@/app/actions/draw-status";
-import { saveHouseProjectStatusAction } from "@/app/actions/house-details";
+import {
+  saveHouseProjectNumberAction,
+  saveHouseProjectStatusAction,
+} from "@/app/actions/house-details";
 import { DrawsBudgetHouseLoader } from "@/app/draws-budget/house-loader";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
 import {
@@ -64,6 +67,7 @@ type HouseView = {
   contractCity: string | null;
   contractSourceStatus: string | null;
   projectStatus: string;
+  projectNumber: number | null;
   completed: boolean;
   completedAt: string | null;
 };
@@ -414,6 +418,7 @@ function buildDemoHouses(): HouseView[] {
       contractCity: null,
       contractSourceStatus: null,
       projectStatus: "active",
+      projectNumber: null,
       completed: house.phaseIndex >= drawPhaseKeys.length - 1,
       completedAt: null,
     };
@@ -457,6 +462,7 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
     contractCity: summary.contractCity,
     contractSourceStatus: summary.contractSourceStatus,
     projectStatus: summary.projectStatus,
+    projectNumber: summary.projectNumber,
     completed: false,
     completedAt: null,
   };
@@ -857,7 +863,9 @@ function HouseCard({
 
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-extrabold text-[#16294d]">{house.house}</h2>
+              <h2 className="text-xl font-extrabold text-[#16294d]">
+                {house.house}{house.projectNumber ? ` (${house.projectNumber})` : ""}
+              </h2>
               <span className="rounded-[7px] bg-[#eaf2ff] px-2.5 py-1 text-xs font-extrabold text-[#16294d]">
                 {activePhase}
               </span>
@@ -1042,7 +1050,7 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
             Source of Truth
           </p>
           <h3 className="mt-1 font-['Barlow_Condensed',Barlow,sans-serif] text-[28px] font-bold uppercase leading-none tracking-[0.03em] text-[#16294d]">
-            {house.house}
+            {house.house}{house.projectNumber ? ` (${house.projectNumber})` : ""}
           </h3>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1060,6 +1068,33 @@ function SourceTruthPanel({ house }: { house: HouseView }) {
       </summary>
 
       <div className="mt-4 flex justify-end">
+        <form action={saveHouseProjectNumberAction} className="mr-2 flex flex-wrap items-end gap-2">
+          <input name="qboBankAccountId" type="hidden" value={house.id} />
+          <input name="houseName" type="hidden" value={house.house} />
+          <input
+            name="returnTo"
+            type="hidden"
+            value={`/draws-budget?house=${encodeURIComponent(house.id)}&phase=${house.currentPhase.key}&details=1#${sourceTruthAnchorIdForHouse(house.id)}`}
+          />
+          <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#7b8298]">
+            Project number
+            <input
+              className="mt-1 block h-9 w-28 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold text-[#16294d]"
+              defaultValue={house.projectNumber ?? ""}
+              inputMode="numeric"
+              min="101"
+              name="projectNumber"
+              placeholder="101"
+              type="number"
+            />
+          </label>
+          <button
+            className="h-9 rounded-[9px] border border-[#d6dceb] bg-white px-3 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
+            type="submit"
+          >
+            Save number
+          </button>
+        </form>
         <form action={saveHouseProjectStatusAction} className="mr-auto flex flex-wrap items-end gap-2">
           <input name="qboBankAccountId" type="hidden" value={house.id} />
           <input name="houseName" type="hidden" value={house.house} />

@@ -40,6 +40,7 @@ export type HouseDashboardSummary = {
   contractCity: string | null;
   contractSourceStatus: string | null;
   projectStatus: string;
+  projectNumber: number | null;
   refreshedAt: string;
 };
 
@@ -114,10 +115,12 @@ async function initializeHouseDashboardSummaryTable() {
       contract_city text,
       contract_source_status text,
       project_status text not null default 'active',
+      project_number integer,
       refreshed_at timestamptz not null default now()
     )
   `;
   await sql()`alter table house_dashboard_summaries add column if not exists project_status text not null default 'active'`;
+  await sql()`alter table house_dashboard_summaries add column if not exists project_number integer`;
 }
 
 function ensureHouseDashboardSummaryTable() {
@@ -157,6 +160,7 @@ export async function getHouseDashboardSummaries() {
       contract_city: string | null;
       contract_source_status: string | null;
       project_status: string;
+      project_number: number | null;
       refreshed_at: Date;
     }>
   >`
@@ -181,9 +185,10 @@ export async function getHouseDashboardSummaries() {
       contract_city,
       contract_source_status,
       project_status,
+      project_number,
       refreshed_at
     from house_dashboard_summaries
-    order by progress desc, house_name
+    order by project_number asc nulls last, house_name
   `;
 
   return rows.map((row): HouseDashboardSummary => ({
@@ -207,6 +212,7 @@ export async function getHouseDashboardSummaries() {
     contractCity: row.contract_city,
     contractSourceStatus: row.contract_source_status,
     projectStatus: row.project_status,
+    projectNumber: row.project_number,
     refreshedAt: row.refreshed_at.toISOString(),
   }));
 }
@@ -282,6 +288,7 @@ export async function refreshHouseDashboardSummaries() {
           contract_city,
           contract_source_status,
           project_status,
+          project_number,
           refreshed_at
         )
         values (
@@ -305,6 +312,7 @@ export async function refreshHouseDashboardSummaries() {
           ${details?.contractCity ?? null},
           ${details?.contractSourceStatus ?? null},
           ${details?.projectStatus ?? "active"},
+          ${details?.projectNumber ?? null},
           now()
         )
         on conflict (house_id) do update set
@@ -327,6 +335,7 @@ export async function refreshHouseDashboardSummaries() {
           contract_city = excluded.contract_city,
           contract_source_status = excluded.contract_source_status,
           project_status = excluded.project_status,
+          project_number = excluded.project_number,
           refreshed_at = now()
       `;
     }

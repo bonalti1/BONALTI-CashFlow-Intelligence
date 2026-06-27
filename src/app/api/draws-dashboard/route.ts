@@ -134,6 +134,7 @@ function summaryFromFallbackHouse(
       contractCity: null,
       contractSourceStatus: null,
       projectStatus: "active",
+      projectNumber: null,
       refreshedAt: new Date().toISOString(),
       completed: false,
     };

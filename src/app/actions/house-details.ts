@@ -9,6 +9,7 @@ import {
   saveHouseDetail,
   saveHouseManualRenderImage,
   saveHouseProjectStatus,
+  saveHouseProjectNumber,
 } from "@/lib/houses/house-details-store";
 import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
@@ -102,6 +103,28 @@ export async function saveHouseProjectStatusAction(formData: FormData) {
   }
 
   await saveHouseProjectStatus({ qboBankAccountId, houseName, projectStatus });
+  await refreshHouseDashboardSummaries();
+  revalidatePath("/");
+  revalidatePath("/draws-budget");
+  revalidatePath("/setup-inputs");
+  redirect(returnTo);
+}
+
+export async function saveHouseProjectNumberAction(formData: FormData) {
+  const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
+  const houseName = optionalText(formData.get("houseName"));
+  const projectNumber = optionalInteger(formData.get("projectNumber"));
+  const returnTo = safeReturnTo(formData.get("returnTo"));
+
+  if (!qboBankAccountId || !houseName) {
+    throw new Error("House account is missing.");
+  }
+
+  if (projectNumber !== null && projectNumber < 101) {
+    throw new Error("Project numbers must begin at 101.");
+  }
+
+  await saveHouseProjectNumber({ qboBankAccountId, houseName, projectNumber });
   await refreshHouseDashboardSummaries();
   revalidatePath("/");
   revalidatePath("/draws-budget");

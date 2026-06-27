@@ -19,6 +19,7 @@ export type HouseDetail = {
   contractCity: string | null;
   contractSourceStatus: string | null;
   projectStatus: string;
+  projectNumber: number | null;
   changeOrderTotal: number;
   currentContractPrice: number | null;
   updatedAt: string;
@@ -59,6 +60,7 @@ async function initializeHouseDetailsTable() {
       contract_city text,
       contract_source_status text,
       project_status text not null default 'active',
+      project_number integer,
       updated_at timestamptz not null default now()
     )
   `;
@@ -76,6 +78,7 @@ async function initializeHouseDetailsTable() {
   await sql()`alter table house_details add column if not exists contract_city text`;
   await sql()`alter table house_details add column if not exists contract_source_status text`;
   await sql()`alter table house_details add column if not exists project_status text not null default 'active'`;
+  await sql()`alter table house_details add column if not exists project_number integer`;
 }
 
 function ensureHouseDetailsTable() {
@@ -140,6 +143,7 @@ export async function getHouseDetailsMap() {
       contract_city: string | null;
       contract_source_status: string | null;
       project_status: string;
+      project_number: number | null;
       change_order_total: string | null;
       updated_at: Date;
     }>
@@ -163,6 +167,7 @@ export async function getHouseDetailsMap() {
       h.contract_city,
       h.contract_source_status,
       h.project_status,
+      h.project_number,
       coalesce(sum(c.amount), 0) as change_order_total,
       h.updated_at
     from house_details h
@@ -187,6 +192,7 @@ export async function getHouseDetailsMap() {
       h.contract_city,
       h.contract_source_status,
       h.project_status,
+      h.project_number,
       h.updated_at
     order by h.house_name
   `;
@@ -214,6 +220,7 @@ export async function getHouseDetailsMap() {
       contractCity: row.contract_city,
       contractSourceStatus: row.contract_source_status,
       projectStatus: row.project_status,
+      projectNumber: row.project_number,
       changeOrderTotal,
       currentContractPrice: contractPrice === null ? null : contractPrice + changeOrderTotal,
       updatedAt: row.updated_at.toISOString(),
@@ -564,6 +571,55 @@ export async function saveHouseProjectStatus({
     on conflict (qbo_bank_account_id) do update set
       house_name = excluded.house_name,
       project_status = excluded.project_status,
+      updated_at = now()
+  `;
+}
+
+export async function saveHouseProjectNumber({
+  qboBankAccountId,
+  houseName,
+  projectNumber,
+}: {
+  qboBankAccountId: string;
+  houseName: string;
+  projectNumber: number | null;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required to save project numbers.");
+  }
+
+  await ensureHouseDetailsTable();
+
+  if (projectNumber !== null) {
+    const duplicate = await sql()<Array<{ house_name: string }>>`
+      select house_name
+      from house_details
+      where project_number = ${projectNumber}
+        and qbo_bank_account_id <> ${qboBankAccountId}
+      limit 1
+    `;
+
+    if (duplicate[0]) {
+      throw new Error(`Project ${projectNumber} is already assigned to ${duplicate[0].house_name}.`);
+    }
+  }
+
+  await sql()`
+    insert into house_details (
+      qbo_bank_account_id,
+      house_name,
+      project_number,
+      updated_at
+    )
+    values (
+      ${qboBankAccountId},
+      ${houseName},
+      ${projectNumber},
+      now()
+    )
+    on conflict (qbo_bank_account_id) do update set
+      house_name = excluded.house_name,
+      project_number = excluded.project_number,
       updated_at = now()
   `;
 }
