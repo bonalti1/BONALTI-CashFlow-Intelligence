@@ -137,6 +137,7 @@ function DocumentUploadCard({
   const [isUploading, setIsUploading] = useState(false);
   const [localFileName, setLocalFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const displayFileName = localFileName ?? currentFileName;
 
   async function upload(file: File | undefined) {
@@ -144,6 +145,7 @@ function DocumentUploadCard({
       return;
     }
 
+    setPendingFile(null);
     setError(null);
     setIsUploading(true);
     const formData = new FormData();
@@ -197,7 +199,7 @@ function DocumentUploadCard({
       <input
         accept="application/pdf,image/*,.xlsx,.xls,.csv"
         className="sr-only"
-        onChange={(event) => upload(event.currentTarget.files?.[0])}
+        onChange={(event) => setPendingFile(event.currentTarget.files?.[0] ?? null)}
         ref={inputRef}
         type="file"
       />
@@ -219,7 +221,8 @@ function DocumentUploadCard({
         onDragOver={preventDefault}
         onDrop={(event) => {
           preventDefault(event);
-          upload(event.dataTransfer.files?.[0]);
+          setIsDragging(false);
+          setPendingFile(event.dataTransfer.files?.[0] ?? null);
         }}
         type="button"
       >
@@ -258,6 +261,49 @@ function DocumentUploadCard({
         <p className="mt-1 rounded-[7px] bg-[#fdebea] px-2 py-1 text-[10px] font-bold text-[#9d251c]">
           {error}
         </p>
+      ) : null}
+      {pendingFile ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-[#0e1b36]/45 p-4"
+          role="dialog"
+        >
+          <div className="w-full max-w-md rounded-[14px] border border-[#d6dceb] bg-white p-5 shadow-2xl">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#e23b2a]">
+              Confirm source of truth
+            </p>
+            <h3 className="mt-2 text-xl font-extrabold text-[#16294d]">
+              Upload {label} to {houseName}?
+            </h3>
+            <p className="mt-2 break-all rounded-[9px] bg-[#f5f4ef] px-3 py-2 text-sm font-bold text-[#596176]">
+              {pendingFile.name}
+            </p>
+            <p className="mt-3 text-sm leading-5 text-[#69746f]">
+              This document will become part of this project&apos;s source of truth.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                className="h-10 rounded-[9px] border border-[#d6dceb] bg-white text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
+                onClick={() => {
+                  setPendingFile(null);
+                  if (inputRef.current) {
+                    inputRef.current.value = "";
+                  }
+                }}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="h-10 rounded-[9px] bg-[#16294d] text-xs font-extrabold uppercase tracking-[0.08em] text-white"
+                onClick={() => upload(pendingFile)}
+                type="button"
+              >
+                Upload document
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
