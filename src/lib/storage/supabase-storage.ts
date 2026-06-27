@@ -156,3 +156,50 @@ export async function deleteSupabaseStorageObject({
 
   return response.ok;
 }
+
+export async function createSupabaseStorageSignedUrl({
+  bucket,
+  path,
+  expiresIn = 300,
+}: {
+  bucket: string;
+  path: string;
+  expiresIn?: number;
+}) {
+  const config = storageConfig();
+
+  if (!config) {
+    return null;
+  }
+
+  const response = await fetch(
+    `${config.supabaseUrl}/storage/v1/object/sign/${bucket}/${path}`,
+    {
+      body: JSON.stringify({ expiresIn }),
+      headers: {
+        apikey: config.serviceRoleKey,
+        Authorization: `Bearer ${config.serviceRoleKey}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as {
+    signedURL?: string;
+    signedUrl?: string;
+  };
+  const signedPath = payload.signedURL ?? payload.signedUrl;
+
+  if (!signedPath) {
+    return null;
+  }
+
+  return signedPath.startsWith("http")
+    ? signedPath
+    : `${config.supabaseUrl}/storage/v1${signedPath.startsWith("/") ? "" : "/"}${signedPath}`;
+}

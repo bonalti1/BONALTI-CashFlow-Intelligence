@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileCheck2, Upload } from "lucide-react";
+import { ExternalLink, FileCheck2, Upload } from "lucide-react";
 
 type ProjectDocument = {
   id: number;
@@ -262,6 +262,17 @@ function DocumentUploadCard({
           </div>
         </div>
       </button>
+      {displayFileName ? (
+        <a
+          className="mt-2 flex h-9 items-center justify-center gap-2 rounded-[9px] border border-[#d6dceb] bg-white text-[10px] font-extrabold uppercase tracking-[0.09em] text-[#16294d] transition hover:border-[#16294d]"
+          href={`/api/houses/file?houseId=${encodeURIComponent(qboBankAccountId)}&type=${encodeURIComponent(documentType)}`}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <ExternalLink size={13} />
+          View document
+        </a>
+      ) : null}
       {error ? (
         <p className="mt-1 rounded-[7px] bg-[#fdebea] px-2 py-1 text-[10px] font-bold text-[#9d251c]">
           {error}
