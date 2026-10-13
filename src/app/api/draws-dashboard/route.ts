@@ -120,6 +120,7 @@ function summaryFromFallbackHouse(
       actualBankBalance: null,
       actualBankAvailableBalance: null,
       actualBankAccountName: null,
+      actualBankLastSyncedAt: null,
       city: house.city,
       soldPrice: house.soldPrice,
       squareFootage: house.squareFootage,

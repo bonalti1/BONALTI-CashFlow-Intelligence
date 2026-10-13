@@ -31,6 +31,7 @@ export type HouseDashboardSummary = {
   actualBankBalance: number | null;
   actualBankAvailableBalance: number | null;
   actualBankAccountName: string | null;
+  actualBankLastSyncedAt: string | null;
   city: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
@@ -68,7 +69,7 @@ function accountName(account: QboAccount) {
   return account.FullyQualifiedName ?? account.Name;
 }
 
-function plaidAccountForHouse(
+export function plaidAccountForHouse(
   accounts: PlaidBankAccount[],
   qboBankAccountId: string,
   houseName: string,
@@ -268,6 +269,7 @@ export async function getHouseDashboardSummaries() {
       actualBankBalance: plaidAccount?.currentBalance ?? null,
       actualBankAvailableBalance: plaidAccount?.availableBalance ?? null,
       actualBankAccountName: plaidAccount?.name ?? null,
+      actualBankLastSyncedAt: plaidAccount?.lastSyncedAt ?? null,
       city: hasContractSource ? row.contract_city : null,
       soldPrice:
         hasContractSource && row.sold_price !== null ? Number(row.sold_price) : null,

@@ -21,7 +21,7 @@ export async function GET(request: Request) {
         projects: {
           path: "/api/readonly/v1/projects",
           description:
-            "Every project with contract facts, change orders, holdback, bank balance, phase budgets and spending, draw requests and payments, and uploaded documents.",
+            "Every project with contract facts, change orders, holdback, the linked Plaid bank balance and last sync time, phase budgets and spending, draw requests and payments, and uploaded documents.",
         },
         activity: {
           path: "/api/readonly/v1/activity",
@@ -34,6 +34,8 @@ export async function GET(request: Request) {
         "contract.currentPrice = contract.originalPrice + contract.changeOrderTotal.",
         "phases[].draw is null when no draw has been recorded for that phase.",
         "Changes made by the AI contract reader show actorName 'Contract reader (AI)' in the activity feed.",
+        "bank.plaidLastSyncedAt is when that account's Plaid item last synced. Plaid balance fields stay null until the account is linked to the project.",
+        "The same read-only key can also call GET /api/plaid/accounts and GET /api/ai-csuite/finance-export. It cannot sync or link accounts.",
       ],
     },
     { headers: { "Cache-Control": "private, no-store" } },

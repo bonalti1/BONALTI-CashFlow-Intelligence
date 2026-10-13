@@ -1,4 +1,8 @@
-import { getHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
+import {
+  getHouseDashboardSummaries,
+  plaidAccountForHouse,
+} from "@/lib/dashboard/house-dashboard-summary-store";
+import { getPlaidBankAccounts } from "@/lib/plaid/bank-store";
 import {
   getHouseChangeOrdersMap,
   getHouseDetailsMap,
@@ -9,10 +13,11 @@ import { projectStatusLabels, drawStatusLabels, labelFor } from "@/lib/audit/pro
 // A stable, documented shape for outside readers such as Grokbot. Keep field names
 // backwards compatible: add fields instead of renaming them.
 export async function buildProjectFeed() {
-  const [summaries, details, changeOrders] = await Promise.all([
+  const [summaries, details, changeOrders, plaidAccounts] = await Promise.all([
     getHouseDashboardSummaries(),
     getHouseDetailsMap(),
     getHouseChangeOrdersMap(),
+    getPlaidBankAccounts().catch(() => []),
   ]);
   const summaryById = new Map(summaries.map((summary) => [summary.id, summary]));
   const ids = [...new Set([...summaryById.keys(), ...details.keys()])];
@@ -24,6 +29,8 @@ export async function buildProjectFeed() {
       const documents = await getHouseProjectDocuments(id).catch(() => []);
       const projectChangeOrders = changeOrders.get(id) ?? [];
       const projectStatus = detail?.projectStatus ?? summary?.projectStatus ?? "active";
+      const houseName = detail?.houseName ?? summary?.house ?? "";
+      const plaidAccount = plaidAccountForHouse(plaidAccounts, id, houseName);
 
       return {
         id,
@@ -63,9 +70,10 @@ export async function buildProjectFeed() {
         })),
         bank: {
           quickbooksAccountName: summary?.bank ?? null,
-          plaidAccountName: summary?.actualBankAccountName ?? null,
-          plaidCurrentBalance: summary?.actualBankBalance ?? null,
-          plaidAvailableBalance: summary?.actualBankAvailableBalance ?? null,
+          plaidAccountName: plaidAccount?.name ?? null,
+          plaidCurrentBalance: plaidAccount?.currentBalance ?? null,
+          plaidAvailableBalance: plaidAccount?.availableBalance ?? null,
+          plaidLastSyncedAt: plaidAccount?.lastSyncedAt ?? null,
         },
         spending: {
           totalSpent: summary?.totalSpent ?? null,

@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { authorizeFinanceExport } from "@/lib/auth/session";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import {
+  readPlaidBankAccountsForExport,
+  syncAllPlaidItems,
+  type PlaidBankAccountExport,
+} from "@/lib/plaid/bank-store";
 import { ensureQboFinanceObjectTablesForExport } from "@/lib/qbo/finance-objects-store";
 
 export const runtime = "nodejs";
@@ -114,31 +120,83 @@ function dateOrNull(value: Date | null) {
   return value?.toISOString() ?? null;
 }
 
-function isAuthorized(request: Request) {
-  const expectedToken = process.env.AI_CSUITE_EXPORT_TOKEN;
+const PLAID_REFRESH_TIMEOUT_MS = 15_000;
 
-  if (!expectedToken) {
-    return {
-      ok: false,
-      status: 500,
-      message: "AI_CSUITE_EXPORT_TOKEN is not configured.",
-    };
+type PlaidRefreshOutcome =
+  | { state: "not_requested" }
+  | { state: "completed" }
+  | { state: "timed_out" }
+  | { state: "failed"; detail: string };
+
+async function refreshPlaidForExport(request: Request): Promise<PlaidRefreshOutcome> {
+  const refresh = new URL(request.url).searchParams.get("refresh");
+
+  if (refresh !== "plaid") {
+    return { state: "not_requested" };
   }
 
-  const authorization = request.headers.get("authorization") ?? "";
-  const [scheme, token] = authorization.split(" ");
+  const syncPromise: Promise<PlaidRefreshOutcome> = syncAllPlaidItems().then(
+    () => ({ state: "completed" }),
+    (error: unknown) => ({
+      state: "failed",
+      detail: error instanceof Error ? error.message : "Plaid refresh failed.",
+    }),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
-  if (scheme !== "Bearer" || token !== expectedToken) {
-    return {
-      ok: false,
-      status: 401,
-      message: "Missing or invalid bearer token.",
-    };
+  try {
+    return await Promise.race([
+      syncPromise,
+      new Promise<PlaidRefreshOutcome>((resolve) => {
+        timer = setTimeout(() => {
+          resolve({ state: "timed_out" });
+        }, PLAID_REFRESH_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
   }
+}
 
-  return {
-    ok: true,
+function bankAccountDatasetStatus(
+  bankAccounts: PlaidBankAccountExport,
+  refresh: PlaidRefreshOutcome,
+) {
+  const status: {
+    available: boolean;
+    source_system: "plaid";
+    source_table: "plaid_accounts";
+    reason?: string;
+    refresh?: "completed" | "timed_out" | "failed";
+    refresh_note?: string;
+  } = {
+    available: bankAccounts.available,
+    source_system: "plaid",
+    source_table: "plaid_accounts",
   };
+
+  if (!bankAccounts.available && bankAccounts.reason) {
+    status.reason = bankAccounts.reason;
+  }
+
+  if (refresh.state === "not_requested") {
+    return status;
+  }
+
+  status.refresh = refresh.state;
+
+  if (refresh.state === "timed_out") {
+    status.refresh_note =
+      "Plaid sync exceeded 15 seconds. This export uses the latest stored balances.";
+  }
+
+  if (refresh.state === "failed") {
+    status.refresh_note = refresh.detail;
+  }
+
+  return status;
 }
 
 function cashBucketType(row: CashSnapshotRow) {
@@ -449,7 +507,7 @@ async function getProjects() {
 }
 
 export async function GET(request: Request) {
-  const auth = isAuthorized(request);
+  const auth = await authorizeFinanceExport(request);
 
   if (!auth.ok) {
     return NextResponse.json(
@@ -473,16 +531,18 @@ export async function GET(request: Request) {
 
   try {
     await ensureQboFinanceObjectTablesForExport();
-    const [cashSnapshots, jobCosts, payments, invoices, vendorBills, customers, projects] =
+    const plaidRefresh = await refreshPlaidForExport(request);
+    const [cashSnapshots, jobCosts, payments, invoices, vendorBills, customers, projects, bankAccounts] =
       await Promise.all([
-      getCashSnapshots(),
-      getJobCosts(),
-      getPayments(),
+        getCashSnapshots(),
+        getJobCosts(),
+        getPayments(),
         getInvoices(),
         getVendorBills(),
         getCustomers(),
         getProjects(),
-    ]);
+        readPlaidBankAccountsForExport(),
+      ]);
 
     return NextResponse.json({
       status: "ok",
@@ -496,6 +556,7 @@ export async function GET(request: Request) {
         vendor_bills: vendorBills.length,
         customers: customers.length,
         projects: projects.length,
+        bank_accounts: bankAccounts.accounts.length,
       },
       dataset_status: {
         cash_snapshots: {
@@ -538,6 +599,7 @@ export async function GET(request: Request) {
           source_table: "qbo_customers",
           note: "Projects are QuickBooks customers/sub-customers detected from Customer.ParentRef or Customer.Job.",
         },
+        bank_accounts: bankAccountDatasetStatus(bankAccounts, plaidRefresh),
       },
       cash_snapshots: cashSnapshots,
       job_costs: jobCosts,
@@ -546,6 +608,7 @@ export async function GET(request: Request) {
       vendor_bills: vendorBills,
       customers,
       projects,
+      bank_accounts: bankAccounts.accounts,
     });
   } catch (error) {
     return NextResponse.json(

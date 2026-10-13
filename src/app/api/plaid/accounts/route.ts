@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
+import { authorizeApiRequest, authorizePlaidAccountRead, editorRoles } from "@/lib/auth/session";
+import { auditProjectChange } from "@/lib/audit/project-audit";
 import {
   getPlaidBankAccounts,
   linkPlaidAccountToHouse,
 } from "@/lib/plaid/bank-store";
-import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
-import { auditProjectChange } from "@/lib/audit/project-audit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ function requiredText(value: unknown) {
 }
 
 export async function GET(request: Request) {
-  const authorization = await authorizeApiRequest(request);
+  const authorization = await authorizePlaidAccountRead(request);
 
   if (!authorization.ok) {
     return authorization.response;
@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         availableBalance: account.availableBalance,
         linkedHouseName: account.houseName,
         linkedQboBankAccountId: account.qboBankAccountId,
+        lastSyncedAt: account.lastSyncedAt,
       })),
     },
     {

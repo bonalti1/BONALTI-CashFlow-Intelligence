@@ -156,6 +156,96 @@ export function safeNextPath(value: FormDataEntryValue | string | null | undefin
   return text;
 }
 
+// Shared by the finance export and other read-only bank routes.
+// A signed-in session is not enough here: callers must present the export
+// token or a live stb_ro_ key.
+export async function authorizeFinanceExport(request: Request) {
+  const accepted = await acceptedReadOnlyBearer(request);
+
+  if (accepted === "export" || accepted === "key") {
+    return { ok: true as const };
+  }
+
+  if (accepted === "invalid-key") {
+    return {
+      ok: false as const,
+      status: 401 as const,
+      message: "Send a valid read-only key as: Authorization: Bearer <key>",
+    };
+  }
+
+  if (!process.env.AI_CSUITE_EXPORT_TOKEN) {
+    return {
+      ok: false as const,
+      status: 500 as const,
+      message: "AI_CSUITE_EXPORT_TOKEN is not configured.",
+    };
+  }
+
+  return {
+    ok: false as const,
+    status: 401 as const,
+    message: "Missing or invalid bearer token.",
+  };
+}
+
+// Read-only Plaid balances: export token, stb_ro_ key, or an existing signed-in session.
+// Write routes keep the editor/cron checks and do not accept a read-only key.
+export async function authorizePlaidAccountRead(request: Request) {
+  const accepted = await acceptedReadOnlyBearer(request);
+
+  if (accepted === "export" || accepted === "key") {
+    return { ok: true as const };
+  }
+
+  if (accepted === "invalid-key") {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { message: "Send a valid read-only key as: Authorization: Bearer <key>" },
+        { status: 401 },
+      ),
+    };
+  }
+
+  const session = await authorizeApiRequest(request);
+
+  if (session.ok) {
+    return { ok: true as const };
+  }
+
+  const token = bearerToken(request);
+
+  if (token && process.env.AI_CSUITE_EXPORT_TOKEN) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { status: "error", message: "Missing or invalid bearer token." },
+        { status: 401 },
+      ),
+    };
+  }
+
+  return session;
+}
+
+async function acceptedReadOnlyBearer(request: Request) {
+  const token = bearerToken(request);
+  const exportToken = process.env.AI_CSUITE_EXPORT_TOKEN;
+
+  if (exportToken && token && safeEqualText(token, exportToken)) {
+    return "export" as const;
+  }
+
+  if (token?.startsWith("stb_ro_")) {
+    const apiKey = await verifyApiKey(token).catch(() => null);
+
+    return apiKey ? ("key" as const) : ("invalid-key" as const);
+  }
+
+  return "none" as const;
+}
+
 export async function authorizeReadOnlyKey(request: Request) {
   const token = bearerToken(request);
   const apiKey = token ? await verifyApiKey(token).catch(() => null) : null;

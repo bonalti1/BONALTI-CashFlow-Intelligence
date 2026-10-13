@@ -1,8 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { syncAllPlaidItems } from "@/lib/plaid/bank-store";
 import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
+import { syncAllPlaidItems } from "@/lib/plaid/bank-store";
 
 export const runtime = "nodejs";
 

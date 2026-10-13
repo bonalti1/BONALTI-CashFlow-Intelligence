@@ -23,6 +23,7 @@ export type PlaidBankAccount = {
   currency: string | null;
   houseName: string | null;
   qboBankAccountId: string | null;
+  lastSyncedAt: string | null;
   updatedAt: string;
 };
 
@@ -442,24 +443,28 @@ export async function getPlaidBankAccounts() {
       qbo_bank_account_id: string | null;
       house_name: string | null;
       updated_at: Date;
+      last_synced_at: Date | string | null;
     }>
   >`
     select
-      plaid_account_id,
-      item_id,
-      name,
-      official_name,
-      mask,
-      account_type,
-      account_subtype,
-      available_balance,
-      current_balance,
-      iso_currency_code,
-      qbo_bank_account_id,
-      house_name,
-      updated_at
-    from plaid_accounts
-    order by name
+      a.plaid_account_id,
+      a.item_id,
+      a.name,
+      a.official_name,
+      a.mask,
+      a.account_type,
+      a.account_subtype,
+      a.available_balance,
+      a.current_balance,
+      a.iso_currency_code,
+      a.qbo_bank_account_id,
+      a.house_name,
+      a.updated_at,
+      i.last_synced_at
+    from plaid_accounts a
+    left join plaid_items i
+      on i.item_id = a.item_id
+    order by a.name
   `;
 
   return rows.map((row) => ({
@@ -475,8 +480,123 @@ export async function getPlaidBankAccounts() {
     currency: row.iso_currency_code,
     qboBankAccountId: row.qbo_bank_account_id,
     houseName: row.house_name,
+    lastSyncedAt: isoTimestamp(row.last_synced_at),
     updatedAt: row.updated_at.toISOString(),
   }));
+}
+
+export type PlaidBankAccountExportRow = {
+  name: string;
+  official_name: string | null;
+  mask: string | null;
+  current_balance: number | null;
+  available_balance: number | null;
+  currency: string | null;
+  linked_house_name: string | null;
+  linked_qbo_bank_account_id: string | null;
+  last_synced_at: string | null;
+};
+
+export type PlaidBankAccountExport = {
+  available: boolean;
+  accounts: PlaidBankAccountExportRow[];
+  reason?: string;
+};
+
+function moneyOrNull(value: string | null) {
+  return value === null ? null : Number(value);
+}
+
+function isoTimestamp(value: Date | string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+export async function readPlaidBankAccountsForExport(): Promise<PlaidBankAccountExport> {
+  if (!hasDatabaseUrl()) {
+    return {
+      available: false,
+      accounts: [],
+      reason: "DATABASE_URL is not configured.",
+    };
+  }
+
+  try {
+    const tables = await sql()<
+      Array<{
+        accounts: string | null;
+        items: string | null;
+      }>
+    >`
+      select
+        to_regclass('plaid_accounts')::text as accounts,
+        to_regclass('plaid_items')::text as items
+    `;
+    const present = tables[0];
+
+    if (!present?.accounts || !present.items) {
+      return {
+        available: false,
+        accounts: [],
+        reason: "Plaid tables are not present.",
+      };
+    }
+
+    const rows = await sql()<
+      Array<{
+        name: string;
+        official_name: string | null;
+        mask: string | null;
+        current_balance: string | null;
+        available_balance: string | null;
+        iso_currency_code: string | null;
+        house_name: string | null;
+        qbo_bank_account_id: string | null;
+        last_synced_at: Date | string | null;
+      }>
+    >`
+      select
+        a.name,
+        a.official_name,
+        a.mask,
+        a.current_balance,
+        a.available_balance,
+        a.iso_currency_code,
+        a.house_name,
+        a.qbo_bank_account_id,
+        i.last_synced_at
+      from plaid_accounts a
+      left join plaid_items i
+        on i.item_id = a.item_id
+      order by a.name
+    `;
+
+    return {
+      available: true,
+      accounts: rows.map((row) => ({
+        name: row.name,
+        official_name: row.official_name,
+        mask: row.mask,
+        current_balance: moneyOrNull(row.current_balance),
+        available_balance: moneyOrNull(row.available_balance),
+        currency: row.iso_currency_code,
+        linked_house_name: row.house_name,
+        linked_qbo_bank_account_id: row.qbo_bank_account_id,
+        last_synced_at: isoTimestamp(row.last_synced_at),
+      })),
+    };
+  } catch {
+    return {
+      available: false,
+      accounts: [],
+      reason: "Plaid bank data is not available.",
+    };
+  }
 }
 
 export async function linkPlaidAccountToHouse({
