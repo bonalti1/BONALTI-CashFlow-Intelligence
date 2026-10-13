@@ -4,10 +4,13 @@ import { ArrowLeft, Brain } from "lucide-react";
 
 import { IntelligentSummary } from "@/app/agent-health/intelligent-summary";
 import { getEnvStatus } from "@/lib/env";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AgentHealthPage() {
+  await requireUser();
+
   const env = await getEnvStatus();
   const openAiReady = Boolean(env.find((item) => item.key === "OPENAI_API_KEY")?.configured);
 

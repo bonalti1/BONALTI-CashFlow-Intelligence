@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { syncCfoDataLayer } from "@/lib/cfo/data-layer";
 import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
+import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
@@ -42,10 +43,22 @@ async function runCfoSync() {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles, allowCronSecret: true });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   return runCfoSync();
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles, allowCronSecret: true });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   return runCfoSync();
 }

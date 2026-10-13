@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { syncCompanyBrainFromCurrentData } from "@/lib/company/brain-store";
+import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles, allowCronSecret: true });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const companyBrain = await syncCompanyBrainFromCurrentData();
 
@@ -25,6 +32,12 @@ export async function GET() {
   }
 }
 
-export async function POST() {
-  return GET();
+export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles, allowCronSecret: true });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
+  return GET(request);
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getQboAuthorizationUrl, getQboSetupDiagnostics } from "@/lib/qbo/oauth";
+import { authorizeApiRequest, adminRoles } from "@/lib/auth/session";
 
 function encodeState(nextPath: string | null) {
   return Buffer.from(
@@ -11,7 +12,13 @@ function encodeState(nextPath: string | null) {
   ).toString("base64url");
 }
 
-export function GET(request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, { roles: adminRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const diagnostics = getQboSetupDiagnostics();
 
   if (!diagnostics.ready) {

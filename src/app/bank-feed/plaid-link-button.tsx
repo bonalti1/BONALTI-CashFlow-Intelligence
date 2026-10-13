@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ButtonHTMLAttributes } from "react";
+import { useCallback, useEffect, useState, type ButtonHTMLAttributes } from "react";
 import { Landmark, Loader2 } from "lucide-react";
 
 declare global {
@@ -97,6 +97,58 @@ export function PlaidLinkButton({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  const savePublicToken = useCallback(async (
+    publicToken: string,
+    metadata: {
+      institution?: {
+        institution_id?: string;
+        name?: string;
+      };
+    },
+  ) => {
+    const exchangeResponse = await fetch("/api/plaid/exchange", {
+      body: JSON.stringify({
+        institution: metadata.institution,
+        publicToken,
+      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+    const exchangeData = (await exchangeResponse.json()) as {
+      message?: string;
+      status: string;
+    };
+
+    if (!exchangeResponse.ok) {
+      throw new Error(exchangeData.message || "Could not save bank connection.");
+    }
+
+    window.localStorage.removeItem(storedLinkTokenKey);
+    window.location.href = "/bank-feed";
+  }, []);
+
+  const openPlaidLink = useCallback((linkToken: string, receivedRedirectUri?: string) => {
+    window.Plaid?.create({
+      token: linkToken,
+      ...(receivedRedirectUri ? { receivedRedirectUri } : {}),
+      onSuccess: async (publicToken, metadata) => {
+        try {
+          setMessage("Saving bank connection...");
+          await savePublicToken(publicToken, metadata);
+        } catch (error) {
+          setBusy(false);
+          setMessage(error instanceof Error ? error.message : "Could not save bank connection.");
+        }
+      },
+      onExit: (error, metadata) => {
+        setBusy(false);
+        setMessage(plaidExitMessage(error, metadata));
+      },
+    }).open();
+  }, [savePublicToken]);
+
   useEffect(() => {
     async function resumeOAuthRedirect() {
       try {
@@ -119,59 +171,7 @@ export function PlaidLinkButton({
     }
 
     void resumeOAuthRedirect();
-  }, []);
-
-  async function savePublicToken(
-    publicToken: string,
-    metadata: {
-      institution?: {
-        institution_id?: string;
-        name?: string;
-      };
-    },
-  ) {
-    const exchangeResponse = await fetch("/api/plaid/exchange", {
-      body: JSON.stringify({
-        institution: metadata.institution,
-        publicToken,
-      }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
-    const exchangeData = (await exchangeResponse.json()) as {
-      message?: string;
-      status: string;
-    };
-
-    if (!exchangeResponse.ok) {
-      throw new Error(exchangeData.message || "Could not save bank connection.");
-    }
-
-    window.localStorage.removeItem(storedLinkTokenKey);
-    window.location.href = "/bank-feed";
-  }
-
-  function openPlaidLink(linkToken: string, receivedRedirectUri?: string) {
-    window.Plaid?.create({
-      token: linkToken,
-      ...(receivedRedirectUri ? { receivedRedirectUri } : {}),
-      onSuccess: async (publicToken, metadata) => {
-        try {
-          setMessage("Saving bank connection...");
-          await savePublicToken(publicToken, metadata);
-        } catch (error) {
-          setBusy(false);
-          setMessage(error instanceof Error ? error.message : "Could not save bank connection.");
-        }
-      },
-      onExit: (error, metadata) => {
-        setBusy(false);
-        setMessage(plaidExitMessage(error, metadata));
-      },
-    }).open();
-  }
+  }, [openPlaidLink]);
 
   async function handleConnect() {
     try {

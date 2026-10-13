@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 import { getSchedulingProjectVisualMap } from "@/lib/scheduling/status-store";
+import { authorizeApiRequest } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,12 @@ function withRenderTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 1500
 }
 
 export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request);
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const startedAt = performance.now();
   const { searchParams } = new URL(request.url);
   const force = searchParams.get("force") === "1";

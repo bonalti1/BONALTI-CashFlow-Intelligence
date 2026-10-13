@@ -54,7 +54,7 @@ export type HouseDashboardSummary = {
   refreshedAt: string;
 };
 
-const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
+export const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
   pre: { label: "Pre", name: "Pre Phase" },
   p1: { label: "1", name: "Foundation" },
   p2: { label: "2", name: "Framing / Dry-in" },

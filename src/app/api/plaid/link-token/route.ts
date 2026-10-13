@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { createPlaidLinkToken } from "@/lib/plaid/client";
+import { authorizeApiRequest, adminRoles } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: adminRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const token = await createPlaidLinkToken();
 

@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 
 import { saveHouseManualRenderImage } from "@/lib/houses/house-details-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
+import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
+import { auditProjectChange } from "@/lib/audit/project-audit";
 
 function optionalText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -11,6 +13,12 @@ function optionalText(value: FormDataEntryValue | null) {
 }
 
 export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const formData = await request.formData();
     const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
@@ -37,6 +45,17 @@ export async function POST(request: Request) {
         qboBankAccountId,
         houseName,
         manualRenderImageUrl: renderImageUrl,
+      });
+      await auditProjectChange({
+        actor: authorization.actor,
+        action: "project.picture_linked",
+        qboBankAccountId,
+        houseName,
+        title: "Set the project picture from a web link",
+        before: null,
+        after: {},
+        spec: {},
+        details: { renderImageUrl },
       });
 
       revalidatePath("/");
@@ -84,6 +103,17 @@ export async function POST(request: Request) {
       houseName,
       manualRenderImageUrl: uploaded?.url ?? dataUrl,
       renderStoragePath: uploaded?.path ?? null,
+    });
+    await auditProjectChange({
+      actor: authorization.actor,
+      action: "project.picture_uploaded",
+      qboBankAccountId,
+      houseName,
+      title: `Uploaded a new project picture (${renderImage.name})`,
+      before: null,
+      after: {},
+      spec: {},
+      details: { fileName: renderImage.name, fileSize: renderImage.size },
     });
 
     revalidatePath("/");

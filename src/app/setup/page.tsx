@@ -12,6 +12,7 @@ import {
 import { getEnvStatus, type ServerEnvKey } from "@/lib/env";
 import { getAccountsSnapshotStatus } from "@/lib/qbo/accounts-store";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,8 @@ const setupSteps: SetupStep[] = [
 ];
 
 export default async function SetupPage() {
+  await requireUser();
+
   const envStatus = getEnvStatus();
   const qboConnection = await getQboConnectionStatus();
   const accountsSnapshot = await getAccountsSnapshotStatus();

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getAccountsSnapshot } from "@/lib/qbo/accounts-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ const plannedSections = [
 ];
 
 export default async function ChartOfAccountsPage() {
+  await requireUser();
+
   const snapshot = await getAccountsSnapshot().catch(() => null);
   const accounts = snapshot?.accounts ?? [];
   const byType = accounts.reduce<Record<string, number>>((groups, account) => {

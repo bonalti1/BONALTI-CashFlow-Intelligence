@@ -2,10 +2,17 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { syncAllPlaidItems } from "@/lib/plaid/bank-store";
+import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles, allowCronSecret: true });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const result = await syncAllPlaidItems();
 

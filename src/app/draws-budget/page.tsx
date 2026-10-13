@@ -12,6 +12,7 @@ import {
   saveHouseSourceFactsAction,
 } from "@/app/actions/house-details";
 import { DrawsBudgetHouseLoader } from "@/app/draws-budget/house-loader";
+import { PlaidBalanceLink } from "@/app/draws-budget/plaid-balance-link";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
 import { SourceTruthDocuments } from "@/app/draws-budget/source-truth-documents";
 import {
@@ -31,6 +32,7 @@ import {
   type PhaseLineItem,
   type PhaseLineItemActual,
 } from "@/lib/draws/draws-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -564,7 +566,18 @@ async function getDetailedHouseViews(
   return houses.map((house) => (house.id === detailedHouse.id ? detailedHouse : house));
 }
 
-function DrawsBudgetShell({ children }: { children: React.ReactNode }) {
+function workingDayLabel() {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "America/Chicago",
+    weekday: "short",
+  })
+    .format(new Date())
+    .replace(", ", " · ");
+}
+
+function DrawsBudgetShell({ children, userName }: { children: React.ReactNode; userName: string }) {
   return (
     <main className="min-h-screen bg-[#f2f1ea] text-[#1b2233] [background-image:linear-gradient(rgba(22,41,77,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(22,41,77,0.055)_1px,transparent_1px)] [background-size:34px_34px] [font-family:Barlow,system-ui,sans-serif]">
       <header className="bg-[#16294d] px-7 py-4 text-white shadow-[0_6px_22px_-10px_rgba(14,27,54,0.6)]">
@@ -592,11 +605,11 @@ function DrawsBudgetShell({ children }: { children: React.ReactNode }) {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <div className="flex h-12 items-center gap-3 rounded-[10px] border border-white/15 bg-white/10 px-4 text-sm font-bold">
               <span className="text-[11px] uppercase tracking-[0.18em] text-[#b9c5dc]">Working Day</span>
-              <span>Mon · Jun 8</span>
+              <span>{workingDayLabel()}</span>
             </div>
             <div className="flex h-12 items-center gap-3 rounded-[10px] border border-white/15 bg-white/10 px-4 text-sm font-bold">
               <span className="text-[11px] uppercase tracking-[0.18em] text-[#b9c5dc]">Updated by</span>
-              <span className="rounded-[8px] border border-white/20 bg-white/10 px-4 py-2">Owner</span>
+              <span className="rounded-[8px] border border-white/20 bg-white/10 px-4 py-2">{userName}</span>
             </div>
             <div className="flex h-12 items-center rounded-[10px] border border-white/15 bg-white/10 px-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[#b7ead1]">
               QuickBooks synced
@@ -637,6 +650,8 @@ function DrawsBudgetShell({ children }: { children: React.ReactNode }) {
 }
 
 export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageProps) {
+  const user = await requireUser();
+
   const params = searchParams ? await searchParams : {};
   const selectedHouseId = typeof params.house === "string" ? params.house : null;
   const selectedPhaseKey = isDrawPhaseKey(params.phase) ? params.phase : null;
@@ -646,7 +661,7 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
 
   if (!detailsOpen) {
     return (
-      <DrawsBudgetShell>
+      <DrawsBudgetShell userName={user.name}>
         <DrawsBudgetHouseLoader view={listView} />
       </DrawsBudgetShell>
     );
@@ -696,11 +711,11 @@ export default async function DrawsBudgetPage({ searchParams }: DrawsBudgetPageP
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <div className="flex h-12 items-center gap-3 rounded-[10px] border border-white/15 bg-white/10 px-4 text-sm font-bold">
               <span className="text-[11px] uppercase tracking-[0.18em] text-[#b9c5dc]">Working Day</span>
-              <span>Mon · Jun 8</span>
+              <span>{workingDayLabel()}</span>
             </div>
             <div className="flex h-12 items-center gap-3 rounded-[10px] border border-white/15 bg-white/10 px-4 text-sm font-bold">
               <span className="text-[11px] uppercase tracking-[0.18em] text-[#b9c5dc]">Updated by</span>
-              <span className="rounded-[8px] border border-white/20 bg-white/10 px-4 py-2">Owner</span>
+              <span className="rounded-[8px] border border-white/20 bg-white/10 px-4 py-2">{user.name}</span>
             </div>
             <div className="flex h-12 items-center rounded-[10px] border border-white/15 bg-white/10 px-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[#b7ead1]">
               QuickBooks synced
@@ -937,14 +952,11 @@ function HouseCard({
           <MiniPhaseStrip house={house} selectedPhase={selectedPhase} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <span className="w-full rounded-[8px] border border-[#b9dec9] bg-[#eaf7f0] px-2 py-1.5 text-center uppercase text-[#1f6f4b]">
-              <span className="block text-[8px] font-extrabold tracking-[0.1em]">Plaid balance</span>
-              <span className="mt-0.5 block text-[10px] font-extrabold tracking-[0.04em]">
-                {house.actualBankBalance === null
-                  ? "Not mapped"
-                  : currency(house.actualBankBalance)}
-              </span>
-            </span>
+            <PlaidBalanceLink
+              balance={house.actualBankBalance}
+              houseName={house.house}
+              qboBankAccountId={house.id}
+            />
             <Link
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
               href={sourceTruthHref}

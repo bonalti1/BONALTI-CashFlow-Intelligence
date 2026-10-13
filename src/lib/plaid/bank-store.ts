@@ -479,6 +479,85 @@ export async function getPlaidBankAccounts() {
   }));
 }
 
+export async function linkPlaidAccountToHouse({
+  houseName,
+  plaidAccountId,
+  qboBankAccountId,
+}: {
+  houseName: string;
+  plaidAccountId: string;
+  qboBankAccountId: string;
+}) {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required before mapping a bank account.");
+  }
+
+  await ensurePlaidTables();
+
+  return sql().begin(async (transaction) => {
+    const selected = await transaction<
+      Array<{
+        plaid_account_id: string;
+        qbo_bank_account_id: string | null;
+        house_name: string | null;
+      }>
+    >`
+      select plaid_account_id, qbo_bank_account_id, house_name
+      from plaid_accounts
+      where plaid_account_id = ${plaidAccountId}
+      for update
+    `;
+    const account = selected[0];
+
+    if (!account) {
+      throw new Error("The selected Plaid account was not found.");
+    }
+
+    if (
+      account.qbo_bank_account_id &&
+      account.qbo_bank_account_id !== qboBankAccountId
+    ) {
+      throw new Error(
+        `This account is already linked to ${account.house_name ?? "another project"}.`,
+      );
+    }
+
+    await transaction`
+      update plaid_accounts
+      set qbo_bank_account_id = null, house_name = null, updated_at = now()
+      where qbo_bank_account_id = ${qboBankAccountId}
+        and plaid_account_id <> ${plaidAccountId}
+    `;
+
+    const updated = await transaction<
+      Array<{
+        plaid_account_id: string;
+        name: string;
+        current_balance: string | null;
+        available_balance: string | null;
+      }>
+    >`
+      update plaid_accounts
+      set
+        qbo_bank_account_id = ${qboBankAccountId},
+        house_name = ${houseName},
+        updated_at = now()
+      where plaid_account_id = ${plaidAccountId}
+      returning plaid_account_id, name, current_balance, available_balance
+    `;
+    const linked = updated[0];
+
+    return {
+      id: linked.plaid_account_id,
+      name: linked.name,
+      currentBalance:
+        linked.current_balance === null ? null : Number(linked.current_balance),
+      availableBalance:
+        linked.available_balance === null ? null : Number(linked.available_balance),
+    };
+  });
+}
+
 export async function getRecentPlaidTransactions(limit = 50) {
   if (!hasDatabaseUrl()) {
     return [] as PlaidBankTransaction[];

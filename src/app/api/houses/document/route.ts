@@ -6,6 +6,8 @@ import {
   saveHouseProjectDocument,
 } from "@/lib/houses/house-details-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
+import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
+import { auditProjectChange } from "@/lib/audit/project-audit";
 
 const allowedDocumentTypes = new Set(["bank_draw", "baseline", "supporting"]);
 const maxFileSize = 25 * 1024 * 1024;
@@ -30,6 +32,12 @@ function allowedFile(file: File) {
 }
 
 export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request);
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const { searchParams } = new URL(request.url);
   const qboBankAccountId = searchParams.get("houseId")?.trim();
 
@@ -43,6 +51,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const formData = await request.formData();
     const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
@@ -93,6 +107,17 @@ export async function POST(request: Request) {
       fileType: contentType,
       fileUrl: uploaded?.url ?? null,
       storagePath: uploaded?.path ?? null,
+    });
+    await auditProjectChange({
+      actor: authorization.actor,
+      action: "project.document_uploaded",
+      qboBankAccountId,
+      houseName,
+      title: `Uploaded ${documentType.replace(/_/g, " ")} document ${documentFile.name}`,
+      before: null,
+      after: {},
+      spec: {},
+      details: { documentType, fileName: documentFile.name, fileSize: documentFile.size },
     });
 
     revalidatePath("/draws-budget");

@@ -22,6 +22,7 @@ import {
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
 import { PhaseBudgetCalculator } from "./phase-budget-calculator";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,8 @@ function setupAnchorIdForHouse(id: string) {
 }
 
 export default async function SetupInputsPage() {
+  await requireUser();
+
   const [snapshot, detailsByBankAccount, changeOrdersByBankAccount] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
     getHouseDetailsMap(),

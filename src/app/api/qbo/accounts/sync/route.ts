@@ -12,6 +12,7 @@ import {
   getStoredQboConnectionFromCookie,
   qboConnectionCookieName,
 } from "@/lib/qbo/token-store";
+import { authorizeApiRequest, editorRoles } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
@@ -119,9 +120,21 @@ async function runAccountsSync(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles, allowCronSecret: true });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   return runAccountsSync(request);
 }
 
 export async function GET(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles, allowCronSecret: true });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   return runAccountsSync(request);
 }
