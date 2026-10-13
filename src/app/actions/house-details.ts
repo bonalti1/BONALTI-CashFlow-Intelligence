@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import {
   addHouseChangeOrder,
@@ -22,6 +22,8 @@ import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
 import { formatAuditValue } from "@/lib/audit/audit-log";
 import { auditProjectChange, labelFor, projectStatusLabels } from "@/lib/audit/project-audit";
 import { actorForUser, requireEditor } from "@/lib/auth/session";
+import type { FormResult } from "@/lib/forms/form-result";
+import { UserFacingError } from "@/lib/forms/user-facing-error";
 
 const contractFieldSpec = {
   contractPrice: { label: "Contract price", format: "money" as const },
@@ -33,7 +35,7 @@ async function houseBefore(qboBankAccountId: string) {
   return (await getHouseDetailsMap()).get(qboBankAccountId) ?? null;
 }
 
-function optionalMoney(value: FormDataEntryValue | null) {
+function optionalMoney(value: FormDataEntryValue | null, label = "Amount") {
   const text = String(value ?? "").replace(/[$,]/g, "").trim();
 
   if (!text) {
@@ -43,13 +45,13 @@ function optionalMoney(value: FormDataEntryValue | null) {
   const parsed = Number(text);
 
   if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error("Sold price must be a positive number.");
+    throw new UserFacingError(`${label} must be a positive number, like 250000.`);
   }
 
   return parsed;
 }
 
-function optionalInteger(value: FormDataEntryValue | null) {
+function optionalInteger(value: FormDataEntryValue | null, label = "Square footage") {
   const text = String(value ?? "").replace(/,/g, "").trim();
 
   if (!text) {
@@ -59,7 +61,7 @@ function optionalInteger(value: FormDataEntryValue | null) {
   const parsed = Number(text);
 
   if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error("Square footage must be a whole positive number.");
+    throw new UserFacingError(`${label} must be a whole number, like 2180.`);
   }
 
   return parsed;
@@ -89,7 +91,7 @@ function isAllowedContractFile(file: File) {
   return allowedTypes.includes(file.type) || allowedExtensions.some((extension) => fileName.endsWith(extension));
 }
 
-export async function saveHouseDetailsAction(formData: FormData) {
+async function saveHouseDetails(formData: FormData) {
   const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
@@ -99,7 +101,7 @@ export async function saveHouseDetailsAction(formData: FormData) {
   }
 
   const values = {
-    soldPrice: optionalMoney(formData.get("soldPrice")),
+    soldPrice: optionalMoney(formData.get("soldPrice"), "Sold price"),
     squareFootage: optionalInteger(formData.get("squareFootage")),
     city: optionalText(formData.get("city")),
   };
@@ -136,10 +138,10 @@ export async function saveHouseSourceFactsAction(formData: FormData) {
   }
 
   const values = {
-    contractPrice: optionalMoney(formData.get("contractPrice")),
+    contractPrice: optionalMoney(formData.get("contractPrice"), "Contract price"),
     contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
     contractCity: optionalText(formData.get("contractCity")),
-    holdbackAmount: optionalMoney(formData.get("holdbackAmount")),
+    holdbackAmount: optionalMoney(formData.get("holdbackAmount"), "Holdback"),
     holdbackNotes: optionalText(formData.get("holdbackNotes")),
   };
   const before = await houseBefore(qboBankAccountId);
@@ -218,7 +220,7 @@ export async function saveHouseProjectNumberAction(formData: FormData) {
   const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
-  const projectNumber = optionalInteger(formData.get("projectNumber"));
+  const projectNumber = optionalInteger(formData.get("projectNumber"), "Project number");
   const returnTo = safeReturnTo(formData.get("returnTo"));
 
   if (!qboBankAccountId || !houseName) {
@@ -254,7 +256,7 @@ export async function saveHouseProjectIdentityAction(formData: FormData) {
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const displayName = optionalText(formData.get("displayName"));
-  const projectNumber = optionalInteger(formData.get("projectNumber"));
+  const projectNumber = optionalInteger(formData.get("projectNumber"), "Project number");
   const projectStatus = optionalText(formData.get("projectStatus"));
   const returnTo = safeReturnTo(formData.get("returnTo"));
   const allowedStatuses = new Set(["active", "on_hold", "final_phase", "completed", "closed_out"]);
@@ -373,7 +375,7 @@ export async function saveHouseRenderImageAction(formData: FormData) {
   redirect(returnTo);
 }
 
-export async function saveHouseContractSourceAction(formData: FormData) {
+async function saveContractSourceFromForm(formData: FormData) {
   const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
@@ -390,13 +392,13 @@ export async function saveHouseContractSourceAction(formData: FormData) {
 
   if (contractFile instanceof File && contractFile.size > 0) {
     if (!isAllowedContractFile(contractFile)) {
-      throw new Error("Contract must be a PDF or image file.");
+      throw new UserFacingError("Contract must be a PDF or image file.");
     }
 
     const maxSize = 25 * 1024 * 1024;
 
     if (contractFile.size > maxSize) {
-      throw new Error("Contract file must be smaller than 25 MB.");
+      throw new UserFacingError("Contract file must be smaller than 25 MB.");
     }
 
     const buffer = Buffer.from(await contractFile.arrayBuffer());
@@ -418,7 +420,7 @@ export async function saveHouseContractSourceAction(formData: FormData) {
   }
 
   const values = {
-    contractPrice: optionalMoney(formData.get("contractPrice")),
+    contractPrice: optionalMoney(formData.get("contractPrice"), "Contract price"),
     contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
     contractCity: optionalText(formData.get("contractCity")),
     ...(contractFileName ? { contractFileName } : {}),
@@ -455,19 +457,19 @@ export async function saveHouseContractSourceAction(formData: FormData) {
   revalidatePath("/reports/dashboard");
 }
 
-export async function addHouseChangeOrderAction(formData: FormData) {
+async function addHouseChangeOrderFromForm(formData: FormData) {
   const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const title = optionalText(formData.get("title"));
-  const amount = optionalMoney(formData.get("amount"));
+  const amount = optionalMoney(formData.get("amount"), "Change order amount");
 
   if (!qboBankAccountId || !houseName || !title) {
-    throw new Error("Change order is missing a house or title.");
+    throw new UserFacingError("Give the change order a short description.");
   }
 
   if (amount === null) {
-    throw new Error("Change order amount is required.");
+    throw new UserFacingError("Enter the change order amount.");
   }
 
   const notes = optionalText(formData.get("notes"));
@@ -497,4 +499,47 @@ export async function addHouseChangeOrderAction(formData: FormData) {
   revalidatePath("/setup-inputs");
   revalidatePath("/draws-budget");
   revalidatePath("/reports/dashboard");
+}
+
+async function toFormResult(work: () => Promise<void>, savedMessage: string): Promise<FormResult> {
+  try {
+    await work();
+
+    return { status: "saved", message: savedMessage, submittedAt: Date.now() };
+  } catch (error) {
+    unstable_rethrow(error);
+
+    if (error instanceof UserFacingError) {
+      return { status: "error", message: error.message, submittedAt: Date.now() };
+    }
+
+    console.error("House setup save failed", error);
+
+    return {
+      status: "error",
+      message: "This could not be saved right now. Try again, and tell an admin if it keeps happening.",
+      submittedAt: Date.now(),
+    };
+  }
+}
+
+export async function saveHouseDetailsAction(_previous: FormResult, formData: FormData) {
+  return toFormResult(() => saveHouseDetails(formData), "Saved.");
+}
+
+export async function saveHouseContractSourceAction(_previous: FormResult, formData: FormData) {
+  const file = formData.get("contractFile");
+  const uploaded = file instanceof File && file.size > 0 ? file.name : null;
+
+  return toFormResult(
+    () => saveContractSourceFromForm(formData),
+    uploaded ? `Saved. ${uploaded} is now the contract on file.` : "Contract facts saved.",
+  );
+}
+
+export async function addHouseChangeOrderAction(_previous: FormResult, formData: FormData) {
+  return toFormResult(
+    () => addHouseChangeOrderFromForm(formData),
+    `Added change order "${String(formData.get("title") ?? "").trim()}".`,
+  );
 }

@@ -34,7 +34,9 @@ export async function buildProjectFeed() {
         statusLabel: labelFor(projectStatusLabels, projectStatus),
         contract: {
           originalPrice: detail?.contractPrice ?? null,
-          changeOrderTotal: detail?.changeOrderTotal ?? 0,
+          changeOrderTotal:
+            detail?.changeOrderTotal ??
+            projectChangeOrders.reduce((total, order) => total + order.amount, 0),
           currentPrice: detail?.currentContractPrice ?? null,
           squareFeet: detail?.contractSquareFootage ?? null,
           city: detail?.contractCity ?? null,
