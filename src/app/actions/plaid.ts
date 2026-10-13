@@ -6,6 +6,7 @@ import { requireEditor, requireUser } from "@/lib/auth/session";
 import {
   getPlaidBankAccounts,
   linkPlaidAccountToHouse,
+  refreshLiveBalances,
   syncAllPlaidItems,
 } from "@/lib/plaid/bank-store";
 
@@ -124,6 +125,27 @@ export async function syncPlaidBankFeed() {
     return {
       ok: false as const,
       message: syncErrorMessage(error),
+    };
+  }
+}
+
+// Runs each time someone opens the Bank Feed. A bank checked live in the last minute is
+// reused (10 seconds when "Check again" is pressed) so repeat opens do not add Plaid charges.
+export async function checkLiveBalances({ force = false }: { force?: boolean } = {}) {
+  await requireUser();
+
+  try {
+    const result = await refreshLiveBalances({ reuseWithinMs: force ? 10_000 : 60_000 });
+
+    revalidatePath("/bank-feed");
+
+    return { ok: true as const, ...result };
+  } catch (error) {
+    console.error("Live balance check failed", error);
+
+    return {
+      ok: false as const,
+      message: "Could not check the banks right now. The balances shown are the last ones received.",
     };
   }
 }

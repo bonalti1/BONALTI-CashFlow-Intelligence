@@ -4,6 +4,7 @@ export type PlaidAccount = {
     available?: number | null;
     current?: number | null;
     iso_currency_code?: string | null;
+    last_updated_datetime?: string | null;
   };
   mask?: string | null;
   name: string;
@@ -69,22 +70,38 @@ export class PlaidApiError extends Error {
   }
 }
 
-async function plaidRequest<T>(path: string, body: Record<string, unknown>) {
+async function plaidRequest<T>(
+  path: string,
+  body: Record<string, unknown>,
+  { timeoutMs }: { timeoutMs?: number } = {},
+) {
   if (!plaidConfigured()) {
     throw new Error("Plaid keys are not configured.");
   }
 
-  const response = await fetch(`${plaidHosts[plaidEnvironment()]}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      client_id: process.env.PLAID_CLIENT_ID,
-      secret: process.env.PLAID_SECRET,
-      ...body,
-    }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${plaidHosts[plaidEnvironment()]}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: process.env.PLAID_CLIENT_ID,
+        secret: process.env.PLAID_SECRET,
+        ...body,
+      }),
+      ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new PlaidApiError("The bank took too long to answer.", "CLIENT_TIMEOUT");
+    }
+
+    throw error;
+  }
+
   const data = (await response.json().catch(() => ({}))) as T & {
     error_code?: string;
     error_message?: string;
@@ -162,4 +179,31 @@ export async function syncPlaidTransactions(accessToken: string, cursor: string 
       include_original_description: true,
     },
   });
+}
+
+// Real-time balances: Plaid asks the bank right now. Every other Plaid endpoint returns
+// balances cached from Plaid's last pull, which can be hours old. Billed per request.
+export async function getPlaidLiveBalances(accessToken: string) {
+  return plaidRequest<{
+    accounts: PlaidAccount[];
+    item: { item_id: string };
+    request_id: string;
+  }>("/accounts/balance/get", { access_token: accessToken }, { timeoutMs: 25_000 });
+}
+
+export async function getPlaidItemStatus(accessToken: string) {
+  return plaidRequest<{
+    item: {
+      item_id: string;
+      institution_id?: string | null;
+      error?: { error_code?: string | null; error_message?: string | null } | null;
+    };
+    status?: {
+      transactions?: {
+        last_successful_update?: string | null;
+        last_failed_update?: string | null;
+      } | null;
+    } | null;
+    request_id: string;
+  }>("/item/get", { access_token: accessToken }, { timeoutMs: 15_000 });
 }
