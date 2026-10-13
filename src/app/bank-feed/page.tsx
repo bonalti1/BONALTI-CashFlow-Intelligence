@@ -43,8 +43,13 @@ function shortDate(value: string | null | undefined) {
   });
 }
 
-export default async function BankFeedPage() {
+export default async function BankFeedPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ connected?: string | string[] }>;
+}) {
   await requireUser();
+  const { connected } = await searchParams;
 
   const [status, accounts, transactions] = await Promise.all([
     getPlaidConnectionStatus(),
@@ -98,6 +103,17 @@ export default async function BankFeedPage() {
             </div>
           </div>
         </header>
+
+        {connected === "1" || connected === "pending" ? (
+          <p
+            className="mb-5 rounded-[14px] border border-[#b9dec9] bg-[#eaf7f0] px-5 py-3 text-sm font-bold text-[#1f6f4b]"
+            role="status"
+          >
+            {connected === "1"
+              ? "Bank connected and its transactions are loaded."
+              : "Bank connected. The bank is still sending its transaction history, which can take a few minutes. Press Sync Bank in a few minutes to load it."}
+          </p>
+        ) : null}
 
         <section className="mb-5 grid gap-4 lg:grid-cols-4">
           <Metric
