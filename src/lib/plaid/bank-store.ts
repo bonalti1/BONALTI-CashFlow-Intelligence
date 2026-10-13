@@ -23,6 +23,7 @@ export type PlaidBankAccount = {
   currency: string | null;
   houseName: string | null;
   qboBankAccountId: string | null;
+  lastSyncedAt: string | null;
   updatedAt: string;
 };
 
@@ -442,24 +443,28 @@ export async function getPlaidBankAccounts() {
       qbo_bank_account_id: string | null;
       house_name: string | null;
       updated_at: Date;
+      last_synced_at: Date | string | null;
     }>
   >`
     select
-      plaid_account_id,
-      item_id,
-      name,
-      official_name,
-      mask,
-      account_type,
-      account_subtype,
-      available_balance,
-      current_balance,
-      iso_currency_code,
-      qbo_bank_account_id,
-      house_name,
-      updated_at
-    from plaid_accounts
-    order by name
+      a.plaid_account_id,
+      a.item_id,
+      a.name,
+      a.official_name,
+      a.mask,
+      a.account_type,
+      a.account_subtype,
+      a.available_balance,
+      a.current_balance,
+      a.iso_currency_code,
+      a.qbo_bank_account_id,
+      a.house_name,
+      a.updated_at,
+      i.last_synced_at
+    from plaid_accounts a
+    left join plaid_items i
+      on i.item_id = a.item_id
+    order by a.name
   `;
 
   return rows.map((row) => ({
@@ -475,6 +480,7 @@ export async function getPlaidBankAccounts() {
     currency: row.iso_currency_code,
     qboBankAccountId: row.qbo_bank_account_id,
     houseName: row.house_name,
+    lastSyncedAt: isoTimestamp(row.last_synced_at),
     updatedAt: row.updated_at.toISOString(),
   }));
 }

@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  aiCsuiteExportDenied,
-  authorizeAiCsuiteExportToken,
-} from "@/lib/auth/ai-csuite-export-token";
+import { authorizeFinanceExport } from "@/lib/auth/session";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
 import {
   readPlaidBankAccountsForExport,
@@ -510,10 +507,16 @@ async function getProjects() {
 }
 
 export async function GET(request: Request) {
-  const auth = authorizeAiCsuiteExportToken(request);
+  const auth = await authorizeFinanceExport(request);
 
   if (!auth.ok) {
-    return aiCsuiteExportDenied(auth);
+    return NextResponse.json(
+      {
+        status: "error",
+        message: auth.message,
+      },
+      { status: auth.status },
+    );
   }
 
   if (!hasDatabaseUrl()) {

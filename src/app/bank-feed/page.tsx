@@ -11,6 +11,7 @@ import {
   type PlaidBankAccount,
   type PlaidBankTransaction,
 } from "@/lib/plaid/bank-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,8 @@ function shortDate(value: string | null | undefined) {
 }
 
 export default async function BankFeedPage() {
+  await requireUser();
+
   const [status, accounts, transactions] = await Promise.all([
     getPlaidConnectionStatus(),
     getPlaidBankAccounts(),

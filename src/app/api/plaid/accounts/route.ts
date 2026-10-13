@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 
-import {
-  aiCsuiteExportDenied,
-  authorizeAiCsuiteExportToken,
-} from "@/lib/auth/ai-csuite-export-token";
+import { authorizeApiRequest, authorizePlaidAccountRead, editorRoles } from "@/lib/auth/session";
+import { auditProjectChange } from "@/lib/audit/project-audit";
 import {
   getPlaidBankAccounts,
   linkPlaidAccountToHouse,
@@ -16,10 +14,10 @@ function requiredText(value: unknown) {
 }
 
 export async function GET(request: Request) {
-  const auth = authorizeAiCsuiteExportToken(request);
+  const authorization = await authorizePlaidAccountRead(request);
 
-  if (!auth.ok) {
-    return aiCsuiteExportDenied(auth);
+  if (!authorization.ok) {
+    return authorization.response;
   }
 
   const accounts = await getPlaidBankAccounts();
@@ -35,6 +33,7 @@ export async function GET(request: Request) {
         availableBalance: account.availableBalance,
         linkedHouseName: account.houseName,
         linkedQboBankAccountId: account.qboBankAccountId,
+        lastSyncedAt: account.lastSyncedAt,
       })),
     },
     {
@@ -46,10 +45,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = authorizeAiCsuiteExportToken(request);
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles });
 
-  if (!auth.ok) {
-    return aiCsuiteExportDenied(auth);
+  if (!authorization.ok) {
+    return authorization.response;
   }
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -65,11 +64,27 @@ export async function POST(request: Request) {
   }
 
   try {
+    const before = (await getPlaidBankAccounts()).find(
+      (candidate) => candidate.qboBankAccountId === qboBankAccountId,
+    );
     const account = await linkPlaidAccountToHouse({
       houseName,
       plaidAccountId,
       qboBankAccountId,
     });
+
+    if (before?.id !== account.id) {
+      await auditProjectChange({
+        actor: authorization.actor,
+        action: "project.bank_account_linked",
+        qboBankAccountId,
+        houseName,
+        title: "Linked bank account",
+        before: { bankAccount: before ? before.name : null },
+        after: { bankAccount: account.name },
+        spec: { bankAccount: { label: "Plaid bank account" } },
+      });
+    }
 
     return NextResponse.json({ account });
   } catch (error) {

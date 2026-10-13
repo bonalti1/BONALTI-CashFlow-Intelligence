@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-export default function AiHealthPage() {
+export default async function AiHealthPage() {
+  await requireUser();
+
   redirect("/agent-health");
 }

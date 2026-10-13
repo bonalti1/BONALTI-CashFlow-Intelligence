@@ -3,9 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
+import { auditProjectChange, drawStatusLabels, labelFor } from "@/lib/audit/project-audit";
+import { actorForUser, requireEditor } from "@/lib/auth/session";
+import {
+  phaseLabels,
+  refreshHouseDashboardSummaries,
+} from "@/lib/dashboard/house-dashboard-summary-store";
 import {
   drawPhaseKeys,
+  getDrawLineItemStatusesForHouse,
+  getDrawPhaseStatuses,
   saveDrawLineItemStatus,
   saveDrawPhaseStatus,
   type DrawPhaseKey,
@@ -56,6 +63,12 @@ function refreshDashboardSummaryInBackground() {
   });
 }
 
+function phaseTitle(key: DrawPhaseKey) {
+  const phase = phaseLabels[key];
+
+  return key === "pre" ? phase.name : `Phase ${phase.label} (${phase.name})`;
+}
+
 function phaseKey(value: FormDataEntryValue | null): DrawPhaseKey {
   const text = String(value ?? "");
 
@@ -84,6 +97,7 @@ function drawStatus(value: FormDataEntryValue | null): DrawStatus {
 }
 
 export async function saveDrawStatusAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const intent = optionalText(formData.get("intent"));
@@ -114,10 +128,8 @@ export async function saveDrawStatusAction(formData: FormData) {
     receivedDate = today;
   }
 
-  await saveDrawPhaseStatus({
-    qboBankAccountId,
-    houseName,
-    phaseKey: phaseKey(formData.get("phaseKey")),
+  const selectedPhaseKey = phaseKey(formData.get("phaseKey"));
+  const values = {
     drawStatus:
       intent === "mark_draw_requested"
         ? "submitted"
@@ -132,6 +144,34 @@ export async function saveDrawStatusAction(formData: FormData) {
     receivedDate: intent === "mark_money_received" ? (receivedDate ?? today) : receivedDate,
     accountantStatus: optionalText(formData.get("accountantStatus")),
     notes: optionalText(formData.get("notes")),
+  } satisfies Record<string, unknown> & { drawStatus: DrawStatus };
+  const before = (await getDrawPhaseStatuses()).get(`${qboBankAccountId}:${selectedPhaseKey}`);
+
+  await saveDrawPhaseStatus({
+    qboBankAccountId,
+    houseName,
+    phaseKey: selectedPhaseKey,
+    ...values,
+  });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "draw.phase_saved",
+    qboBankAccountId,
+    houseName,
+    title: `${phaseTitle(selectedPhaseKey)} draw`,
+    before: before
+      ? { ...before, drawStatus: labelFor(drawStatusLabels, before.drawStatus) }
+      : { drawStatus: labelFor(drawStatusLabels, "not_started") },
+    after: { ...values, drawStatus: labelFor(drawStatusLabels, values.drawStatus) },
+    spec: {
+      drawStatus: { label: "Draw status" },
+      requestedAmount: { label: "Requested", format: "money" },
+      submittedDate: { label: "Requested on", format: "date" },
+      receivedAmount: { label: "Received", format: "money" },
+      receivedDate: { label: "Received on", format: "date" },
+      accountantStatus: { label: "Accountant review" },
+      notes: { label: "Notes" },
+    },
   });
 
   refreshDashboardSummaryInBackground();
@@ -140,6 +180,7 @@ export async function saveDrawStatusAction(formData: FormData) {
 }
 
 export async function saveDrawLineItemStatusAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const lineItemKey = optionalText(formData.get("lineItemKey"));
@@ -158,10 +199,16 @@ export async function saveDrawLineItemStatusAction(formData: FormData) {
   const existingSubmittedAt = optionalDate(formData.get("existingSubmittedAt"));
   const existingReceivedAt = optionalDate(formData.get("existingReceivedAt"));
 
+  const selectedPhaseKey = phaseKey(formData.get("phaseKey"));
+  const notes = optionalText(formData.get("notes"));
+  const before = (await getDrawLineItemStatusesForHouse(qboBankAccountId)).get(
+    `${qboBankAccountId}:${selectedPhaseKey}:${lineItemKey}`,
+  );
+
   await saveDrawLineItemStatus({
     qboBankAccountId,
     houseName,
-    phaseKey: phaseKey(formData.get("phaseKey")),
+    phaseKey: selectedPhaseKey,
     lineItemKey,
     lineItemName,
     drawSubmitted,
@@ -170,7 +217,23 @@ export async function saveDrawLineItemStatusAction(formData: FormData) {
     drawReceived,
     receivedAmount,
     receivedAt: drawReceived ? (existingReceivedAt ?? now) : null,
-    notes: optionalText(formData.get("notes")),
+    notes,
+  });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "draw.line_item_saved",
+    qboBankAccountId,
+    houseName,
+    title: `${phaseTitle(selectedPhaseKey)} · ${lineItemName}`,
+    before: before ?? { drawSubmitted: false, drawReceived: false },
+    after: { drawSubmitted, requestedAmount, drawReceived, receivedAmount, notes },
+    spec: {
+      drawSubmitted: { label: `${lineItemName} requested`, format: "boolean" },
+      requestedAmount: { label: `${lineItemName} requested amount`, format: "money" },
+      drawReceived: { label: `${lineItemName} received`, format: "boolean" },
+      receivedAmount: { label: `${lineItemName} received amount`, format: "money" },
+      notes: { label: `${lineItemName} notes` },
+    },
   });
 
   revalidatePath("/");

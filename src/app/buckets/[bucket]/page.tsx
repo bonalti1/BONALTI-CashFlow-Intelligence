@@ -5,6 +5,7 @@ import { ArrowLeft, CalendarDays, Landmark, Megaphone, RefreshCcw, WalletCards }
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,8 @@ export default async function BucketDetailPage({
 }: {
   params: Promise<{ bucket: string }>;
 }) {
+  await requireUser();
+
   const { bucket } = await params;
   const config = bucketConfigs[bucket as BucketSlug];
   const appUrl = getPublicAppUrl();

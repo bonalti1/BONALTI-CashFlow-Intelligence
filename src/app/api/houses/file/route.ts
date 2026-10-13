@@ -5,6 +5,7 @@ import {
   getHouseProjectDocuments,
 } from "@/lib/houses/house-details-store";
 import { downloadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
+import { authorizeApiRequest } from "@/lib/auth/session";
 
 const projectDocumentTypes = new Set(["bank_draw", "baseline", "supporting"]);
 
@@ -39,6 +40,12 @@ function documentResponse(
 }
 
 export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request);
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const { searchParams } = new URL(request.url);
   const houseId = searchParams.get("houseId")?.trim();
   const documentType = searchParams.get("type")?.trim();

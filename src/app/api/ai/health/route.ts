@@ -11,6 +11,7 @@ import {
   getTransactionsSnapshotStatus,
   type SavedQboTransaction,
 } from "@/lib/qbo/transactions-store";
+import { authorizeApiRequest } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -231,6 +232,12 @@ async function buildHealthContext() {
 }
 
 export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request);
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const env = getEnvStatus();
   const openAiReady = Boolean(env.find((item) => item.key === "OPENAI_API_KEY")?.configured);
 

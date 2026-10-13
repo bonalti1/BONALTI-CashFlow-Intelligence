@@ -9,6 +9,7 @@ import {
   saveQboConnection,
   sealStoredQboConnectionForCookie,
 } from "@/lib/qbo/token-store";
+import { authorizeApiRequest, adminRoles } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,12 @@ function decodeNextPath(state: string | null) {
 }
 
 export async function GET(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, { roles: adminRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const realmId = searchParams.get("realmId");
   const code = searchParams.get("code");

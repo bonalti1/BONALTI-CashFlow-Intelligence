@@ -5,12 +5,27 @@ import { extractContractSourceFromFile } from "@/lib/contracts/contract-extracti
 import { refreshHouseDashboardSummaries } from "@/lib/dashboard/house-dashboard-summary-store";
 import {
   clearHouseContractSource,
+  getHouseDetailsMap,
   saveHouseContractSource,
 } from "@/lib/houses/house-details-store";
+import { recordAudit } from "@/lib/audit/audit-log";
+import { auditProjectChange } from "@/lib/audit/project-audit";
+
+const contractFieldSpec = {
+  contractPrice: { label: "Contract price", format: "money" as const },
+  contractSquareFootage: { label: "Contract square feet", format: "number" as const },
+  contractCity: { label: "Contract city" },
+  contractFileName: { label: "Contract file" },
+};
+
+async function houseBefore(qboBankAccountId: string) {
+  return (await getHouseDetailsMap()).get(qboBankAccountId) ?? null;
+}
 import {
   deleteSupabaseStorageObject,
   uploadSupabaseStorageObject,
 } from "@/lib/storage/supabase-storage";
+import { authorizeApiRequest, adminRoles, editorRoles } from "@/lib/auth/session";
 
 function optionalText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -145,6 +160,8 @@ async function extractAndSaveContractSource({
       return;
     }
 
+    const before = await houseBefore(qboBankAccountId);
+
     await saveHouseContractSource({
       qboBankAccountId,
       houseName,
@@ -157,6 +174,17 @@ async function extractAndSaveContractSource({
       contractSquareFootage,
       contractCity,
       contractSourceStatus: "reviewed",
+    });
+    await auditProjectChange({
+      actor: { type: "system", id: null, name: "Contract reader (AI)" },
+      action: "project.contract_extracted",
+      qboBankAccountId,
+      houseName,
+      title: `Read contract ${fileName}`,
+      before,
+      after: { contractPrice, contractSquareFootage, contractCity },
+      spec: contractFieldSpec,
+      details: { fileName },
     });
     refreshDashboardSummaryInBackground();
     revalidateHousePages();
@@ -172,6 +200,12 @@ async function extractAndSaveContractSource({
 }
 
 export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: editorRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const formData = await request.formData();
     const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
@@ -238,6 +272,7 @@ export async function POST(request: Request) {
     const shouldExtractContract =
       Boolean(uploadedFileBuffer && uploadedFileContentType && uploadedFileName) &&
       (!manualContractPrice || !manualContractSquareFootage || !manualContractCity);
+    const before = await houseBefore(qboBankAccountId);
 
     await saveHouseContractSource({
       qboBankAccountId,
@@ -251,6 +286,22 @@ export async function POST(request: Request) {
       contractSquareFootage: manualContractSquareFootage,
       contractCity: manualContractCity,
       contractSourceStatus: shouldExtractContract ? "reading" : "reviewed",
+    });
+    await auditProjectChange({
+      actor: authorization.actor,
+      action: "project.contract_source_saved",
+      qboBankAccountId,
+      houseName,
+      title: contractFileName ? `Uploaded contract ${contractFileName}` : "Contract facts",
+      before,
+      after: {
+        contractPrice: manualContractPrice,
+        contractSquareFootage: manualContractSquareFootage,
+        contractCity: manualContractCity,
+        ...(contractFileName ? { contractFileName } : {}),
+      },
+      spec: contractFieldSpec,
+      ...(contractFileName ? { details: { fileName: contractFileName } } : {}),
     });
     refreshDashboardSummaryInBackground();
     revalidateHousePages();
@@ -286,6 +337,12 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: adminRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const body = (await request.json().catch(() => null)) as {
       confirmText?: unknown;
@@ -309,7 +366,23 @@ export async function DELETE(request: Request) {
       );
     }
 
+    const before = await houseBefore(qboBankAccountId);
     const storagePath = await clearHouseContractSource({ qboBankAccountId });
+
+    await recordAudit({
+      actor: authorization.actor,
+      action: "project.contract_deleted",
+      entityType: "project",
+      entityId: qboBankAccountId,
+      houseName: before?.houseName ?? null,
+      summary: `Deleted contract ${before?.contractFileName ?? "file"} and its contract facts.`,
+      details: {
+        contractFileName: before?.contractFileName ?? null,
+        contractPrice: before?.contractPrice ?? null,
+        contractSquareFootage: before?.contractSquareFootage ?? null,
+        contractCity: before?.contractCity ?? null,
+      },
+    });
 
     if (storagePath) {
       await deleteSupabaseStorageObject({

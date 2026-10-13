@@ -2,15 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 
+import { requireEditor, requireUser } from "@/lib/auth/session";
 import {
   getPlaidBankAccounts,
   linkPlaidAccountToHouse,
   syncAllPlaidItems,
 } from "@/lib/plaid/bank-store";
 
-// Bank Feed and project cards call these actions instead of the public JSON
-// routes. Next.js accepts the actions only from the same origin, so the
-// browser never receives AI_CSUITE_EXPORT_TOKEN.
+// Signed-in pages call these actions. The public JSON routes stay behind a
+// bearer token or session, so the browser never receives a key.
 
 function requiredText(value: string) {
   const text = value.trim();
@@ -29,6 +29,8 @@ function syncErrorMessage(error: unknown) {
 }
 
 export async function listPlaidAccountsForLink() {
+  await requireUser();
+
   try {
     const accounts = await getPlaidBankAccounts();
 
@@ -58,6 +60,7 @@ export async function linkProjectPlaidAccount(input: {
   plaidAccountId: string;
   qboBankAccountId: string;
 }) {
+  await requireEditor();
   const houseName = requiredText(input.houseName);
   const plaidAccountId = requiredText(input.plaidAccountId);
   const qboBankAccountId = requiredText(input.qboBankAccountId);
@@ -92,6 +95,8 @@ export async function linkProjectPlaidAccount(input: {
 }
 
 export async function syncPlaidBankFeed() {
+  await requireEditor();
+
   try {
     const result = await syncAllPlaidItems();
 

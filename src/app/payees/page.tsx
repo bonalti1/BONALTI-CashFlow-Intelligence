@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,8 @@ function buildPayeeSummaries(transactions: SavedQboTransaction[]) {
 }
 
 export default async function PayeesPage() {
+  await requireUser();
+
   const transactionsByBankAccount = await getTransactionsByBankAccount();
   const transactions = Array.from(transactionsByBankAccount.values())
     .flat()

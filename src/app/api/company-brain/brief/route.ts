@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { getCompanyExecutiveBrief } from "@/lib/company/brain-store";
+import { authorizeApiRequest } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request);
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const brief = await getCompanyExecutiveBrief();
 
