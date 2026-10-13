@@ -16,6 +16,7 @@ import {
 
 type CheckResult = Awaited<ReturnType<typeof checkLiveBalances>>;
 type CheckState =
+  | { status: "idle" }
   | { status: "checking" }
   | { status: "done"; at: string; banks: Extract<CheckResult, { ok: true }>["banks"] }
   | { status: "failed"; message: string };
@@ -83,9 +84,17 @@ const bankStatusLabels: Record<AccountRow["connectionStatus"], { label: string; 
   unchecked: { label: "Not checked yet", className: "border-[#e7e1d3] bg-[#fbfaf6] text-[#858b9f]" },
 };
 
-export function ConnectedAccounts({ accounts, renderedAt }: { accounts: AccountRow[]; renderedAt: number }) {
+export function ConnectedAccounts({
+  accounts,
+  canCheckLive,
+  renderedAt,
+}: {
+  accounts: AccountRow[];
+  canCheckLive: boolean;
+  renderedAt: number;
+}) {
   const router = useRouter();
-  const [check, setCheck] = useState<CheckState>({ status: "checking" });
+  const [check, setCheck] = useState<CheckState>(canCheckLive ? { status: "checking" } : { status: "idle" });
   const [now, setNow] = useState(renderedAt);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -104,8 +113,13 @@ export function ConnectedAccounts({ accounts, renderedAt }: { accounts: AccountR
     [router],
   );
 
-  // Every visit asks the banks for their balance right now.
+  // Plaid charges per live check, so only an admin's visit asks the banks; everyone else
+  // sees the balances from the last admin check, with their time.
   useEffect(() => {
+    if (!canCheckLive) {
+      return;
+    }
+
     let cancelled = false;
 
     void checkLiveBalances().then((result) => {
@@ -117,7 +131,7 @@ export function ConnectedAccounts({ accounts, renderedAt }: { accounts: AccountR
     return () => {
       cancelled = true;
     };
-  }, [applyResult]);
+  }, [applyResult, canCheckLive]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -131,6 +145,15 @@ export function ConnectedAccounts({ accounts, renderedAt }: { accounts: AccountR
   }
 
   const summary = useMemo(() => summarizeAccounts(accounts, now), [accounts, now]);
+  const lastLiveCheck = useMemo(
+    () =>
+      accounts
+        .filter((row) => row.balanceSource === "live" && row.balanceAsOf)
+        .map((row) => row.balanceAsOf as string)
+        .sort()
+        .at(-1) ?? null,
+    [accounts],
+  );
 
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -186,20 +209,29 @@ export function ConnectedAccounts({ accounts, renderedAt }: { accounts: AccountR
         <div>
           <h2 className="text-lg font-black uppercase tracking-[0.12em] text-[#14254b]">Connected Accounts</h2>
           <p className="mt-1 text-sm font-bold text-[#858b9f]">
-            Each time you open this page, every bank is asked for its balance right now.
+            {canCheckLive
+              ? "Each time you open this page, every bank is asked for its balance right now."
+              : "Balances are checked live with each bank when an admin opens this page."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <LiveCheckPill check={check} liveBanks={liveBanks} totalBanks={check.status === "done" ? check.banks.length : 0} />
-          <button
-            className="flex h-10 items-center gap-2 rounded-md border border-[#d8ded3] bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-[#14254b] disabled:opacity-50"
-            disabled={check.status === "checking"}
-            onClick={checkAgain}
-            type="button"
-          >
-            <RefreshCw size={14} />
-            Check again
-          </button>
+          <LiveCheckPill
+            check={check}
+            lastLiveCheck={lastLiveCheck}
+            liveBanks={liveBanks}
+            totalBanks={check.status === "done" ? check.banks.length : 0}
+          />
+          {canCheckLive ? (
+            <button
+              className="flex h-10 items-center gap-2 rounded-md border border-[#d8ded3] bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-[#14254b] disabled:opacity-50"
+              disabled={check.status === "checking"}
+              onClick={checkAgain}
+              type="button"
+            >
+              <RefreshCw size={14} />
+              Check again
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -369,13 +401,28 @@ function notLiveDetail(states: Record<AccountState, number>) {
 
 function LiveCheckPill({
   check,
+  lastLiveCheck,
   liveBanks,
   totalBanks,
 }: {
   check: CheckState;
+  lastLiveCheck: string | null;
   liveBanks: number;
   totalBanks: number;
 }) {
+  if (check.status === "idle") {
+    return (
+      <span
+        className="flex h-10 items-center gap-2 rounded-md bg-[#f6f5f0] px-3 text-xs font-black text-[#5f6b7d]"
+        role="status"
+        title={lastLiveCheck ? exactTime(lastLiveCheck) : undefined}
+      >
+        <span className="h-2 w-2 rounded-full bg-[#b9bdc9]" />
+        {lastLiveCheck ? `Last live check: ${exactTime(lastLiveCheck)}` : "Not checked live yet"}
+      </span>
+    );
+  }
+
   if (check.status === "checking") {
     return (
       <span className="flex h-10 items-center gap-2 rounded-md bg-[#eef1f7] px-3 text-xs font-black text-[#14254b]" role="status">
