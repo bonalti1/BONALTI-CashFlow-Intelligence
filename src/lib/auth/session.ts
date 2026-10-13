@@ -14,6 +14,7 @@ import {
 import { safeEqualText } from "@/lib/auth/crypto";
 import type { AuditActor } from "@/lib/audit/audit-log";
 import { hasDatabaseUrl } from "@/lib/db/raw";
+import { UserFacingError } from "@/lib/forms/user-facing-error";
 
 export const sessionCookieName = "stb_session";
 
@@ -60,7 +61,7 @@ export async function requireRole(roles: AppRole[]) {
   const user = await requireUser();
 
   if (!roles.includes(user.role)) {
-    throw new Error(
+    throw new UserFacingError(
       roles.includes("editor")
         ? "Your account is view-only. Ask an admin for editor access to make changes."
         : "Only admins can do this.",

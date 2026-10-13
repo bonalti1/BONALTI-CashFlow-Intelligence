@@ -22,7 +22,8 @@ import {
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
 import { PhaseBudgetCalculator } from "./phase-budget-calculator";
-import { requireUser } from "@/lib/auth/session";
+import { canEdit, requireUser } from "@/lib/auth/session";
+import { ActionForm, SubmitButton } from "@/components/forms/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,8 @@ function setupAnchorIdForHouse(id: string) {
 }
 
 export default async function SetupInputsPage() {
-  await requireUser();
+  const user = await requireUser();
+  const editable = canEdit(user);
 
   const [snapshot, detailsByBankAccount, changeOrdersByBankAccount] = await Promise.all([
     getAccountsSnapshot().catch(() => null),
@@ -64,6 +66,7 @@ export default async function SetupInputsPage() {
       }
 
       const details = detailsByBankAccount.get(account.Id);
+      const changeOrders = changeOrdersByBankAccount.get(account.Id) ?? [];
       const sourceSoldPrice =
         details?.currentContractPrice ?? details?.contractPrice ?? details?.soldPrice ?? null;
       const sourceSquareFootage = details?.contractSquareFootage ?? details?.squareFootage ?? null;
@@ -83,9 +86,12 @@ export default async function SetupInputsPage() {
         contractSquareFootage: details?.contractSquareFootage ?? null,
         contractCity: details?.contractCity ?? null,
         contractSourceStatus: details?.contractSourceStatus ?? null,
-        changeOrderTotal: details?.changeOrderTotal ?? 0,
+        // Houses without saved contract facts have no details row, so total the orders directly.
+        changeOrderTotal:
+          details?.changeOrderTotal ??
+          changeOrders.reduce((total, changeOrder) => total + changeOrder.amount, 0),
         currentContractPrice: details?.currentContractPrice ?? null,
-        changeOrders: changeOrdersByBankAccount.get(account.Id) ?? [],
+        changeOrders,
         setupComplete: Boolean(sourceSoldPrice && sourceSquareFootage && sourceCity),
       };
     })
@@ -141,6 +147,11 @@ export default async function SetupInputsPage() {
                 Add the sale price, square footage, and city for each house. These are saved only
                 in this dashboard database. QuickBooks stays read-only.
               </p>
+              {!editable ? (
+                <p className="mt-3 inline-block rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+                  You have view-only access. Ask an admin for editor access to make changes.
+                </p>
+              ) : null}
             </div>
             <div className="rounded-lg border border-[#121d49] bg-[#121d49] px-4 py-3 text-sm text-white">
               <div className="brand-kicker text-[10px] uppercase text-white/70">
@@ -160,7 +171,7 @@ export default async function SetupInputsPage() {
                 without changing the original agreement.
               </p>
             </div>
-            <div className="grid max-h-[720px] grid-cols-1 gap-3 overflow-auto bg-[#fbfaf7] p-4 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 bg-[#fbfaf7] p-4 xl:grid-cols-2">
               {houses.map((house) => (
                 <div
                   className="scroll-mt-6 rounded-lg border border-[#d9dee9] bg-white p-3 shadow-sm"
@@ -195,11 +206,12 @@ export default async function SetupInputsPage() {
                     />
                   </div>
 
+                  {editable ? (
                   <details className="mb-3 rounded-lg border border-[#d9dee9] bg-white p-3">
                     <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-[#121d49]">
                       Contract source
                     </summary>
-                    <form action={saveHouseContractSourceAction} className="mt-3 space-y-3">
+                    <ActionForm action={saveHouseContractSourceAction} className="mt-3 space-y-3">
                       <input name="qboBankAccountId" type="hidden" value={house.id} />
                       <input name="houseName" type="hidden" value={house.house} />
                       <div className="rounded-md border border-dashed border-[#c8cfde] bg-[#fbfaf7] p-3 text-xs text-[#69746f]">
@@ -248,21 +260,24 @@ export default async function SetupInputsPage() {
                             placeholder="Alice"
                           />
                         </label>
-                        <button
-                          className="mt-5 h-9 rounded-md bg-[#121d49] px-3 text-sm font-bold text-white"
-                          type="submit"
-                        >
+                        <SubmitButton className="mt-5 h-9 rounded-md bg-[#121d49] px-3 text-sm font-bold text-white">
                           Save Source
-                        </button>
+                        </SubmitButton>
                       </div>
-                    </form>
+                    </ActionForm>
                   </details>
+                  ) : null}
 
                   <details className="mb-3 rounded-lg border border-[#d9dee9] bg-white p-3">
                     <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-[#121d49]">
                       Change orders
                     </summary>
-                    <form action={addHouseChangeOrderAction} className="mt-3 grid gap-2 md:grid-cols-[1fr_120px_130px_auto]">
+                    {editable ? (
+                    <ActionForm
+                      action={addHouseChangeOrderAction}
+                      className="mt-3 grid gap-2 md:grid-cols-[1fr_120px_130px_auto]"
+                      resetOnSuccess
+                    >
                       <input name="qboBankAccountId" type="hidden" value={house.id} />
                       <input name="houseName" type="hidden" value={house.house} />
                       <label className="text-xs text-[#69746f]">
@@ -290,12 +305,9 @@ export default async function SetupInputsPage() {
                           type="date"
                         />
                       </label>
-                      <button
-                        className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white"
-                        type="submit"
-                      >
+                      <SubmitButton className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white" pendingLabel="Adding…">
                         Add
-                      </button>
+                      </SubmitButton>
                       <label className="md:col-span-4 text-xs text-[#69746f]">
                         Notes
                         <input
@@ -304,7 +316,8 @@ export default async function SetupInputsPage() {
                           placeholder="What changed and who approved it"
                         />
                       </label>
-                    </form>
+                    </ActionForm>
+                    ) : null}
                     <div className="mt-3 space-y-1">
                       {house.changeOrders.length === 0 ? (
                         <p className="text-xs text-[#69746f]">No change orders yet.</p>
@@ -322,7 +335,8 @@ export default async function SetupInputsPage() {
                     </div>
                   </details>
 
-                  <form action={saveHouseDetailsAction}>
+                  {editable ? (
+                  <ActionForm action={saveHouseDetailsAction}>
                     <input name="qboBankAccountId" type="hidden" value={house.id} />
                     <input name="houseName" type="hidden" value={house.house} />
                     <div className="grid grid-cols-[1fr_112px_112px_auto] gap-2">
@@ -355,14 +369,12 @@ export default async function SetupInputsPage() {
                           placeholder="Alice"
                         />
                       </label>
-                      <button
-                        className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white"
-                        type="submit"
-                      >
+                      <SubmitButton className="mt-5 h-9 rounded-md bg-[#ff332b] px-3 text-sm font-bold text-white">
                         Save
-                      </button>
+                      </SubmitButton>
                     </div>
-                  </form>
+                  </ActionForm>
+                  ) : null}
 
                   <div className="mt-3 text-xs text-[#69746f]">
                     {house.currentContractPrice && house.squareFootage
