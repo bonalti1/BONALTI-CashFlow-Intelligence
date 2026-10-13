@@ -129,10 +129,18 @@ export async function syncPlaidBankFeed() {
   }
 }
 
-// Runs each time someone opens the Bank Feed. A bank checked live in the last minute is
-// reused (10 seconds when "Check again" is pressed) so repeat opens do not add Plaid charges.
+// Plaid bills each live balance check, so only admins trigger one: when an admin opens the
+// Bank Feed or presses "Check again". Everyone else sees the result of the last admin check.
+// A bank checked live in the last minute is reused (10 seconds for "Check again").
 export async function checkLiveBalances({ force = false }: { force?: boolean } = {}) {
-  await requireUser();
+  const user = await requireUser();
+
+  if (user.role !== "admin") {
+    return {
+      ok: false as const,
+      message: "Live balance checks run when an admin opens this page.",
+    };
+  }
 
   try {
     const result = await refreshLiveBalances({ reuseWithinMs: force ? 10_000 : 60_000 });

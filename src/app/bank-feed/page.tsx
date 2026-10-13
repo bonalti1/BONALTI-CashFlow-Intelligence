@@ -88,7 +88,7 @@ export default async function BankFeedPage({
 }: {
   searchParams: Promise<{ connected?: string | string[] }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { connected } = await searchParams;
 
   const [status, accounts, transactions, houseDetails] = await Promise.all([
@@ -204,7 +204,7 @@ export default async function BankFeedPage({
           />
         </section>
 
-        <ConnectedAccounts accounts={accountRows} renderedAt={renderedAt} />
+        <ConnectedAccounts accounts={accountRows} canCheckLive={user.role === "admin"} renderedAt={renderedAt} />
         <TransactionsPanel transactions={transactions} />
       </div>
     </main>
