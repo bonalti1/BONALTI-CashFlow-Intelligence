@@ -15,6 +15,7 @@ import {
 
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getCompanyExecutiveBrief } from "@/lib/company/brain-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,8 @@ function statusTone(status: string) {
 }
 
 export default async function CompanyBrainPage() {
+  await requireUser();
+
   const appUrl = getPublicAppUrl();
   const brief = await getCompanyExecutiveBrief().catch(() => null);
   const status = brief?.status;

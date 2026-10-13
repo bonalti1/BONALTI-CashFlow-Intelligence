@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { classifyAccounts, summarizeClassifications } from "@/lib/qbo/account-classifier";
 import { getAccountsSnapshot } from "@/lib/qbo/accounts-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,8 @@ const roleStyles = {
 };
 
 export default async function MappingPage() {
+  await requireUser();
+
   const snapshot = await getAccountsSnapshot().catch(() => null);
   const classifications = classifyAccounts(snapshot?.accounts ?? []);
   const summary = summarizeClassifications(classifications);

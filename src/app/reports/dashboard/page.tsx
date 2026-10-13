@@ -22,6 +22,7 @@ import {
   getSchedulingProjectVisualList,
   type SchedulingProjectVisual,
 } from "@/lib/scheduling/status-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -413,6 +414,8 @@ async function getReportHouses() {
 }
 
 export default async function DashboardReportPage({ searchParams }: DashboardReportPageProps) {
+  await requireUser();
+
   const params = searchParams ? await searchParams : {};
   const selectedHouseId = typeof params.house === "string" ? params.house : null;
   const houses = await getReportHouses();

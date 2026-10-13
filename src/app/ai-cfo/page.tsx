@@ -15,6 +15,7 @@ import {
   Split,
   UploadCloud,
 } from "lucide-react";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -210,7 +211,9 @@ function projectModel(house: (typeof houseFiles)[number]) {
   return { depositRemaining, margin, perDraw, profit };
 }
 
-export default function AiCfoControlCenterPage() {
+export default async function AiCfoControlCenterPage() {
+  await requireUser();
+
   const mappedCash = houseFiles.reduce((sum, house) => sum + house.bankBalance, 0);
   const projectedProfit = houseFiles.reduce((sum, house) => sum + projectModel(house).profit, 0);
   const missingSources = houseFiles.reduce((sum, house) => sum + house.missing.length, 0);

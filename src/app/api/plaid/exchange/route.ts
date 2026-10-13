@@ -2,10 +2,17 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { savePlaidPublicToken } from "@/lib/plaid/bank-store";
+import { authorizeApiRequest, adminRoles } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const authorization = await authorizeApiRequest(request, { roles: adminRoles });
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   try {
     const body = (await request.json()) as {
       institution?: {

@@ -9,6 +9,7 @@ import { getQboSetupDiagnostics } from "@/lib/qbo/oauth";
 import { getQboConnectionStatus } from "@/lib/qbo/token-store";
 import { getTransactionsSnapshotStatus } from "@/lib/qbo/transactions-store";
 import { getSchedulingConnectionStatus } from "@/lib/scheduling/status-store";
+import { authorizeApiRequest } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,13 @@ function withStatusTimeout<T>(promise: Promise<T>, value: T, timeoutMs = 2000) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request);
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const [
     database,
     qboConnection,

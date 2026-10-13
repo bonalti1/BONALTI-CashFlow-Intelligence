@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, Building2, RefreshCw, WalletCards } from 
 import { getPublicAppUrl } from "@/lib/app-url";
 import { getConfirmedHouseName, isInternalBankAccount } from "@/lib/qbo/bank-account-map";
 import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ function toBankView(account: QboAccount): BankAccountView {
 }
 
 export default async function HouseAccountsPage() {
+  await requireUser();
+
   const appUrl = getPublicAppUrl();
   const snapshot = await getAccountsSnapshot().catch(() => null);
   const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];

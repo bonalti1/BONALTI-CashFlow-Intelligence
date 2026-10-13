@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +81,8 @@ export default async function PayeeDetailPage({
 }: {
   params: Promise<{ payee: string }>;
 }) {
+  await requireUser();
+
   const { payee } = await params;
   const payeeName = decodeURIComponent(payee);
   const transactionsByBankAccount = await getTransactionsByBankAccount();

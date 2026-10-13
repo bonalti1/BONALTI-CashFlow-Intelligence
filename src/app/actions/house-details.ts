@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import {
   addHouseChangeOrder,
+  getHouseDetailsMap,
   saveHouseContractSource,
   saveHouseDetail,
   saveHouseManualRenderImage,
@@ -18,6 +19,19 @@ import {
   updateHouseDashboardProjectIdentity,
 } from "@/lib/dashboard/house-dashboard-summary-store";
 import { uploadSupabaseStorageObject } from "@/lib/storage/supabase-storage";
+import { formatAuditValue } from "@/lib/audit/audit-log";
+import { auditProjectChange, labelFor, projectStatusLabels } from "@/lib/audit/project-audit";
+import { actorForUser, requireEditor } from "@/lib/auth/session";
+
+const contractFieldSpec = {
+  contractPrice: { label: "Contract price", format: "money" as const },
+  contractSquareFootage: { label: "Contract square feet", format: "number" as const },
+  contractCity: { label: "Contract city" },
+};
+
+async function houseBefore(qboBankAccountId: string) {
+  return (await getHouseDetailsMap()).get(qboBankAccountId) ?? null;
+}
 
 function optionalMoney(value: FormDataEntryValue | null) {
   const text = String(value ?? "").replace(/[$,]/g, "").trim();
@@ -76,6 +90,7 @@ function isAllowedContractFile(file: File) {
 }
 
 export async function saveHouseDetailsAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
 
@@ -83,12 +98,27 @@ export async function saveHouseDetailsAction(formData: FormData) {
     throw new Error("House account is missing.");
   }
 
-  await saveHouseDetail({
-    qboBankAccountId,
-    houseName,
+  const values = {
     soldPrice: optionalMoney(formData.get("soldPrice")),
     squareFootage: optionalInteger(formData.get("squareFootage")),
     city: optionalText(formData.get("city")),
+  };
+  const before = await houseBefore(qboBankAccountId);
+
+  await saveHouseDetail({ qboBankAccountId, houseName, ...values });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.manual_facts_saved",
+    qboBankAccountId,
+    houseName,
+    title: "Manual project facts",
+    before,
+    after: values,
+    spec: {
+      soldPrice: { label: "Manual sold price", format: "money" },
+      squareFootage: { label: "Square feet", format: "number" },
+      city: { label: "City" },
+    },
   });
 
   revalidatePath("/");
@@ -97,12 +127,22 @@ export async function saveHouseDetailsAction(formData: FormData) {
 }
 
 export async function saveHouseSourceFactsAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
 
   if (!qboBankAccountId || !houseName) {
     throw new Error("House account is missing.");
   }
+
+  const values = {
+    contractPrice: optionalMoney(formData.get("contractPrice")),
+    contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
+    contractCity: optionalText(formData.get("contractCity")),
+    holdbackAmount: optionalMoney(formData.get("holdbackAmount")),
+    holdbackNotes: optionalText(formData.get("holdbackNotes")),
+  };
+  const before = await houseBefore(qboBankAccountId);
 
   await Promise.all([
     saveHouseContractSource({
@@ -111,17 +151,31 @@ export async function saveHouseSourceFactsAction(formData: FormData) {
       contractFileName: null,
       contractFileType: null,
       contractFileDataUrl: null,
-      contractPrice: optionalMoney(formData.get("contractPrice")),
-      contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
-      contractCity: optionalText(formData.get("contractCity")),
+      contractPrice: values.contractPrice,
+      contractSquareFootage: values.contractSquareFootage,
+      contractCity: values.contractCity,
     }),
     saveHouseHoldback({
       qboBankAccountId,
       houseName,
-      holdbackAmount: optionalMoney(formData.get("holdbackAmount")),
-      holdbackNotes: optionalText(formData.get("holdbackNotes")),
+      holdbackAmount: values.holdbackAmount,
+      holdbackNotes: values.holdbackNotes,
     }),
   ]);
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.contract_facts_saved",
+    qboBankAccountId,
+    houseName,
+    title: "Contract facts",
+    before,
+    after: values,
+    spec: {
+      ...contractFieldSpec,
+      holdbackAmount: { label: "Holdback", format: "money" },
+      holdbackNotes: { label: "Holdback notes" },
+    },
+  });
   await refreshHouseDashboardSummaries();
   revalidatePath("/");
   revalidatePath("/draws-budget");
@@ -129,6 +183,7 @@ export async function saveHouseSourceFactsAction(formData: FormData) {
 }
 
 export async function saveHouseProjectStatusAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const projectStatus = optionalText(formData.get("projectStatus"));
@@ -139,7 +194,19 @@ export async function saveHouseProjectStatusAction(formData: FormData) {
     throw new Error("Choose a valid project status.");
   }
 
+  const before = await houseBefore(qboBankAccountId);
+
   await saveHouseProjectStatus({ qboBankAccountId, houseName, projectStatus });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.status_saved",
+    qboBankAccountId,
+    houseName,
+    title: "Project status",
+    before: { projectStatus: labelFor(projectStatusLabels, before?.projectStatus) },
+    after: { projectStatus: labelFor(projectStatusLabels, projectStatus) },
+    spec: { projectStatus: { label: "Status" } },
+  });
   await refreshHouseDashboardSummaries();
   revalidatePath("/");
   revalidatePath("/draws-budget");
@@ -148,6 +215,7 @@ export async function saveHouseProjectStatusAction(formData: FormData) {
 }
 
 export async function saveHouseProjectNumberAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const projectNumber = optionalInteger(formData.get("projectNumber"));
@@ -161,7 +229,19 @@ export async function saveHouseProjectNumberAction(formData: FormData) {
     throw new Error("Project numbers must begin at 101.");
   }
 
+  const before = await houseBefore(qboBankAccountId);
+
   await saveHouseProjectNumber({ qboBankAccountId, houseName, projectNumber });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.number_saved",
+    qboBankAccountId,
+    houseName,
+    title: "Project number",
+    before,
+    after: { projectNumber },
+    spec: { projectNumber: { label: "Project number" } },
+  });
   await refreshHouseDashboardSummaries();
   revalidatePath("/");
   revalidatePath("/draws-budget");
@@ -170,6 +250,7 @@ export async function saveHouseProjectNumberAction(formData: FormData) {
 }
 
 export async function saveHouseProjectIdentityAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const displayName = optionalText(formData.get("displayName"));
@@ -194,12 +275,32 @@ export async function saveHouseProjectIdentityAction(formData: FormData) {
     throw new Error("Choose a valid project status.");
   }
 
+  const before = await houseBefore(qboBankAccountId);
+
   await saveHouseProjectIdentity({
     qboBankAccountId,
     houseName,
     displayName,
     projectNumber,
     projectStatus,
+  });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.identity_saved",
+    qboBankAccountId,
+    houseName,
+    title: "Project name, number and status",
+    before: {
+      displayName: before?.displayName ?? null,
+      projectNumber: before?.projectNumber ?? null,
+      projectStatus: labelFor(projectStatusLabels, before?.projectStatus),
+    },
+    after: { displayName, projectNumber, projectStatus: labelFor(projectStatusLabels, projectStatus) },
+    spec: {
+      displayName: { label: "Project name" },
+      projectNumber: { label: "Project number" },
+      projectStatus: { label: "Status" },
+    },
   });
   await updateHouseDashboardProjectIdentity({
     qboBankAccountId,
@@ -214,6 +315,7 @@ export async function saveHouseProjectIdentityAction(formData: FormData) {
 }
 
 export async function saveHouseRenderImageAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const returnTo = safeReturnTo(formData.get("returnTo"));
@@ -254,6 +356,17 @@ export async function saveHouseRenderImageAction(formData: FormData) {
     manualRenderImageUrl: uploaded?.url ?? dataUrl,
     renderStoragePath: uploaded?.path ?? null,
   });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.picture_uploaded",
+    qboBankAccountId,
+    houseName,
+    title: `Uploaded a new project picture (${renderImage.name})`,
+    before: null,
+    after: {},
+    spec: {},
+    details: { fileName: renderImage.name, fileSize: renderImage.size },
+  });
 
   revalidatePath("/");
   revalidatePath("/draws-budget");
@@ -261,6 +374,7 @@ export async function saveHouseRenderImageAction(formData: FormData) {
 }
 
 export async function saveHouseContractSourceAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const contractFile = formData.get("contractFile");
@@ -303,6 +417,14 @@ export async function saveHouseContractSourceAction(formData: FormData) {
     contractFileDataUrl = uploaded ? null : `data:${contentType};base64,${buffer.toString("base64")}`;
   }
 
+  const values = {
+    contractPrice: optionalMoney(formData.get("contractPrice")),
+    contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
+    contractCity: optionalText(formData.get("contractCity")),
+    ...(contractFileName ? { contractFileName } : {}),
+  };
+  const before = await houseBefore(qboBankAccountId);
+
   await saveHouseContractSource({
     qboBankAccountId,
     houseName,
@@ -311,9 +433,20 @@ export async function saveHouseContractSourceAction(formData: FormData) {
     contractFileUrl,
     contractStoragePath,
     contractFileDataUrl,
-    contractPrice: optionalMoney(formData.get("contractPrice")),
-    contractSquareFootage: optionalInteger(formData.get("contractSquareFootage")),
-    contractCity: optionalText(formData.get("contractCity")),
+    contractPrice: values.contractPrice,
+    contractSquareFootage: values.contractSquareFootage,
+    contractCity: values.contractCity,
+  });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.contract_source_saved",
+    qboBankAccountId,
+    houseName,
+    title: contractFileName ? `Uploaded contract ${contractFileName}` : "Contract facts",
+    before,
+    after: values,
+    spec: { ...contractFieldSpec, contractFileName: { label: "Contract file" } },
+    ...(contractFileName ? { details: { fileName: contractFileName } } : {}),
   });
 
   revalidatePath("/");
@@ -323,6 +456,7 @@ export async function saveHouseContractSourceAction(formData: FormData) {
 }
 
 export async function addHouseChangeOrderAction(formData: FormData) {
+  const editor = await requireEditor();
   const qboBankAccountId = optionalText(formData.get("qboBankAccountId"));
   const houseName = optionalText(formData.get("houseName"));
   const title = optionalText(formData.get("title"));
@@ -336,13 +470,27 @@ export async function addHouseChangeOrderAction(formData: FormData) {
     throw new Error("Change order amount is required.");
   }
 
+  const notes = optionalText(formData.get("notes"));
+  const approvedAt = optionalText(formData.get("approvedAt"));
+
   await addHouseChangeOrder({
     qboBankAccountId,
     houseName,
     title,
     amount,
-    notes: optionalText(formData.get("notes")),
-    approvedAt: optionalText(formData.get("approvedAt")),
+    notes,
+    approvedAt,
+  });
+  await auditProjectChange({
+    actor: actorForUser(editor),
+    action: "project.change_order_added",
+    qboBankAccountId,
+    houseName,
+    title: `Added change order "${title}" for ${formatAuditValue(amount, "money")}`,
+    before: null,
+    after: {},
+    spec: {},
+    details: { title, amount, notes, approvedAt },
   });
 
   revalidatePath("/");

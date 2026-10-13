@@ -13,6 +13,7 @@ import {
   getProjectLedgerTransactions,
   type ProjectLedgerTransaction,
 } from "@/lib/qbo/transactions-store";
+import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,8 @@ export default async function ProjectLedgerPage({
   params,
   searchParams,
 }: ProjectLedgerPageProps) {
+  await requireUser();
+
   const { projectId } = await params;
   const query = await searchParams;
   const requestedView = query.view;

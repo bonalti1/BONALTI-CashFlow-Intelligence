@@ -9,6 +9,7 @@ import {
   getSchedulingProjectVisualList,
   type SchedulingProjectVisual,
 } from "@/lib/scheduling/status-store";
+import { authorizeApiRequest } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -179,6 +180,12 @@ function timedJson(payload: DrawsDashboardPayload, startedAt: number, cacheStatu
 }
 
 export async function GET(request: Request) {
+  const authorization = await authorizeApiRequest(request);
+
+  if (!authorization.ok) {
+    return authorization.response;
+  }
+
   const startedAt = performance.now();
   const { searchParams } = new URL(request.url);
   const view = searchParams.get("view") === "completed" ? "completed" : "active";
