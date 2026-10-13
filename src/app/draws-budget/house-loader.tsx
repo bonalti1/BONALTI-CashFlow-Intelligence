@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { saveHouseProjectIdentityAction } from "@/app/actions/house-details";
+import { PlaidBalanceLink } from "@/app/draws-budget/plaid-balance-link";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
 import { SourceTruthDocuments } from "@/app/draws-budget/source-truth-documents";
 import type {
@@ -479,14 +480,11 @@ function HouseCard({
           <MiniPhaseStrip house={house} />
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <span className="w-full rounded-[8px] border border-[#b9dec9] bg-[#eaf7f0] px-2 py-1.5 text-center uppercase text-[#1f6f4b]">
-              <span className="block text-[8px] font-extrabold tracking-[0.1em]">Plaid balance</span>
-              <span className="mt-0.5 block text-[10px] font-extrabold tracking-[0.04em]">
-                {house.actualBankBalance === null
-                  ? "Not mapped"
-                  : currency(house.actualBankBalance)}
-              </span>
-            </span>
+            <PlaidBalanceLink
+              balance={house.actualBankBalance}
+              houseName={house.house}
+              qboBankAccountId={house.id}
+            />
             <button
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
               onClick={onToggleSourceTruth}
