@@ -59,6 +59,16 @@ export function plaidEnvironmentLabel() {
   return plaidEnvironment();
 }
 
+export class PlaidApiError extends Error {
+  readonly code: string | null;
+
+  constructor(message: string, code: string | null) {
+    super(message);
+    this.name = "PlaidApiError";
+    this.code = code;
+  }
+}
+
 async function plaidRequest<T>(path: string, body: Record<string, unknown>) {
   if (!plaidConfigured()) {
     throw new Error("Plaid keys are not configured.");
@@ -81,8 +91,9 @@ async function plaidRequest<T>(path: string, body: Record<string, unknown>) {
   };
 
   if (!response.ok) {
-    throw new Error(
+    throw new PlaidApiError(
       data.error_message || data.error_code || `Plaid request failed with ${response.status}.`,
+      data.error_code ?? null,
     );
   }
 

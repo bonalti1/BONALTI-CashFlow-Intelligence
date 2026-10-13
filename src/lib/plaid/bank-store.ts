@@ -4,9 +4,11 @@ import {
   exchangePublicToken,
   getPlaidAccounts,
   plaidConfigured,
+  PlaidApiError,
   plaidEnvironmentLabel,
   syncPlaidTransactions,
   type PlaidAccount,
+  type PlaidRemovedTransaction,
   type PlaidTransaction,
 } from "@/lib/plaid/client";
 
@@ -181,7 +183,14 @@ async function saveAccounts({
   }
 }
 
-async function getStoredItems() {
+type StoredPlaidItem = {
+  itemId: string;
+  accessToken: string;
+  cursor: string | null;
+  institutionName: string | null;
+};
+
+async function getStoredItems(): Promise<StoredPlaidItem[]> {
   await ensurePlaidTables();
 
   const rows = await sql()<
@@ -189,9 +198,10 @@ async function getStoredItems() {
       item_id: string;
       access_token_encrypted: string;
       cursor: string | null;
+      institution_name: string | null;
     }>
   >`
-    select item_id, access_token_encrypted, cursor
+    select item_id, access_token_encrypted, cursor, institution_name
     from plaid_items
     order by connected_at desc
   `;
@@ -200,6 +210,7 @@ async function getStoredItems() {
     itemId: row.item_id,
     accessToken: unseal(row.access_token_encrypted),
     cursor: row.cursor,
+    institutionName: row.institution_name,
   }));
 }
 
@@ -252,11 +263,118 @@ export async function savePlaidPublicToken({
     accounts: accountSnapshot.accounts,
     itemId: exchanged.item_id,
   });
-  await syncAllPlaidItems();
+
+  // The bank is connected at this point. Pull only this bank's transactions; if that
+  // fails (Plaid is often still loading history right after linking), report it as a
+  // warning instead of a failed connection. The next Sync Bank picks it up.
+  const storedItem = (await getStoredItems()).find((item) => item.itemId === exchanged.item_id);
+  let syncWarning: string | null = null;
+
+  if (storedItem) {
+    try {
+      await syncPlaidItem(storedItem);
+    } catch (error) {
+      console.error("Initial Plaid sync failed", { itemId: exchanged.item_id, error });
+      syncWarning = plaidSyncProblem(error);
+    }
+  }
 
   return {
     accounts: accountSnapshot.accounts.length,
     itemId: exchanged.item_id,
+    syncWarning,
+  };
+}
+
+export type PlaidSyncFailure = {
+  institutionName: string;
+  message: string;
+};
+
+const maxSyncAttempts = 3;
+
+export function plaidSyncProblem(error: unknown) {
+  const code = error instanceof PlaidApiError ? error.code : null;
+
+  if (code === "ITEM_LOGIN_REQUIRED") {
+    return "the bank needs you to sign in again before it can sync.";
+  }
+
+  if (code === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION" || code === "PRODUCT_NOT_READY") {
+    return "the bank was still updating its transactions. Try Sync Bank again in a few minutes.";
+  }
+
+  return error instanceof Error ? error.message : "Plaid sync failed.";
+}
+
+// Plaid's /transactions/sync contract: collect every page first and apply nothing until
+// has_more is false. If the item changes mid-way (TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION),
+// throw the collected pages away and restart from the cursor this sync began with.
+async function fetchPlaidItemChanges(item: StoredPlaidItem) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const added: PlaidTransaction[] = [];
+      const modified: PlaidTransaction[] = [];
+      const removed: PlaidRemovedTransaction[] = [];
+      let accounts: PlaidAccount[] = [];
+      let cursor = item.cursor;
+      let hasMore = true;
+
+      while (hasMore) {
+        const page = await syncPlaidTransactions(item.accessToken, cursor);
+
+        added.push(...page.added);
+        modified.push(...page.modified);
+        removed.push(...page.removed);
+        accounts = page.accounts.length > 0 ? page.accounts : accounts;
+        cursor = page.next_cursor;
+        hasMore = page.has_more;
+      }
+
+      return { accounts, added, cursor, modified, removed };
+    } catch (error) {
+      const restartable =
+        error instanceof PlaidApiError &&
+        error.code === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION";
+
+      if (!restartable || attempt >= maxSyncAttempts) {
+        throw error;
+      }
+    }
+  }
+}
+
+async function syncPlaidItem(item: StoredPlaidItem) {
+  const changes = await fetchPlaidItemChanges(item);
+
+  if (changes.accounts.length > 0) {
+    await saveAccounts({ accounts: changes.accounts, itemId: item.itemId });
+  }
+
+  for (const transaction of [...changes.added, ...changes.modified]) {
+    await savePlaidTransaction(transaction, item.itemId);
+  }
+
+  for (const removed of changes.removed) {
+    await sql()`
+      update plaid_transactions
+      set removed_at = now(), updated_at = now()
+      where plaid_transaction_id = ${removed.transaction_id}
+    `;
+  }
+
+  // Saved last, so an interrupted save replays from the old cursor; the writes above are upserts.
+  await sql()`
+    update plaid_items
+    set cursor = ${changes.cursor}, last_synced_at = now(), updated_at = now()
+    where item_id = ${item.itemId}
+  `;
+
+  return {
+    accounts: changes.accounts.length,
+    added: changes.added.length,
+    modified: changes.modified.length,
+    removed: changes.removed.length,
   };
 }
 
@@ -267,49 +385,33 @@ export async function syncAllPlaidItems() {
 
   await ensurePlaidTables();
   const items = await getStoredItems();
+  const failures: PlaidSyncFailure[] = [];
   let accountsSynced = 0;
   let transactionsAdded = 0;
   let transactionsModified = 0;
   let transactionsRemoved = 0;
 
+  // One bank's problem (an expired login, a mid-sync update) must not stop the others.
   for (const item of items) {
-    let cursor = item.cursor;
-    let hasMore = true;
+    try {
+      const result = await syncPlaidItem(item);
 
-    while (hasMore) {
-      const page = await syncPlaidTransactions(item.accessToken, cursor);
-
-      await saveAccounts({ accounts: page.accounts, itemId: item.itemId });
-      accountsSynced += page.accounts.length;
-
-      for (const transaction of [...page.added, ...page.modified]) {
-        await savePlaidTransaction(transaction, item.itemId);
-      }
-
-      for (const removed of page.removed) {
-        await sql()`
-          update plaid_transactions
-          set removed_at = now(), updated_at = now()
-          where plaid_transaction_id = ${removed.transaction_id}
-        `;
-      }
-
-      transactionsAdded += page.added.length;
-      transactionsModified += page.modified.length;
-      transactionsRemoved += page.removed.length;
-      cursor = page.next_cursor;
-      hasMore = page.has_more;
+      accountsSynced += result.accounts;
+      transactionsAdded += result.added;
+      transactionsModified += result.modified;
+      transactionsRemoved += result.removed;
+    } catch (error) {
+      console.error("Plaid sync failed for item", { itemId: item.itemId, error });
+      failures.push({
+        institutionName: item.institutionName ?? "One bank",
+        message: plaidSyncProblem(error),
+      });
     }
-
-    await sql()`
-      update plaid_items
-      set cursor = ${cursor}, last_synced_at = now(), updated_at = now()
-      where item_id = ${item.itemId}
-    `;
   }
 
   return {
     accountsSynced,
+    failures,
     items: items.length,
     transactionsAdded,
     transactionsModified,

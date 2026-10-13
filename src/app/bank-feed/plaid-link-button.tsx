@@ -119,6 +119,7 @@ export function PlaidLinkButton({
     const exchangeData = (await exchangeResponse.json()) as {
       message?: string;
       status: string;
+      syncWarning?: string | null;
     };
 
     if (!exchangeResponse.ok) {
@@ -126,7 +127,9 @@ export function PlaidLinkButton({
     }
 
     window.localStorage.removeItem(storedLinkTokenKey);
-    window.location.href = "/bank-feed";
+    window.location.href = exchangeData.syncWarning
+      ? "/bank-feed?connected=pending"
+      : "/bank-feed?connected=1";
   }, []);
 
   const openPlaidLink = useCallback((linkToken: string, receivedRedirectUri?: string) => {

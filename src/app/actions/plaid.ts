@@ -103,6 +103,18 @@ export async function syncPlaidBankFeed() {
     revalidatePath("/bank-feed");
     revalidatePath("/draws-budget");
 
+    if (result.failures.length > 0) {
+      const synced = result.items - result.failures.length;
+      const problems = result.failures
+        .map((failure) => `${failure.institutionName}: ${failure.message}`)
+        .join(" ");
+
+      return {
+        ok: false as const,
+        message: `Synced ${synced} of ${result.items} bank logins. ${problems}`,
+      };
+    }
+
     return {
       ok: true as const,
       ...result,
