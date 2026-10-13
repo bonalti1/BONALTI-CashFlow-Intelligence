@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Check, ChevronDown, LoaderCircle, Landmark } from "lucide-react";
 
+import { linkProjectPlaidAccount, listPlaidAccountsForLink } from "@/app/actions/plaid";
+
 type PlaidAccountOption = {
   id: string;
   name: string;
@@ -12,11 +14,6 @@ type PlaidAccountOption = {
   availableBalance: number | null;
   linkedHouseName: string | null;
   linkedQboBankAccountId: string | null;
-};
-
-type AccountsResponse = {
-  accounts?: PlaidAccountOption[];
-  message?: string;
 };
 
 function currency(value: number | null) {
@@ -60,14 +57,13 @@ export function PlaidBalanceLink({
     setLoading(true);
 
     try {
-      const response = await fetch("/api/plaid/accounts", { cache: "no-store" });
-      const payload = (await response.json()) as AccountsResponse;
+      const payload = await listPlaidAccountsForLink();
 
-      if (!response.ok) {
-        throw new Error(payload.message ?? "Unable to load Plaid accounts.");
+      if (!payload.ok) {
+        throw new Error(payload.message);
       }
 
-      const nextAccounts = payload.accounts ?? [];
+      const nextAccounts = payload.accounts;
       const linked = nextAccounts.find(
         (account) => account.linkedQboBankAccountId === qboBankAccountId,
       );
@@ -91,22 +87,14 @@ export function PlaidBalanceLink({
     setError(null);
 
     try {
-      const response = await fetch("/api/plaid/accounts", {
-        body: JSON.stringify({
-          houseName,
-          plaidAccountId: selectedId,
-          qboBankAccountId,
-        }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
+      const payload = await linkProjectPlaidAccount({
+        houseName,
+        plaidAccountId: selectedId,
+        qboBankAccountId,
       });
-      const payload = (await response.json()) as {
-        account?: { currentBalance: number | null };
-        message?: string;
-      };
 
-      if (!response.ok || !payload.account) {
-        throw new Error(payload.message ?? "Unable to link this account.");
+      if (!payload.ok) {
+        throw new Error(payload.message);
       }
 
       setCurrentBalance(payload.account.currentBalance);

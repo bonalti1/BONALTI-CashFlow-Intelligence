@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  aiCsuiteExportDenied,
+  authorizeAiCsuiteExportToken,
+} from "@/lib/auth/ai-csuite-export-token";
+import {
   getPlaidBankAccounts,
   linkPlaidAccountToHouse,
 } from "@/lib/plaid/bank-store";
@@ -11,7 +15,13 @@ function requiredText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = authorizeAiCsuiteExportToken(request);
+
+  if (!auth.ok) {
+    return aiCsuiteExportDenied(auth);
+  }
+
   const accounts = await getPlaidBankAccounts();
 
   return NextResponse.json(
@@ -36,6 +46,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = authorizeAiCsuiteExportToken(request);
+
+  if (!auth.ok) {
+    return aiCsuiteExportDenied(auth);
+  }
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const houseName = requiredText(body?.houseName);
   const plaidAccountId = requiredText(body?.plaidAccountId);

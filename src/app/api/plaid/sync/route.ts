@@ -1,11 +1,21 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import {
+  aiCsuiteExportDenied,
+  authorizeAiCsuiteExportToken,
+} from "@/lib/auth/ai-csuite-export-token";
 import { syncAllPlaidItems } from "@/lib/plaid/bank-store";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const auth = authorizeAiCsuiteExportToken(request);
+
+  if (!auth.ok) {
+    return aiCsuiteExportDenied(auth);
+  }
+
   try {
     const result = await syncAllPlaidItems();
 

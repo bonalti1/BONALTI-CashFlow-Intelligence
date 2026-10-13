@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 
+import { syncPlaidBankFeed } from "@/app/actions/plaid";
+
 export function BankSyncButton({ disabled = false }: { disabled?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -11,16 +13,10 @@ export function BankSyncButton({ disabled = false }: { disabled?: boolean }) {
     try {
       setBusy(true);
       setMessage(null);
-      const response = await fetch("/api/plaid/sync", {
-        method: "POST",
-      });
-      const data = (await response.json()) as {
-        message?: string;
-        status: string;
-      };
+      const result = await syncPlaidBankFeed();
 
-      if (!response.ok) {
-        throw new Error(data.message || "Bank sync failed.");
+      if (!result.ok) {
+        throw new Error(result.message);
       }
 
       window.location.reload();
