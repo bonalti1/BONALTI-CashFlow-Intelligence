@@ -169,8 +169,12 @@ export default async function BankFeedPage({
           <Metric
             icon={WalletCards}
             label="Bank Accounts"
-            value={String(status.accounts)}
-            detail={`${status.items} bank login${status.items === 1 ? "" : "s"}`}
+            value={String(accountRows.length)}
+            detail={
+              status.duplicateItems > 0
+                ? `${status.items - status.duplicateItems} bank login · ${status.duplicateItems} older login${status.duplicateItems === 1 ? "" : "s"} hidden`
+                : `${status.items} bank login${status.items === 1 ? "" : "s"}`
+            }
           />
           <Metric
             icon={Landmark}

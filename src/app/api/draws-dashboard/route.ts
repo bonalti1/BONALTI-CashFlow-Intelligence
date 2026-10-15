@@ -4,6 +4,7 @@ import {
   getHouseDashboardSummaries,
   type HouseDashboardSummary,
 } from "@/lib/dashboard/house-dashboard-summary-store";
+import { getPlaidBalanceRefreshedAt } from "@/lib/plaid/bank-store";
 import type { DrawPhaseKey } from "@/lib/draws/draws-store";
 import {
   getSchedulingProjectVisualList,
@@ -22,6 +23,7 @@ type DrawsDashboardPayload = {
   completedCount: number;
   houses: Array<HouseDashboardSummary & { completed: boolean }>;
   message?: string;
+  plaidRefreshedAt: string | null;
   status: "ok" | "fallback";
   view: "active" | "completed";
 };
@@ -124,6 +126,7 @@ function summaryFromFallbackHouse(
       actualBankAvailableBalance: null,
       actualBankAccountName: null,
       actualBankLastSyncedAt: null,
+      actualBankBalanceAsOf: null,
       city: house.city,
       soldPrice: house.soldPrice,
       squareFootage: house.squareFootage,
@@ -174,7 +177,10 @@ function schedulingFallbackSummaries(projects: SchedulingProjectVisual[]) {
 
 async function buildDrawsDashboard(view: "active" | "completed"): Promise<DrawsDashboardPayload> {
   try {
-    const summaries = await getHouseDashboardSummaries();
+    const [summaries, plaidRefreshedAt] = await Promise.all([
+      getHouseDashboardSummaries(),
+      getPlaidBalanceRefreshedAt(),
+    ]);
     const houses = summaries.map((summary) => ({
       ...summary,
       completed: summaryIsCompleted(summary),
@@ -192,6 +198,7 @@ async function buildDrawsDashboard(view: "active" | "completed"): Promise<DrawsD
         .filter((projectNumber): projectNumber is number => projectNumber !== null),
       completedCount,
       houses: visibleHouses,
+      plaidRefreshedAt,
       status: "ok",
       view,
     };
@@ -210,6 +217,7 @@ async function buildDrawsDashboard(view: "active" | "completed"): Promise<DrawsD
       houses: visibleHouses,
       message:
         "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",
+      plaidRefreshedAt: null,
       status: "fallback",
       view,
     };
@@ -296,6 +304,7 @@ export async function GET(request: Request) {
       houses: visibleHouses,
       message:
         "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",
+      plaidRefreshedAt: null,
       status: "fallback",
       view,
     };

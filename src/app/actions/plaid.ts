@@ -6,7 +6,7 @@ import { requireEditor, requireUser } from "@/lib/auth/session";
 import {
   getPlaidBankAccounts,
   linkPlaidAccountToHouse,
-  refreshLiveBalances,
+  refreshPlaidBalances,
   syncAllPlaidItems,
 } from "@/lib/plaid/bank-store";
 
@@ -129,31 +129,61 @@ export async function syncPlaidBankFeed() {
   }
 }
 
-// Plaid bills each live balance check, so only admins trigger one: when an admin opens the
-// Bank Feed or presses "Check again". Everyone else sees the result of the last admin check.
-// A bank checked live in the last minute is reused (10 seconds for "Check again").
-export async function checkLiveBalances({ force = false }: { force?: boolean } = {}) {
-  const user = await requireUser();
-
-  if (user.role !== "admin") {
-    return {
-      ok: false as const,
-      message: "Live balance checks run when an admin opens this page.",
-    };
-  }
+// Any signed-in open can ask for balances. The server skips Plaid when the last
+// attempt was under 5 minutes ago, so repeat opens do not add another charge.
+export async function refreshBalancesOnOpen() {
+  await requireUser();
 
   try {
-    const result = await refreshLiveBalances({ reuseWithinMs: force ? 10_000 : 60_000 });
+    const result = await refreshPlaidBalances();
 
-    revalidatePath("/bank-feed");
+    if (!result.cached) {
+      revalidatePath("/bank-feed");
+      revalidatePath("/draws-budget");
+    }
 
-    return { ok: true as const, ...result };
+    return {
+      ok: true as const,
+      cached: result.cached,
+      refreshedAt: result.refreshedAt,
+    };
   } catch (error) {
-    console.error("Live balance check failed", error);
+    console.error("Balance refresh on open failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
 
     return {
       ok: false as const,
-      message: "Could not check the banks right now. The balances shown are the last ones received.",
+      message: "Could not check the banks right now. The balances shown are the last ones saved.",
+    };
+  }
+}
+
+export async function checkLiveBalances() {
+  await requireUser();
+
+  try {
+    const result = await refreshPlaidBalances();
+
+    if (!result.cached) {
+      revalidatePath("/bank-feed");
+      revalidatePath("/draws-budget");
+    }
+
+    return {
+      ok: true as const,
+      cached: result.cached,
+      checkedAt: result.refreshedAt ?? new Date().toISOString(),
+      banks: result.banks,
+    };
+  } catch (error) {
+    console.error("Live balance check failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+
+    return {
+      ok: false as const,
+      message: "Could not check the banks right now. The balances shown are the last ones saved.",
     };
   }
 }

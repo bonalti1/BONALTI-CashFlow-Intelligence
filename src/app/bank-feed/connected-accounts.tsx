@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CircleAlert, LoaderCircle, RefreshCw, Search } from "lucide-react";
 
 import { checkLiveBalances } from "@/app/actions/plaid";
+import { balanceRefreshDoneEvent, balanceRefreshStartEvent } from "@/components/app/plaid-balance-refresh";
 import {
   accountKind,
   accountState,
@@ -94,7 +95,7 @@ export function ConnectedAccounts({
   renderedAt: number;
 }) {
   const router = useRouter();
-  const [check, setCheck] = useState<CheckState>(canCheckLive ? { status: "checking" } : { status: "idle" });
+  const [check, setCheck] = useState<CheckState>({ status: "idle" });
   const [now, setNow] = useState(renderedAt);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -113,25 +114,39 @@ export function ConnectedAccounts({
     [router],
   );
 
-  // Plaid charges per live check, so only an admin's visit asks the banks; everyone else
-  // sees the balances from the last admin check, with their time.
+  // The signed-in shell starts the refresh after the page is visible. This listens
+  // so the "last updated" time can move without waiting on that request to render.
   useEffect(() => {
-    if (!canCheckLive) {
-      return;
+    function start() {
+      setCheck({ status: "checking" });
     }
 
-    let cancelled = false;
+    function done(event: Event) {
+      const detail = (event as CustomEvent<Awaited<ReturnType<typeof checkLiveBalances>>>).detail;
 
-    void checkLiveBalances().then((result) => {
-      if (!cancelled) {
-        applyResult(result);
+      if (!detail?.ok) {
+        setCheck({
+          status: "failed",
+          message: detail && "message" in detail ? detail.message : "Could not check the banks right now.",
+        });
+        return;
       }
-    });
+
+      setCheck({ status: "idle" });
+
+      if (!detail.cached) {
+        router.refresh();
+      }
+    }
+
+    window.addEventListener(balanceRefreshStartEvent, start);
+    window.addEventListener(balanceRefreshDoneEvent, done);
 
     return () => {
-      cancelled = true;
+      window.removeEventListener(balanceRefreshStartEvent, start);
+      window.removeEventListener(balanceRefreshDoneEvent, done);
     };
-  }, [applyResult, canCheckLive]);
+  }, [router]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -141,7 +156,7 @@ export function ConnectedAccounts({
 
   async function checkAgain() {
     setCheck({ status: "checking" });
-    applyResult(await checkLiveBalances({ force: true }));
+    applyResult(await checkLiveBalances());
   }
 
   const summary = useMemo(() => summarizeAccounts(accounts, now), [accounts, now]);
@@ -209,9 +224,7 @@ export function ConnectedAccounts({
         <div>
           <h2 className="text-lg font-black uppercase tracking-[0.12em] text-[#14254b]">Connected Accounts</h2>
           <p className="mt-1 text-sm font-bold text-[#858b9f]">
-            {canCheckLive
-              ? "Each time you open this page, every bank is asked for its balance right now."
-              : "Balances are checked live with each bank when an admin opens this page."}
+            Opening the app asks each bank for its balance. A check from the last 5 minutes is reused.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
