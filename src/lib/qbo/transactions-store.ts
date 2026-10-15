@@ -1,4 +1,6 @@
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { runOnce } from "@/lib/db/run-once";
+import { dedupeInflight } from "@/lib/performance/ttl-cache";
 
 export type QboTransactionLine = {
   Id?: string;
@@ -88,7 +90,13 @@ type TransactionSnapshot = {
   transactions: SavedQboTransaction[];
 };
 
-async function ensureTransactionTables() {
+const ensureTransactionTables = runOnce(initializeTransactionTables);
+
+export function ensureQboTransactionTables() {
+  return ensureTransactionTables();
+}
+
+async function initializeTransactionTables() {
   await sql()`
     create table if not exists qbo_transaction_snapshots (
       realm_id text primary key,
@@ -329,32 +337,73 @@ export async function getTransactionsSnapshotStatus() {
   }
 }
 
-export async function getTransactionsByBankAccount() {
+type TransactionColumnRow = {
+  qbo_id: string;
+  source: string;
+  realm_id: string;
+  txn_date: Date | null;
+  bank_account_qbo_id: string | null;
+  bank_account_name: string | null;
+  payee_name: string | null;
+  total_amount: string;
+  payment_type: string | null;
+  doc_number: string | null;
+  memo: string | null;
+  cleared_status: "cleared" | "not_cleared" | "unknown";
+  cleared_status_raw: string | null;
+  expense_account_ids: string[];
+  expense_account_names: string[];
+};
+
+function dateOnly(value: Date | string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return value.slice(0, 10);
+}
+
+function transactionFromColumns(
+  row: TransactionColumnRow,
+  raw: QboMoneyTransaction = { Id: row.qbo_id },
+): SavedQboTransaction {
+  return {
+    source: row.source,
+    id: row.qbo_id,
+    realmId: row.realm_id,
+    txnDate: dateOnly(row.txn_date),
+    bankAccountId: row.bank_account_qbo_id,
+    bankAccountName: row.bank_account_name,
+    payeeName: row.payee_name,
+    totalAmount: Number(row.total_amount),
+    paymentType: row.payment_type,
+    docNumber: row.doc_number,
+    memo: row.memo,
+    clearedStatus: row.cleared_status,
+    clearedStatusRaw: row.cleared_status_raw,
+    expenseAccountIds: row.expense_account_ids ?? [],
+    expenseAccountNames: row.expense_account_names ?? [],
+    raw,
+  };
+}
+
+function payeeLabel(payeeName: string | null) {
+  const trimmed = payeeName?.trim();
+
+  return trimmed ? trimmed : "No payee listed";
+}
+
+async function loadTransactionsByBankAccount() {
   if (!hasDatabaseUrl()) {
     return new Map<string, SavedQboTransaction[]>();
   }
 
   await ensureTransactionTables();
-  const rows = await sql()<
-    Array<{
-      qbo_id: string;
-      source: string;
-      realm_id: string;
-      txn_date: Date | null;
-      bank_account_qbo_id: string | null;
-      bank_account_name: string | null;
-      payee_name: string | null;
-      total_amount: string;
-      payment_type: string | null;
-      doc_number: string | null;
-      memo: string | null;
-      cleared_status: "cleared" | "not_cleared" | "unknown";
-      cleared_status_raw: string | null;
-      expense_account_ids: string[];
-      expense_account_names: string[];
-      raw: QboMoneyTransaction;
-    }>
-  >`
+  const rows = await sql()<Array<TransactionColumnRow>>`
     select
       qbo_id,
       source,
@@ -370,8 +419,7 @@ export async function getTransactionsByBankAccount() {
       cleared_status,
       cleared_status_raw,
       expense_account_ids,
-      expense_account_names,
-      raw
+      expense_account_names
     from qbo_money_transactions
     where bank_account_qbo_id is not null
     order by txn_date desc nulls last, updated_at desc
@@ -379,24 +427,7 @@ export async function getTransactionsByBankAccount() {
   const grouped = new Map<string, SavedQboTransaction[]>();
 
   for (const row of rows) {
-    const item: SavedQboTransaction = {
-      source: row.source,
-      id: row.qbo_id,
-      realmId: row.realm_id,
-      txnDate: row.txn_date?.toISOString().slice(0, 10) ?? null,
-      bankAccountId: row.bank_account_qbo_id,
-      bankAccountName: row.bank_account_name,
-      payeeName: row.payee_name,
-      totalAmount: Number(row.total_amount),
-      paymentType: row.payment_type,
-      docNumber: row.doc_number,
-      memo: row.memo,
-      clearedStatus: row.cleared_status,
-      clearedStatusRaw: row.cleared_status_raw,
-      expenseAccountIds: row.expense_account_ids,
-      expenseAccountNames: row.expense_account_names,
-      raw: row.raw,
-    };
+    const item = transactionFromColumns(row);
     const existing = grouped.get(row.bank_account_qbo_id!) ?? [];
 
     existing.push(item);
@@ -404,6 +435,191 @@ export async function getTransactionsByBankAccount() {
   }
 
   return grouped;
+}
+
+export function getTransactionsByBankAccount() {
+  return dedupeInflight("qbo:transactions-by-bank", loadTransactionsByBankAccount);
+}
+
+export async function getTransactionsForBankAccounts(bankAccountIds: string[]) {
+  if (!hasDatabaseUrl() || bankAccountIds.length === 0) {
+    return [] as SavedQboTransaction[];
+  }
+
+  await ensureTransactionTables();
+  const rows = await sql()<Array<TransactionColumnRow>>`
+    select
+      qbo_id,
+      source,
+      realm_id,
+      txn_date,
+      bank_account_qbo_id,
+      bank_account_name,
+      payee_name,
+      total_amount,
+      payment_type,
+      doc_number,
+      memo,
+      cleared_status,
+      cleared_status_raw,
+      expense_account_ids,
+      expense_account_names
+    from qbo_money_transactions
+    where bank_account_qbo_id = any(${bankAccountIds})
+    order by txn_date desc nulls last, updated_at desc
+  `;
+
+  return rows.map((row) => transactionFromColumns(row));
+}
+
+export type PayeeSummaryRow = {
+  name: string;
+  totalPaid: number;
+  paymentCount: number;
+  firstPaymentDate: string | null;
+  lastPaymentDate: string | null;
+  bankAccounts: string[];
+  transactions: SavedQboTransaction[];
+};
+
+export async function listPayeeSummaries() {
+  if (!hasDatabaseUrl()) {
+    return [] as PayeeSummaryRow[];
+  }
+
+  await ensureTransactionTables();
+  const [summaries, recent] = await Promise.all([
+    sql()<
+      Array<{
+        payee_name: string;
+        total_paid: string;
+        payment_count: number;
+        first_payment_date: Date | null;
+        last_payment_date: Date | null;
+        bank_account_names: Array<string | null>;
+      }>
+    >`
+      select
+        coalesce(nullif(btrim(payee_name), ''), 'No payee listed') as payee_name,
+        sum(abs(total_amount)) as total_paid,
+        count(*)::int as payment_count,
+        min(txn_date) as first_payment_date,
+        max(txn_date) as last_payment_date,
+        array_agg(bank_account_name order by txn_date desc nulls last) as bank_account_names
+      from qbo_money_transactions
+      where bank_account_qbo_id is not null
+        and total_amount <> 0
+      group by 1
+      order by total_paid desc, payee_name
+    `,
+    sql()<
+      Array<{
+        payee_name: string;
+        source: string;
+        qbo_id: string;
+        txn_date: Date | null;
+        bank_account_name: string | null;
+        amount: string;
+      }>
+    >`
+      select payee_name, source, qbo_id, txn_date, bank_account_name, amount
+      from (
+        select
+          coalesce(nullif(btrim(payee_name), ''), 'No payee listed') as payee_name,
+          source,
+          qbo_id,
+          txn_date,
+          bank_account_name,
+          abs(total_amount) as amount,
+          row_number() over (
+            partition by coalesce(nullif(btrim(payee_name), ''), 'No payee listed')
+            order by txn_date desc nulls last, updated_at desc
+          ) as rn
+        from qbo_money_transactions
+        where bank_account_qbo_id is not null
+          and total_amount <> 0
+      ) recent
+      where rn <= 3
+      order by payee_name, rn
+    `,
+  ]);
+  const recentByPayee = new Map<string, SavedQboTransaction[]>();
+
+  for (const row of recent) {
+    const existing = recentByPayee.get(row.payee_name) ?? [];
+
+    existing.push({
+      source: row.source,
+      id: row.qbo_id,
+      realmId: "",
+      txnDate: dateOnly(row.txn_date),
+      bankAccountId: null,
+      bankAccountName: row.bank_account_name,
+      payeeName: row.payee_name,
+      totalAmount: Number(row.amount),
+      paymentType: null,
+      docNumber: null,
+      memo: null,
+      clearedStatus: "unknown",
+      clearedStatusRaw: null,
+      expenseAccountIds: [],
+      expenseAccountNames: [],
+      raw: { Id: row.qbo_id },
+    });
+    recentByPayee.set(row.payee_name, existing);
+  }
+
+  return summaries.map((row): PayeeSummaryRow => {
+    const bankAccounts: string[] = [];
+
+    for (const name of row.bank_account_names ?? []) {
+      if (name && !bankAccounts.includes(name)) {
+        bankAccounts.push(name);
+      }
+    }
+
+    return {
+      name: row.payee_name,
+      totalPaid: Number(row.total_paid),
+      paymentCount: row.payment_count,
+      firstPaymentDate: dateOnly(row.first_payment_date),
+      lastPaymentDate: dateOnly(row.last_payment_date),
+      bankAccounts,
+      transactions: recentByPayee.get(row.payee_name) ?? [],
+    };
+  });
+}
+
+export async function getPayeeTransactions(payeeName: string) {
+  if (!hasDatabaseUrl()) {
+    return [] as SavedQboTransaction[];
+  }
+
+  await ensureTransactionTables();
+  const rows = await sql()<Array<TransactionColumnRow>>`
+    select
+      qbo_id,
+      source,
+      realm_id,
+      txn_date,
+      bank_account_qbo_id,
+      bank_account_name,
+      payee_name,
+      total_amount,
+      payment_type,
+      doc_number,
+      memo,
+      cleared_status,
+      cleared_status_raw,
+      expense_account_ids,
+      expense_account_names
+    from qbo_money_transactions
+    where bank_account_qbo_id is not null
+      and coalesce(nullif(btrim(payee_name), ''), 'No payee listed') = ${payeeLabel(payeeName)}
+    order by txn_date desc nulls last, updated_at desc
+  `;
+
+  return rows.map((row) => transactionFromColumns(row));
 }
 
 export type ProjectLedgerTransaction = SavedQboTransaction & {
@@ -418,24 +634,12 @@ export async function getProjectLedgerTransactions(qboBankAccountId: string) {
 
   await ensureTransactionTables();
   const rows = await sql()<
-    Array<{
-      qbo_id: string;
-      source: string;
-      realm_id: string;
-      txn_date: Date | null;
-      bank_account_qbo_id: string | null;
-      bank_account_name: string | null;
-      payee_name: string | null;
-      total_amount: string;
-      payment_type: string | null;
-      doc_number: string | null;
-      memo: string | null;
-      cleared_status: "cleared" | "not_cleared" | "unknown";
-      cleared_status_raw: string | null;
-      expense_account_ids: string[];
-      expense_account_names: string[];
-      raw: QboMoneyTransaction;
-    }>
+    Array<
+      TransactionColumnRow & {
+        from_account_ref: { value?: string; name?: string } | null;
+        to_account_ref: { value?: string; name?: string } | null;
+      }
+    >
   >`
     select
       qbo_id,
@@ -453,7 +657,8 @@ export async function getProjectLedgerTransactions(qboBankAccountId: string) {
       cleared_status_raw,
       expense_account_ids,
       expense_account_names,
-      raw
+      raw -> 'FromAccountRef' as from_account_ref,
+      raw -> 'ToAccountRef' as to_account_ref
     from qbo_money_transactions
     where bank_account_qbo_id = ${qboBankAccountId}
       or (
@@ -468,25 +673,14 @@ export async function getProjectLedgerTransactions(qboBankAccountId: string) {
 
   return rows.map((row): ProjectLedgerTransaction => {
     const isTransfer = row.source === "Transfer";
-    const transferIn = isTransfer && row.raw.ToAccountRef?.value === qboBankAccountId;
+    const transferIn = isTransfer && row.to_account_ref?.value === qboBankAccountId;
 
     return {
-      source: row.source,
-      id: row.qbo_id,
-      realmId: row.realm_id,
-      txnDate: row.txn_date?.toISOString().slice(0, 10) ?? null,
-      bankAccountId: row.bank_account_qbo_id,
-      bankAccountName: row.bank_account_name,
-      payeeName: row.payee_name,
-      totalAmount: Number(row.total_amount),
-      paymentType: row.payment_type,
-      docNumber: row.doc_number,
-      memo: row.memo,
-      clearedStatus: row.cleared_status,
-      clearedStatusRaw: row.cleared_status_raw,
-      expenseAccountIds: row.expense_account_ids,
-      expenseAccountNames: row.expense_account_names,
-      raw: row.raw,
+      ...transactionFromColumns(row, {
+        Id: row.qbo_id,
+        FromAccountRef: row.from_account_ref ?? undefined,
+        ToAccountRef: row.to_account_ref ?? undefined,
+      }),
       direction: isTransfer ? (transferIn ? "transfer_in" : "transfer_out") : "expense",
       countsTowardSpend: !isTransfer,
     };

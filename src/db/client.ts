@@ -1,10 +1,13 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
-import { requireEnv } from "@/lib/env";
+import { sql } from "@/lib/db/raw";
 
-const client = postgres(requireEnv("DATABASE_URL"), {
-  max: 1,
-});
+let database: PostgresJsDatabase | null = null;
 
-export const db = drizzle(client);
+// Drizzle rides the shared postgres.js pool. Importing this module does not
+// open a second connection.
+export function getDb() {
+  database ??= drizzle(sql());
+
+  return database;
+}

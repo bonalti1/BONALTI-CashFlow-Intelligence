@@ -10,6 +10,7 @@ import {
   type SchedulingProjectVisual,
 } from "@/lib/scheduling/status-store";
 import { authorizeApiRequest } from "@/lib/auth/session";
+import { dedupeInflight } from "@/lib/performance/ttl-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,8 @@ const dashboardCache = new Map<
     payload: DrawsDashboardPayload;
   }
 >();
+
+const dashboardInflight = new Map<string, Promise<DrawsDashboardPayload>>();
 
 const phaseLabels: Record<DrawPhaseKey, { label: string; name: string }> = {
   pre: { label: "Pre", name: "Pre Phase" },
@@ -169,6 +172,77 @@ function schedulingFallbackSummaries(projects: SchedulingProjectVisual[]) {
   );
 }
 
+async function buildDrawsDashboard(view: "active" | "completed"): Promise<DrawsDashboardPayload> {
+  try {
+    const summaries = await getHouseDashboardSummaries();
+    const houses = summaries.map((summary) => ({
+      ...summary,
+      completed: summaryIsCompleted(summary),
+    }));
+    const activeCount = houses.filter((house) => !house.completed).length;
+    const completedCount = houses.length - activeCount;
+    const visibleHouses = houses.filter((house) =>
+      view === "completed" ? house.completed : !house.completed,
+    );
+
+    return {
+      activeCount,
+      assignedProjectNumbers: houses
+        .map((house) => house.projectNumber)
+        .filter((projectNumber): projectNumber is number => projectNumber !== null),
+      completedCount,
+      houses: visibleHouses,
+      status: "ok",
+      view,
+    };
+  } catch {
+    const schedulingHouses = await getSchedulingProjectVisualList().catch(() => []);
+    const fallbackHouses =
+      schedulingHouses.length > 0 ? schedulingFallbackSummaries(schedulingHouses) : demoSummaries();
+    const visibleHouses = fallbackHouses.filter((house) =>
+      view === "completed" ? house.completed : !house.completed,
+    );
+
+    return {
+      activeCount: fallbackHouses.filter((house) => !house.completed).length,
+      assignedProjectNumbers: [],
+      completedCount: 0,
+      houses: visibleHouses,
+      message:
+        "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",
+      status: "fallback",
+      view,
+    };
+  }
+}
+
+function loadDrawsDashboard(view: "active" | "completed") {
+  const existing = dashboardInflight.get(view);
+
+  if (existing) {
+    return existing;
+  }
+
+  const pending = buildDrawsDashboard(view)
+    .then((payload) => {
+      dashboardCache.set(view, {
+        expiresAt: Date.now() + dashboardCacheMs,
+        payload,
+      });
+
+      return payload;
+    })
+    .finally(() => {
+      if (dashboardInflight.get(view) === pending) {
+        dashboardInflight.delete(view);
+      }
+    });
+
+  dashboardInflight.set(view, pending);
+
+  return pending;
+}
+
 function timedJson(payload: DrawsDashboardPayload, startedAt: number, cacheStatus: "hit" | "miss") {
   const durationMs = Math.round(performance.now() - startedAt);
 
@@ -202,58 +276,29 @@ export async function GET(request: Request) {
   }
 
   try {
-    const summaries = await withDashboardTimeout(getHouseDashboardSummaries());
-    const houses = summaries.map((summary) => ({
-      ...summary,
-      completed: summaryIsCompleted(summary),
-    }));
-    const activeCount = houses.filter((house) => !house.completed).length;
-    const completedCount = houses.length - activeCount;
-    const visibleHouses = houses.filter((house) =>
-      view === "completed" ? house.completed : !house.completed,
-    );
-    const payload: DrawsDashboardPayload = {
-      activeCount,
-      assignedProjectNumbers: houses
-        .map((house) => house.projectNumber)
-        .filter((projectNumber): projectNumber is number => projectNumber !== null),
-      completedCount,
-      houses: visibleHouses,
-      status: "ok",
-      view,
-    };
-
-    dashboardCache.set(cacheKey, {
-      expiresAt: Date.now() + dashboardCacheMs,
-      payload,
-    });
+    const payload = await withDashboardTimeout(loadDrawsDashboard(view));
 
     return timedJson(payload, startedAt, "miss");
   } catch {
     const schedulingHouses = await withDashboardTimeout(
-      getSchedulingProjectVisualList(),
+      dedupeInflight("dashboard:scheduling-fallback", () => getSchedulingProjectVisualList()),
       1500,
     ).catch(() => []);
     const fallbackHouses =
       schedulingHouses.length > 0 ? schedulingFallbackSummaries(schedulingHouses) : demoSummaries();
-    const houses = fallbackHouses;
-    const visibleHouses = houses.filter((house) =>
+    const visibleHouses = fallbackHouses.filter((house) =>
       view === "completed" ? house.completed : !house.completed,
     );
     const payload: DrawsDashboardPayload = {
-      activeCount: houses.filter((house) => !house.completed).length,
+      activeCount: fallbackHouses.filter((house) => !house.completed).length,
       assignedProjectNumbers: [],
       completedCount: 0,
       houses: visibleHouses,
-      message: "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",
+      message:
+        "Live database summaries are unavailable. Showing demo project cards until Render database DNS is fixed.",
       status: "fallback",
       view,
     };
-
-    dashboardCache.set(cacheKey, {
-      expiresAt: Date.now() + dashboardCacheMs,
-      payload,
-    });
 
     return timedJson(payload, startedAt, "miss");
   }

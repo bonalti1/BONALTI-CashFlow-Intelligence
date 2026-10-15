@@ -1,5 +1,6 @@
 import { seal, unseal } from "@/lib/crypto/seal";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { dedupeInflight } from "@/lib/performance/ttl-cache";
 import {
   exchangePublicToken,
   getPlaidAccounts,
@@ -84,7 +85,7 @@ export type PlaidConnectionStatus = {
 
 let plaidTablesReady: Promise<void> | null = null;
 
-function ensurePlaidTables() {
+export function ensurePlaidTables() {
   plaidTablesReady ??= initializePlaidTables().catch((error) => {
     plaidTablesReady = null;
     throw error;
@@ -798,7 +799,7 @@ function connectionHealth(value: string | null): PlaidConnectionHealth {
     : "unchecked";
 }
 
-export async function getPlaidBankAccounts() {
+async function loadPlaidBankAccounts() {
   if (!hasDatabaseUrl()) {
     return [] as PlaidBankAccount[];
   }
@@ -886,6 +887,10 @@ export async function getPlaidBankAccounts() {
       connectionMessage: row.balance_status_message,
     };
   });
+}
+
+export function getPlaidBankAccounts() {
+  return dedupeInflight("plaid:bank-accounts", loadPlaidBankAccounts);
 }
 
 export type PlaidBankAccountExportRow = {

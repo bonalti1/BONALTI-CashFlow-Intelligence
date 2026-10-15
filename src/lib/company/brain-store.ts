@@ -2,6 +2,7 @@ import type { TransactionSql } from "postgres";
 
 import { getCfoDataStatus, getCfoPortfolioSummary } from "@/lib/cfo/data-layer";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { runOnce } from "@/lib/db/run-once";
 import { getAccountsSnapshotStatus } from "@/lib/qbo/accounts-store";
 import { getTransactionsSnapshotStatus } from "@/lib/qbo/transactions-store";
 
@@ -50,7 +51,13 @@ export type SavedCompanyAiReport = {
   traceRefs?: Record<string, unknown>;
 };
 
-async function ensureCompanyBrainTables() {
+const ensureCompanyBrainTables = runOnce(initializeCompanyBrainTables);
+
+export function ensureCompanyBrainSchema() {
+  return ensureCompanyBrainTables();
+}
+
+async function initializeCompanyBrainTables() {
   await sql()`
     create table if not exists company_data_sources (
       slug text primary key,

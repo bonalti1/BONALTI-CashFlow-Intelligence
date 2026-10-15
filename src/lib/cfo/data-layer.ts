@@ -4,6 +4,7 @@ import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
 import { getTransactionsByBankAccount } from "@/lib/qbo/transactions-store";
 import type { SavedQboTransaction } from "@/lib/qbo/transactions-store";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { runOnce } from "@/lib/db/run-once";
 
 const phaseRules = [
   {
@@ -208,7 +209,13 @@ export function mapAccountToPhase(account: QboAccount): PhaseMapping {
   };
 }
 
-async function ensureCfoTables() {
+const ensureCfoTables = runOnce(initializeCfoTables);
+
+export function ensureCfoSchema() {
+  return ensureCfoTables();
+}
+
+async function initializeCfoTables() {
   await sql()`
     create table if not exists cfo_phase_line_items (
       qbo_account_id text primary key,

@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // Every page, Server Action and Route Handler verifies the session itself.
 const sessionCookieName = "stb_session";
 
-const publicPages = ["/login", "/setup-owner"];
+const publicPages = ["/login", "/setup-owner", "/api/health"];
 const publicPagePrefixes = ["/invite/"];
 // These routes check their own bearer token.
 const tokenApiPrefixes = ["/api/readonly/", "/api/ai-csuite/finance-export"];

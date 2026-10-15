@@ -12,7 +12,7 @@ import {
   getPlaidBankAccounts,
   type PlaidBankAccount,
 } from "@/lib/plaid/bank-store";
-import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
+import { getAccountsSnapshotStatus, getBankAccounts, type QboAccount } from "@/lib/qbo/accounts-store";
 import { getConfirmedHouseName } from "@/lib/qbo/bank-account-map";
 
 export type HouseDashboardSummaryPhase = {
@@ -176,7 +176,7 @@ async function initializeHouseDashboardSummaryTable() {
   await sql()`alter table house_dashboard_summaries add column if not exists holdback_notes text`;
 }
 
-function ensureHouseDashboardSummaryTable() {
+export function ensureHouseDashboardSummaryTable() {
   houseDashboardSummaryTableReady ??= initializeHouseDashboardSummaryTable().catch((error) => {
     houseDashboardSummaryTableReady = null;
     throw error;
@@ -329,13 +329,21 @@ export async function refreshHouseDashboardSummaries() {
   }
 
   await ensureHouseDashboardSummaryTable();
-  const [snapshot, houseDetails, drawStatusesByPhase, actualsByPhase] = await Promise.all([
-    getAccountsSnapshot(),
+  const [bankAccounts, houseDetails, drawStatusesByPhase, actualsByPhase] = await Promise.all([
+    getBankAccounts(),
     getHouseDetailsMap(),
     getDrawPhaseStatuses(),
     getHousePhaseActuals(),
   ]);
-  const bankAccounts = snapshot.accounts.filter((account) => account.AccountType === "Bank");
+
+  if (bankAccounts.length === 0) {
+    const status = await getAccountsSnapshotStatus();
+
+    if (!status.synced) {
+      throw new Error("No Chart of Accounts snapshot exists yet.");
+    }
+  }
+
   const refreshedIds: string[] = [];
 
   await sql().begin(async (transaction) => {

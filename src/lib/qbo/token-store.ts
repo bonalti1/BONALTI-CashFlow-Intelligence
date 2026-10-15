@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { seal, unseal } from "@/lib/crypto/seal";
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { runOnce } from "@/lib/db/run-once";
 import { createQboOAuthClient } from "@/lib/qbo/oauth";
 
 type StoredQboConnection = {
@@ -36,7 +37,13 @@ function expiresAt(createdAt: number | undefined, seconds: number | undefined) {
   return new Date((createdAt ?? Date.now()) + (seconds ?? 0) * 1000).toISOString();
 }
 
-async function ensureQboConnectionTable() {
+const qboConnectionTableReady = runOnce(initializeQboConnectionTable);
+
+export function ensureQboConnectionTable() {
+  return qboConnectionTableReady();
+}
+
+async function initializeQboConnectionTable() {
   await sql()`
     create table if not exists qbo_connections (
       realm_id text primary key,

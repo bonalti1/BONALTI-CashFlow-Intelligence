@@ -6,7 +6,7 @@ import {
   ReceiptText,
 } from "lucide-react";
 
-import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
+import { getPayeeTransactions, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
 import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -33,10 +33,6 @@ function shortCurrency(value: number) {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(value);
-}
-
-function normalizePayeeName(transaction: SavedQboTransaction) {
-  return transaction.payeeName?.trim() || "No payee listed";
 }
 
 function monthKey(txnDate: string | null) {
@@ -85,11 +81,7 @@ export default async function PayeeDetailPage({
 
   const { payee } = await params;
   const payeeName = decodeURIComponent(payee);
-  const transactionsByBankAccount = await getTransactionsByBankAccount();
-  const transactions = Array.from(transactionsByBankAccount.values())
-    .flat()
-    .filter((transaction) => normalizePayeeName(transaction) === payeeName)
-    .sort((a, b) => String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")));
+  const transactions = await getPayeeTransactions(payeeName);
   const totalPaid = transactions.reduce(
     (total, transaction) => total + Math.abs(transaction.totalAmount),
     0,
