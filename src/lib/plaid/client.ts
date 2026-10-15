@@ -13,19 +13,35 @@ export type PlaidAccount = {
   type?: string | null;
 };
 
+export type PlaidPaymentMeta = {
+  by_order_of?: string | null;
+  payee?: string | null;
+  payer?: string | null;
+  payment_method?: string | null;
+  payment_processor?: string | null;
+  ppd_id?: string | null;
+  reason?: string | null;
+  reference_number?: string | null;
+};
+
 export type PlaidTransaction = {
   account_id: string;
   account_owner?: string | null;
   amount: number;
   authorized_date?: string | null;
   category?: string[] | null;
+  check_number?: string | null;
+  counterparties?: unknown;
   date: string;
   iso_currency_code?: string | null;
   merchant_name?: string | null;
   name: string;
   payment_channel?: string | null;
+  payment_meta?: PlaidPaymentMeta | null;
   pending: boolean;
+  pending_transaction_id?: string | null;
   personal_finance_category?: unknown;
+  transaction_code?: string | null;
   transaction_id: string;
 };
 
@@ -191,11 +207,23 @@ export async function getPlaidLiveBalances(accessToken: string) {
   }>("/accounts/balance/get", { access_token: accessToken }, { timeoutMs: 25_000 });
 }
 
+// Asks Plaid to pull new transactions from the bank. It does not return transactions
+// and it does not move money. Plaid bills each successful call on its own.
+export async function refreshPlaidTransactions(accessToken: string) {
+  return plaidRequest<{ request_id: string }>(
+    "/transactions/refresh",
+    { access_token: accessToken },
+    { timeoutMs: 25_000 },
+  );
+}
+
 export async function getPlaidItemStatus(accessToken: string) {
   return plaidRequest<{
     item: {
       item_id: string;
       institution_id?: string | null;
+      products?: string[] | null;
+      billed_products?: string[] | null;
       error?: { error_code?: string | null; error_message?: string | null } | null;
     };
     status?: {

@@ -28,14 +28,33 @@ function currency(value: number | null) {
   }).format(value);
 }
 
+function chicagoStamp(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "America/Chicago",
+    timeZoneName: "short",
+  }).format(date);
+}
+
 export function PlaidBalanceLink({
   balance,
   houseName,
   qboBankAccountId,
+  updatedAt = null,
 }: {
   balance: number | null;
   houseName: string;
   qboBankAccountId: string;
+  updatedAt?: string | null;
 }) {
   const [accounts, setAccounts] = useState<PlaidAccountOption[]>([]);
   const [currentBalance, setCurrentBalance] = useState(balance);
@@ -122,6 +141,11 @@ export function PlaidBalanceLink({
         <span className="mt-0.5 block text-[10px] font-extrabold tracking-[0.04em]">
           {currentBalance === null ? "Link account" : currency(currentBalance)}
         </span>
+        {updatedAt && chicagoStamp(updatedAt) ? (
+          <span className="mt-0.5 block text-[8px] font-bold normal-case tracking-normal text-[#1f6f4b]">
+            {chicagoStamp(updatedAt)}
+          </span>
+        ) : null}
       </button>
 
       {open ? (

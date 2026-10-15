@@ -4,6 +4,7 @@ import { logoutAction } from "@/app/actions/auth";
 import { roleLabels } from "@/lib/auth/auth-store";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AccountNav } from "./account-nav";
+import { PlaidBalanceRefresh } from "./plaid-balance-refresh";
 
 export async function AccountBar() {
   const user = await getCurrentUser();
@@ -21,6 +22,7 @@ export async function AccountBar() {
 
   return (
     <div className="no-print border-b border-[#e3e1d7] bg-white text-[#16294d] [font-family:Barlow,system-ui,sans-serif]">
+      <PlaidBalanceRefresh />
       <div className="mx-auto flex h-11 max-w-[1440px] items-center gap-3 px-4">
         <AccountNav links={links} />
         <div className="ml-auto flex shrink-0 items-center gap-2 text-sm">

@@ -5,6 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { saveHouseProjectIdentityAction } from "@/app/actions/house-details";
 import { PlaidBalanceLink } from "@/app/draws-budget/plaid-balance-link";
+import {
+  balanceRefreshDoneEvent,
+  balanceRefreshStartEvent,
+} from "@/components/app/plaid-balance-refresh";
 import { ProjectRenderUpload } from "@/app/draws-budget/render-upload";
 import { SourceTruthDocuments } from "@/app/draws-budget/source-truth-documents";
 import type {
@@ -22,9 +26,14 @@ type DrawsDashboardResponse = {
   completedCount: number;
   houses: DrawsDashboardHouse[];
   message?: string;
+  plaidRefreshedAt?: string | null;
   status: "ok" | "error" | "fallback";
   view: "active" | "completed";
 };
+
+type BalanceRefreshDetail =
+  | { ok: true; cached: boolean; refreshedAt: string | null }
+  | { ok: false; message: string };
 
 type DrawsRendersResponse = {
   renders: Array<{
@@ -69,6 +78,37 @@ function phaseDisplayName(phase: HouseDashboardSummaryPhase | undefined) {
 
 function anchorIdForHouse(id: string) {
   return `house-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function chicagoStamp(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "America/Chicago",
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function balanceStatus(checking: boolean, refreshedAt: string | null | undefined) {
+  if (checking) {
+    return "Checking bank balances…";
+  }
+
+  const stamp = refreshedAt ? chicagoStamp(refreshedAt) : null;
+
+  if (stamp) {
+    return `Bank balances updated ${stamp}`;
+  }
+
+  return "Bank balances have not been checked yet.";
 }
 
 function HouseStatusCard({
@@ -484,6 +524,7 @@ function HouseCard({
               balance={house.actualBankBalance}
               houseName={house.house}
               qboBankAccountId={house.id}
+              updatedAt={house.actualBankBalanceAsOf}
             />
             <button
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"
@@ -560,9 +601,45 @@ function loadDashboard(view: HouseListView) {
 
 export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
   const [data, setData] = useState<DrawsDashboardResponse | null>(null);
+  const [checkingBalances, setCheckingBalances] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [renderUrls, setRenderUrls] = useState<Record<string, string | null>>({});
   const [sourceTruthHouseId, setSourceTruthHouseId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function start() {
+      setCheckingBalances(true);
+    }
+
+    function done(event: Event) {
+      setCheckingBalances(false);
+      const detail = (event as CustomEvent<BalanceRefreshDetail>).detail;
+
+      if (!detail?.ok) {
+        return;
+      }
+
+      if (!detail.cached) {
+        setReloadKey((current) => current + 1);
+        return;
+      }
+
+      if (detail.refreshedAt) {
+        setData((current) =>
+          current ? { ...current, plaidRefreshedAt: detail.refreshedAt } : current,
+        );
+      }
+    }
+
+    window.addEventListener(balanceRefreshStartEvent, start);
+    window.addEventListener(balanceRefreshDoneEvent, done);
+
+    return () => {
+      window.removeEventListener(balanceRefreshStartEvent, start);
+      window.removeEventListener(balanceRefreshDoneEvent, done);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -597,7 +674,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [view]);
+  }, [reloadKey, view]);
 
   useEffect(() => {
     if (!data?.houses.length) {
@@ -662,6 +739,10 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
           note="Closed projects kept for final cost, payee history, and profit review."
         />
       </section>
+
+      <p className="mb-4 text-xs font-bold text-[#7b8298]">
+        {balanceStatus(checkingBalances, data?.plaidRefreshedAt)}
+      </p>
 
       {error ? (
         <div className="rounded-[14px] border border-[#f4d48a] bg-[#fff6df] p-4 text-sm font-semibold text-[#9a6500]">

@@ -56,6 +56,7 @@ type HouseView = {
   actualBankBalance: number | null;
   actualBankAvailableBalance: number | null;
   actualBankAccountName: string | null;
+  actualBankBalanceAsOf: string | null;
   city: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
@@ -409,6 +410,7 @@ function buildDemoHouses(): HouseView[] {
       actualBankBalance: null,
       actualBankAvailableBalance: null,
       actualBankAccountName: null,
+      actualBankBalanceAsOf: null,
       city: house.city,
       soldPrice: house.soldPrice,
       squareFootage: house.squareFootage,
@@ -459,6 +461,7 @@ function houseViewFromSummary(summary: HouseDashboardSummary): HouseView {
     actualBankBalance: summary.actualBankBalance,
     actualBankAvailableBalance: summary.actualBankAvailableBalance,
     actualBankAccountName: summary.actualBankAccountName,
+    actualBankBalanceAsOf: summary.actualBankBalanceAsOf,
     city: summary.city,
     soldPrice: summary.soldPrice,
     squareFootage: summary.squareFootage,
@@ -956,6 +959,7 @@ function HouseCard({
               balance={house.actualBankBalance}
               houseName={house.house}
               qboBankAccountId={house.id}
+              updatedAt={house.actualBankBalanceAsOf}
             />
             <Link
               className="rounded-[9px] border border-[#e3e1d7] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[#16294d]"

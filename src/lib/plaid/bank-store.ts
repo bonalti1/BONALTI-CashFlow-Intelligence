@@ -9,11 +9,18 @@ import {
   plaidConfigured,
   PlaidApiError,
   plaidEnvironmentLabel,
+  refreshPlaidTransactions,
   syncPlaidTransactions,
   type PlaidAccount,
-  type PlaidRemovedTransaction,
   type PlaidTransaction,
 } from "@/lib/plaid/client";
+import {
+  dedupePlaidAccounts,
+  pickCanonicalItems,
+  toPublicBalance,
+  withinRefreshWindow,
+  type PublicBalance,
+} from "@/lib/plaid/dedupe-accounts";
 
 export type PlaidBankAccount = {
   id: string;
@@ -81,6 +88,7 @@ export type PlaidConnectionStatus = {
   accounts: number;
   transactions: number;
   lastSyncedAt: string | null;
+  duplicateItems: number;
 };
 
 let plaidTablesReady: Promise<void> | null = null;
@@ -156,6 +164,60 @@ async function initializePlaidTables() {
   await sql()`alter table plaid_items add column if not exists balance_checked_at timestamptz`;
   await sql()`alter table plaid_items add column if not exists live_checked_at timestamptz`;
   await sql()`alter table plaid_items add column if not exists bank_updated_at timestamptz`;
+  await sql()`alter table plaid_transactions add column if not exists pending_transaction_id text`;
+  await sql()`alter table plaid_transactions add column if not exists payee text`;
+  await sql()`alter table plaid_transactions add column if not exists check_number text`;
+  await sql()`alter table plaid_transactions add column if not exists counterparties jsonb`;
+  await sql()`alter table plaid_transactions add column if not exists payment_meta jsonb`;
+  await sql()`alter table plaid_transactions add column if not exists transaction_code text`;
+  await sql()`
+    create index if not exists plaid_transactions_account_date_idx
+      on plaid_transactions (plaid_account_id, txn_date desc, plaid_transaction_id desc)
+      where removed_at is null
+  `.catch((error) => {
+    console.error("Could not add the Plaid transaction date index", { code: databaseErrorCode(error) });
+  });
+  await sql()`
+    create index if not exists plaid_transactions_amount_date_idx
+      on plaid_transactions (amount, txn_date)
+      where removed_at is null
+  `.catch((error) => {
+    console.error("Could not add the Plaid transaction amount index", { code: databaseErrorCode(error) });
+  });
+  // One row per refresh kind. The timestamp is what the 5-minute throttle reads.
+  await sql()`
+    create table if not exists plaid_refresh_state (
+      scope text primary key,
+      last_success_at timestamptz,
+      last_attempt_at timestamptz,
+      updated_at timestamptz not null default now()
+    )
+  `;
+  // Same login cannot store two rows for one mask and type. This does not collapse
+  // the same mask across two logins: those rows have different Plaid account ids,
+  // and a unique key there would require deleting accounts. See the optional SQL
+  // in docs/plaid-balance-refresh.md.
+  await sql()`
+    create unique index if not exists plaid_accounts_item_mask_type_key
+      on plaid_accounts (item_id, mask, account_type)
+      where mask is not null and account_type is not null
+  `.catch((error) => {
+    console.error("Could not add the Plaid account unique index", {
+      code: databaseErrorCode(error),
+    });
+  });
+}
+
+function databaseErrorCode(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return null;
+  }
+
+  return typeof error.code === "string" ? error.code : null;
+}
+
+function isUniqueViolation(error: unknown) {
+  return databaseErrorCode(error) === "23505";
 }
 
 function normalizeAccount(account: PlaidAccount) {
@@ -186,48 +248,72 @@ async function saveAccounts({
   for (const account of accounts) {
     const normalized = normalizeAccount(account);
 
-    await sql()`
-      insert into plaid_accounts (
-        plaid_account_id,
-        item_id,
-        name,
-        official_name,
-        mask,
-        account_type,
-        account_subtype,
-        available_balance,
-        current_balance,
-        iso_currency_code,
-        raw,
-        updated_at
-      )
-      values (
-        ${account.account_id},
-        ${itemId},
-        ${account.name},
-        ${normalized.officialName},
-        ${normalized.mask},
-        ${normalized.type},
-        ${normalized.subtype},
-        ${normalized.availableBalance},
-        ${normalized.currentBalance},
-        ${normalized.currency},
-        ${sql().json(databaseJson(account))},
-        now()
-      )
-      on conflict (plaid_account_id) do update set
-        item_id = excluded.item_id,
-        name = excluded.name,
-        official_name = excluded.official_name,
-        mask = excluded.mask,
-        account_type = excluded.account_type,
-        account_subtype = excluded.account_subtype,
-        available_balance = excluded.available_balance,
-        current_balance = excluded.current_balance,
-        iso_currency_code = excluded.iso_currency_code,
-        raw = excluded.raw,
-        updated_at = now()
-    `;
+    try {
+      await sql()`
+        insert into plaid_accounts (
+          plaid_account_id,
+          item_id,
+          name,
+          official_name,
+          mask,
+          account_type,
+          account_subtype,
+          available_balance,
+          current_balance,
+          iso_currency_code,
+          raw,
+          updated_at
+        )
+        values (
+          ${account.account_id},
+          ${itemId},
+          ${account.name},
+          ${normalized.officialName},
+          ${normalized.mask},
+          ${normalized.type},
+          ${normalized.subtype},
+          ${normalized.availableBalance},
+          ${normalized.currentBalance},
+          ${normalized.currency},
+          ${sql().json(databaseJson(account))},
+          now()
+        )
+        on conflict (plaid_account_id) do update set
+          item_id = excluded.item_id,
+          name = excluded.name,
+          official_name = excluded.official_name,
+          mask = excluded.mask,
+          account_type = excluded.account_type,
+          account_subtype = excluded.account_subtype,
+          available_balance = excluded.available_balance,
+          current_balance = excluded.current_balance,
+          iso_currency_code = excluded.iso_currency_code,
+          raw = excluded.raw,
+          updated_at = now()
+      `;
+    } catch (error) {
+      if (!isUniqueViolation(error) || !normalized.mask || !normalized.type) {
+        throw error;
+      }
+
+      // This login already has this mask and type under a different Plaid account id.
+      // Keep that row (and the transactions that point at it) and refresh its numbers.
+      await sql()`
+        update plaid_accounts
+        set
+          name = ${account.name},
+          official_name = ${normalized.officialName},
+          account_subtype = ${normalized.subtype},
+          available_balance = ${normalized.availableBalance},
+          current_balance = ${normalized.currentBalance},
+          iso_currency_code = ${normalized.currency},
+          raw = ${sql().json(databaseJson(account))},
+          updated_at = now()
+        where item_id = ${itemId}
+          and mask = ${normalized.mask}
+          and account_type = ${normalized.type}
+      `;
+    }
   }
 }
 
@@ -235,7 +321,9 @@ type StoredPlaidItem = {
   itemId: string;
   accessToken: string;
   cursor: string | null;
+  institutionId: string | null;
   institutionName: string | null;
+  connectedAt: Date;
   balanceStatus: string | null;
   balanceCheckedAt: Date | null;
 };
@@ -248,13 +336,15 @@ async function getStoredItems(): Promise<StoredPlaidItem[]> {
       item_id: string;
       access_token_encrypted: string;
       cursor: string | null;
+      institution_id: string | null;
       institution_name: string | null;
+      connected_at: Date;
       balance_status: string | null;
       balance_checked_at: Date | null;
     }>
   >`
-    select item_id, access_token_encrypted, cursor, institution_name, balance_status,
-      balance_checked_at
+    select item_id, access_token_encrypted, cursor, institution_id, institution_name,
+      connected_at, balance_status, balance_checked_at
     from plaid_items
     order by connected_at desc
   `;
@@ -263,7 +353,9 @@ async function getStoredItems(): Promise<StoredPlaidItem[]> {
     itemId: row.item_id,
     accessToken: unseal(row.access_token_encrypted),
     cursor: row.cursor,
+    institutionId: row.institution_id,
     institutionName: row.institution_name,
+    connectedAt: row.connected_at,
     balanceStatus: row.balance_status,
     balanceCheckedAt: row.balance_checked_at,
   }));
@@ -378,32 +470,76 @@ async function saveLiveAccounts(accounts: PlaidAccount[], itemId: string, checke
 
     // New accounts get the live numbers as their cached copy too; existing rows only get
     // their live columns, so Plaid's cached copy keeps its own timing.
-    await sql()`
-      insert into plaid_accounts (
-        plaid_account_id, item_id, name, official_name, mask, account_type, account_subtype,
-        available_balance, current_balance, iso_currency_code, raw,
-        live_available_balance, live_current_balance, live_checked_at, updated_at
-      )
-      values (
-        ${account.account_id}, ${itemId}, ${account.name}, ${normalized.officialName},
-        ${normalized.mask}, ${normalized.type}, ${normalized.subtype},
-        ${normalized.availableBalance}, ${normalized.currentBalance}, ${normalized.currency},
-        ${sql().json(databaseJson(account))},
-        ${normalized.availableBalance}, ${normalized.currentBalance}, ${checkedAt}, now()
-      )
-      on conflict (plaid_account_id) do update set
-        item_id = excluded.item_id,
-        name = excluded.name,
-        official_name = excluded.official_name,
-        mask = excluded.mask,
-        account_type = excluded.account_type,
-        account_subtype = excluded.account_subtype,
-        iso_currency_code = excluded.iso_currency_code,
-        live_available_balance = excluded.live_available_balance,
-        live_current_balance = excluded.live_current_balance,
-        live_checked_at = excluded.live_checked_at,
-        updated_at = now()
-    `;
+    try {
+      await sql()`
+        insert into plaid_accounts (
+          plaid_account_id, item_id, name, official_name, mask, account_type, account_subtype,
+          available_balance, current_balance, iso_currency_code, raw,
+          live_available_balance, live_current_balance, live_checked_at, updated_at
+        )
+        values (
+          ${account.account_id}, ${itemId}, ${account.name}, ${normalized.officialName},
+          ${normalized.mask}, ${normalized.type}, ${normalized.subtype},
+          ${normalized.availableBalance}, ${normalized.currentBalance}, ${normalized.currency},
+          ${sql().json(databaseJson(account))},
+          ${normalized.availableBalance}, ${normalized.currentBalance}, ${checkedAt}, now()
+        )
+        on conflict (plaid_account_id) do update set
+          item_id = excluded.item_id,
+          name = excluded.name,
+          official_name = excluded.official_name,
+          mask = excluded.mask,
+          account_type = excluded.account_type,
+          account_subtype = excluded.account_subtype,
+          iso_currency_code = excluded.iso_currency_code,
+          live_available_balance = excluded.live_available_balance,
+          live_current_balance = excluded.live_current_balance,
+          live_checked_at = excluded.live_checked_at,
+          updated_at = now()
+      `;
+    } catch (error) {
+      if (!isUniqueViolation(error) || !normalized.mask || !normalized.type) {
+        throw error;
+      }
+
+      await sql()`
+        update plaid_accounts
+        set
+          name = ${account.name},
+          official_name = ${normalized.officialName},
+          account_subtype = ${normalized.subtype},
+          iso_currency_code = ${normalized.currency},
+          live_available_balance = ${normalized.availableBalance},
+          live_current_balance = ${normalized.currentBalance},
+          live_checked_at = ${checkedAt},
+          updated_at = now()
+        where item_id = ${itemId}
+          and mask = ${normalized.mask}
+          and account_type = ${normalized.type}
+      `;
+    }
+
+    if (normalized.mask) {
+      // Older logins of the same bank keep their own rows. Copy the live numbers onto
+      // them so a linked copy of this mask does not stay on yesterday's balance.
+      await sql()`
+        update plaid_accounts other
+        set
+          live_available_balance = ${normalized.availableBalance},
+          live_current_balance = ${normalized.currentBalance},
+          live_checked_at = ${checkedAt},
+          iso_currency_code = coalesce(${normalized.currency}, other.iso_currency_code),
+          updated_at = now()
+        from plaid_items self_item, plaid_items other_item
+        where self_item.item_id = ${itemId}
+          and other.item_id = other_item.item_id
+          and self_item.institution_id is not null
+          and other_item.institution_id = self_item.institution_id
+          and other.mask = ${normalized.mask}
+          and other.account_type is not distinct from ${normalized.type}
+          and other.plaid_account_id <> ${account.account_id}
+      `;
+    }
   }
 }
 
@@ -520,6 +656,352 @@ export async function refreshLiveBalances({
   return { checkedAt: new Date().toISOString(), banks };
 }
 
+export type TransactionRefreshStatus = "requested" | "not_enabled" | "not_ready" | "skipped" | "error";
+
+export type TransactionRefreshItem = {
+  institutionName: string | null;
+  status: TransactionRefreshStatus;
+  code: string | null;
+};
+
+export type BalanceRefreshResult = {
+  cached: boolean;
+  refreshedAt: string | null;
+  accounts: PublicBalance[];
+  banks: LiveBalanceBank[];
+  skippedItems: number;
+  transactions: {
+    cached: boolean;
+    items: TransactionRefreshItem[];
+  } | null;
+};
+
+const balanceScope = "balances";
+const transactionScope = "transactions";
+
+function plaidErrorCode(error: unknown) {
+  return error instanceof PlaidApiError ? error.code : null;
+}
+
+async function readRefreshState(scope: string) {
+  const [row] = await sql()<
+    Array<{ last_success_at: Date | null; last_attempt_at: Date | null }>
+  >`
+    select last_success_at, last_attempt_at
+    from plaid_refresh_state
+    where scope = ${scope}
+  `;
+
+  return row ?? { last_success_at: null, last_attempt_at: null };
+}
+
+function refreshIsThrottled(state: { last_success_at: Date | null; last_attempt_at: Date | null }, now: number) {
+  return (
+    withinRefreshWindow(state.last_success_at, now) || withinRefreshWindow(state.last_attempt_at, now)
+  );
+}
+
+async function markRefreshAttempt(scope: string) {
+  await sql()`
+    insert into plaid_refresh_state (scope, last_attempt_at, updated_at)
+    values (${scope}, now(), now())
+    on conflict (scope) do update set
+      last_attempt_at = now(),
+      updated_at = now()
+  `;
+}
+
+async function markRefreshSuccess(scope: string) {
+  await sql()`
+    insert into plaid_refresh_state (scope, last_success_at, last_attempt_at, updated_at)
+    values (${scope}, now(), now(), now())
+    on conflict (scope) do update set
+      last_success_at = now(),
+      last_attempt_at = now(),
+      updated_at = now()
+  `;
+}
+
+type PlaidItemMetadata = {
+  itemId: string;
+  institutionId: string | null;
+  institutionName: string | null;
+  connectedAt: Date;
+  balanceStatus: string | null;
+};
+
+async function getPlaidItemMetadata(): Promise<PlaidItemMetadata[]> {
+  const rows = await sql()<
+    Array<{
+      item_id: string;
+      institution_id: string | null;
+      institution_name: string | null;
+      connected_at: Date;
+      balance_status: string | null;
+    }>
+  >`
+    select item_id, institution_id, institution_name, connected_at, balance_status
+    from plaid_items
+    order by connected_at desc
+  `;
+
+  return rows.map((row) => ({
+    itemId: row.item_id,
+    institutionId: row.institution_id,
+    institutionName: row.institution_name,
+    connectedAt: row.connected_at,
+    balanceStatus: row.balance_status,
+  }));
+}
+
+function canonicalPlaidItems(items: PlaidItemMetadata[]) {
+  return pickCanonicalItems(
+    items.map((item) => ({
+      item,
+      itemId: item.itemId,
+      institutionKey: item.institutionId,
+      connectedAt: item.connectedAt.toISOString(),
+      needsSignIn: item.balanceStatus === "needs_sign_in",
+    })),
+  );
+}
+
+async function accessTokenForItem(itemId: string) {
+  const [row] = await sql()<Array<{ access_token_encrypted: string }>>`
+    select access_token_encrypted
+    from plaid_items
+    where item_id = ${itemId}
+  `;
+
+  if (!row) {
+    throw new Error("Plaid item was not found.");
+  }
+
+  return unseal(row.access_token_encrypted);
+}
+
+async function readPublicBalances(): Promise<PublicBalance[]> {
+  const accounts = await getPlaidBankAccounts();
+
+  return accounts
+    .map((account) =>
+      toPublicBalance({
+        name: account.name,
+        mask: account.mask,
+        type: account.type,
+        current: account.currentBalance,
+        available: account.availableBalance,
+        currency: account.currency,
+      }),
+    )
+    .sort((left, right) => left.name.localeCompare(right.name) || (left.mask ?? "").localeCompare(right.mask ?? ""));
+}
+
+async function refreshCanonicalBalances(items: PlaidItemMetadata[]) {
+  const banks: LiveBalanceBank[] = [];
+  let anySuccess = false;
+
+  for (const item of items) {
+    const base = { itemId: item.itemId, institutionName: item.institutionName };
+    const checkedAt = new Date();
+    const accessToken = await accessTokenForItem(item.itemId);
+
+    try {
+      const live = await getPlaidLiveBalances(accessToken);
+
+      await saveLiveAccounts(live.accounts, item.itemId, checkedAt);
+      await saveItemBalanceStatus({
+        itemId: item.itemId,
+        status: "live",
+        message: null,
+        checkedAt,
+        liveCheckedAt: checkedAt,
+        bankUpdatedAt: null,
+      });
+      anySuccess = true;
+      banks.push({ ...base, status: "live", message: null, reused: false });
+    } catch (error) {
+      const code = plaidErrorCode(error);
+      const needsSignIn = Boolean(code && signInCodes.has(code));
+      const status: PlaidConnectionHealth = needsSignIn ? "needs_sign_in" : "error";
+      const message = needsSignIn
+        ? "This bank needs a new sign-in. The amount shown is the last one saved."
+        : "The bank did not return a live balance. The amount shown is the last one saved.";
+
+      console.error("Plaid balance refresh failed", { itemId: item.itemId, code });
+      await saveItemBalanceStatus({
+        itemId: item.itemId,
+        status,
+        message,
+        checkedAt,
+        liveCheckedAt: null,
+        bankUpdatedAt: null,
+      });
+      banks.push({ ...base, status, message, reused: false });
+    }
+  }
+
+  return { anySuccess, banks };
+}
+
+function transactionsEnabled(products: Array<string | null | undefined>) {
+  return products.some((product) => product === "transactions");
+}
+
+async function refreshCanonicalTransactions(items: PlaidItemMetadata[]): Promise<TransactionRefreshItem[]> {
+  const results: TransactionRefreshItem[] = [];
+  let anyRequested = false;
+
+  for (const item of items) {
+    const institutionName = item.institutionName;
+    const accessToken = await accessTokenForItem(item.itemId);
+
+    try {
+      const status = await getPlaidItemStatus(accessToken);
+      const products = [...(status.item.products ?? []), ...(status.item.billed_products ?? [])];
+
+      if (!transactionsEnabled(products)) {
+        results.push({ institutionName, status: "not_enabled", code: null });
+        continue;
+      }
+    } catch (error) {
+      console.error("Plaid item status failed", { itemId: item.itemId, code: plaidErrorCode(error) });
+      results.push({ institutionName, status: "error", code: plaidErrorCode(error) });
+      continue;
+    }
+
+    try {
+      await refreshPlaidTransactions(accessToken);
+      anyRequested = true;
+      results.push({ institutionName, status: "requested", code: null });
+    } catch (error) {
+      const code = plaidErrorCode(error);
+
+      console.error("Plaid transaction refresh failed", { itemId: item.itemId, code });
+      results.push({
+        institutionName,
+        status: code === "PRODUCT_NOT_READY" ? "not_ready" : "error",
+        code,
+      });
+    }
+  }
+
+  if (anyRequested) {
+    await markRefreshSuccess(transactionScope);
+  }
+
+  return results;
+}
+
+async function refreshPlaidTransactionsOnce(items: PlaidItemMetadata[]) {
+  if (!plaidConfigured() || items.length === 0) {
+    return { cached: false, items: [] as TransactionRefreshItem[] };
+  }
+
+  const transactionState = await readRefreshState(transactionScope);
+
+  if (refreshIsThrottled(transactionState, Date.now())) {
+    return {
+      cached: true,
+      items: items.map((item) => ({
+        institutionName: item.institutionName,
+        status: "skipped" as const,
+        code: null,
+      })),
+    };
+  }
+
+  await markRefreshAttempt(transactionScope);
+
+  return {
+    cached: false,
+    items: await refreshCanonicalTransactions(items),
+  };
+}
+
+// Reads /accounts/balance/get for one login per institution and stores the numbers.
+// A successful refresh in the last 5 minutes is returned as-is. Pass transactions
+// only from the scheduled job: that also calls /transactions/refresh when the
+// Transactions product is enabled. Nothing here moves money.
+export async function refreshPlaidBalances({
+  transactions = false,
+}: { transactions?: boolean } = {}): Promise<BalanceRefreshResult> {
+  const balances = await dedupeInflight("plaid:balance-refresh", () => refreshPlaidBalancesOnce());
+
+  if (!transactions) {
+    return balances;
+  }
+
+  const transactionResult = await dedupeInflight("plaid:transaction-refresh", async () => {
+    const { keep } = canonicalPlaidItems(await getPlaidItemMetadata());
+
+    return refreshPlaidTransactionsOnce(keep.map((entry) => entry.item));
+  });
+
+  return { ...balances, transactions: transactionResult };
+}
+
+async function refreshPlaidBalancesOnce(): Promise<BalanceRefreshResult> {
+  if (!hasDatabaseUrl()) {
+    throw new Error("DATABASE_URL is required before refreshing Plaid balances.");
+  }
+
+  await ensurePlaidTables();
+  const now = Date.now();
+  const balanceState = await readRefreshState(balanceScope);
+  const items = await getPlaidItemMetadata();
+  const { keep, skipped } = canonicalPlaidItems(items);
+  const throttled = refreshIsThrottled(balanceState, now);
+  const callPlaid = plaidConfigured() && keep.length > 0 && !throttled;
+
+  let banks: LiveBalanceBank[];
+
+  if (!callPlaid) {
+    banks = keep.map((entry) => ({
+      itemId: entry.item.itemId,
+      institutionName: entry.item.institutionName,
+      status: connectionHealth(entry.item.balanceStatus),
+      message: null,
+      reused: true,
+    }));
+  } else {
+    await markRefreshAttempt(balanceScope);
+    const refreshed = await refreshCanonicalBalances(keep.map((entry) => entry.item));
+
+    banks = refreshed.banks;
+
+    if (refreshed.anySuccess) {
+      await markRefreshSuccess(balanceScope);
+    }
+  }
+
+  const success = await readRefreshState(balanceScope);
+
+  return {
+    cached: !callPlaid && throttled,
+    refreshedAt: success.last_success_at?.toISOString() ?? null,
+    accounts: await readPublicBalances(),
+    banks,
+    skippedItems: skipped.length,
+    transactions: null,
+  };
+}
+
+export async function getPlaidBalanceRefreshedAt() {
+  if (!hasDatabaseUrl()) {
+    return null;
+  }
+
+  try {
+    await ensurePlaidTables();
+    const state = await readRefreshState(balanceScope);
+
+    return state.last_success_at?.toISOString() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export type PlaidSyncFailure = {
   institutionName: string;
   message: string;
@@ -541,31 +1023,69 @@ export function plaidSyncProblem(error: unknown) {
   return error instanceof Error ? error.message : "Plaid sync failed.";
 }
 
-// Plaid's /transactions/sync contract: collect every page first and apply nothing until
-// has_more is false. If the item changes mid-way (TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION),
-// throw the collected pages away and restart from the cursor this sync began with.
-async function fetchPlaidItemChanges(item: StoredPlaidItem) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      const added: PlaidTransaction[] = [];
-      const modified: PlaidTransaction[] = [];
-      const removed: PlaidRemovedTransaction[] = [];
-      let accounts: PlaidAccount[] = [];
-      let cursor = item.cursor;
-      let hasMore = true;
+// /transactions/sync pages until has_more is false, which is the full history Plaid
+// still has for this login. Each page is written and then dropped. Upserts make a
+// restart safe: on TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION we replay from the
+// cursor this attempt started with. The cursor is saved only after the last page,
+// so a crash replays instead of skipping a gap.
+async function syncPlaidItem(item: StoredPlaidItem) {
+  const startedCursor = item.cursor;
 
+  for (let attempt = 1; ; attempt += 1) {
+    const accounts = new Map<string, PlaidAccount>();
+    let added = 0;
+    let cursor = startedCursor;
+    let hasMore = true;
+    let modified = 0;
+    let removed = 0;
+
+    try {
       while (hasMore) {
         const page = await syncPlaidTransactions(item.accessToken, cursor);
 
-        added.push(...page.added);
-        modified.push(...page.modified);
-        removed.push(...page.removed);
-        accounts = page.accounts.length > 0 ? page.accounts : accounts;
+        for (const account of page.accounts) {
+          accounts.set(account.account_id, account);
+        }
+
+        for (const transaction of page.added) {
+          await savePlaidTransaction(transaction, item.itemId);
+          added += 1;
+        }
+
+        for (const transaction of page.modified) {
+          await savePlaidTransaction(transaction, item.itemId);
+          modified += 1;
+        }
+
+        for (const removedTransaction of page.removed) {
+          await sql()`
+            update plaid_transactions
+            set removed_at = now(), updated_at = now()
+            where plaid_transaction_id = ${removedTransaction.transaction_id}
+          `;
+          removed += 1;
+        }
+
         cursor = page.next_cursor;
         hasMore = page.has_more;
       }
 
-      return { accounts, added, cursor, modified, removed };
+      if (accounts.size > 0) {
+        await saveAccounts({ accounts: [...accounts.values()], itemId: item.itemId });
+      }
+
+      await sql()`
+        update plaid_items
+        set cursor = ${cursor}, last_synced_at = now(), updated_at = now()
+        where item_id = ${item.itemId}
+      `;
+
+      return {
+        accounts: accounts.size,
+        added,
+        modified,
+        removed,
+      };
     } catch (error) {
       const restartable =
         error instanceof PlaidApiError &&
@@ -576,40 +1096,6 @@ async function fetchPlaidItemChanges(item: StoredPlaidItem) {
       }
     }
   }
-}
-
-async function syncPlaidItem(item: StoredPlaidItem) {
-  const changes = await fetchPlaidItemChanges(item);
-
-  if (changes.accounts.length > 0) {
-    await saveAccounts({ accounts: changes.accounts, itemId: item.itemId });
-  }
-
-  for (const transaction of [...changes.added, ...changes.modified]) {
-    await savePlaidTransaction(transaction, item.itemId);
-  }
-
-  for (const removed of changes.removed) {
-    await sql()`
-      update plaid_transactions
-      set removed_at = now(), updated_at = now()
-      where plaid_transaction_id = ${removed.transaction_id}
-    `;
-  }
-
-  // Saved last, so an interrupted save replays from the old cursor; the writes above are upserts.
-  await sql()`
-    update plaid_items
-    set cursor = ${changes.cursor}, last_synced_at = now(), updated_at = now()
-    where item_id = ${item.itemId}
-  `;
-
-  return {
-    accounts: changes.accounts.length,
-    added: changes.added.length,
-    modified: changes.modified.length,
-    removed: changes.removed.length,
-  };
 }
 
 export async function syncAllPlaidItems() {
@@ -635,7 +1121,10 @@ export async function syncAllPlaidItems() {
       transactionsModified += result.modified;
       transactionsRemoved += result.removed;
     } catch (error) {
-      console.error("Plaid sync failed for item", { itemId: item.itemId, error });
+      console.error("Plaid sync failed for item", {
+        itemId: item.itemId,
+        code: error instanceof PlaidApiError ? error.code : null,
+      });
       failures.push({
         institutionName: item.institutionName ?? "One bank",
         message: plaidSyncProblem(error),
@@ -669,6 +1158,12 @@ async function savePlaidTransaction(transaction: PlaidTransaction, itemId: strin
       pending,
       category,
       personal_finance_category,
+      pending_transaction_id,
+      payee,
+      check_number,
+      counterparties,
+      payment_meta,
+      transaction_code,
       raw,
       removed_at,
       updated_at
@@ -686,7 +1181,13 @@ async function savePlaidTransaction(transaction: PlaidTransaction, itemId: strin
       ${transaction.payment_channel ?? null},
       ${transaction.pending},
       ${transaction.category ?? []},
-      ${sql().json(databaseJson(transaction.personal_finance_category))},
+      ${jsonOrNull(transaction.personal_finance_category)},
+      ${transaction.pending_transaction_id ?? null},
+      ${transaction.payment_meta?.payee ?? null},
+      ${transaction.check_number ?? null},
+      ${jsonOrNull(transaction.counterparties)},
+      ${jsonOrNull(transaction.payment_meta)},
+      ${transaction.transaction_code ?? null},
       ${sql().json(databaseJson(transaction))},
       null,
       now()
@@ -704,10 +1205,52 @@ async function savePlaidTransaction(transaction: PlaidTransaction, itemId: strin
       pending = excluded.pending,
       category = excluded.category,
       personal_finance_category = excluded.personal_finance_category,
+      pending_transaction_id = excluded.pending_transaction_id,
+      payee = excluded.payee,
+      check_number = excluded.check_number,
+      counterparties = excluded.counterparties,
+      payment_meta = excluded.payment_meta,
+      transaction_code = excluded.transaction_code,
       raw = excluded.raw,
       removed_at = null,
       updated_at = now()
   `;
+}
+
+function jsonOrNull(value: unknown) {
+  if (value == null) {
+    return null;
+  }
+
+  return sql().json(databaseJson(value));
+}
+
+const transactionSyncScope = "transaction_sync";
+
+// Pulls /transactions/sync for every login at most once every 5 minutes.
+// A login with no cursor is walked until Plaid has no more history.
+export async function syncPlaidTransactionsIfDue() {
+  return dedupeInflight("plaid:transaction-sync", async () => {
+    if (!hasDatabaseUrl() || !plaidConfigured()) {
+      return { synced: false as const, failures: [] as PlaidSyncFailure[] };
+    }
+
+    await ensurePlaidTables();
+    const state = await readRefreshState(transactionSyncScope);
+
+    if (refreshIsThrottled(state, Date.now())) {
+      return { synced: false as const, failures: [] as PlaidSyncFailure[] };
+    }
+
+    await markRefreshAttempt(transactionSyncScope);
+    const result = await syncAllPlaidItems();
+
+    if (result.failures.length < result.items) {
+      await markRefreshSuccess(transactionSyncScope);
+    }
+
+    return { synced: true as const, failures: result.failures };
+  });
 }
 
 export async function getPlaidConnectionStatus(): Promise<PlaidConnectionStatus> {
@@ -718,6 +1261,7 @@ export async function getPlaidConnectionStatus(): Promise<PlaidConnectionStatus>
       connected: false,
       environment: plaidEnvironmentLabel(),
       items: 0,
+      duplicateItems: 0,
       lastSyncedAt: null,
       transactions: 0,
     };
@@ -725,7 +1269,7 @@ export async function getPlaidConnectionStatus(): Promise<PlaidConnectionStatus>
 
   try {
     await ensurePlaidTables();
-    const [items, accounts, transactions, lastSync] = await Promise.all([
+    const [items, accounts, transactions, lastSync, itemRows] = await Promise.all([
       sql()<Array<{ count: string }>>`select count(*) from plaid_items`,
       sql()<Array<{ count: string }>>`select count(*) from plaid_accounts`,
       sql()<Array<{ count: string }>>`
@@ -734,12 +1278,32 @@ export async function getPlaidConnectionStatus(): Promise<PlaidConnectionStatus>
       sql()<Array<{ last_synced_at: Date | null }>>`
         select max(last_synced_at) as last_synced_at from plaid_items
       `,
+      sql()<
+        Array<{
+          item_id: string;
+          institution_id: string | null;
+          connected_at: Date;
+          balance_status: string | null;
+        }>
+      >`
+        select item_id, institution_id, connected_at, balance_status
+        from plaid_items
+      `,
     ]);
+    const duplicateItems = pickCanonicalItems(
+      itemRows.map((row) => ({
+        itemId: row.item_id,
+        institutionKey: row.institution_id,
+        connectedAt: row.connected_at.toISOString(),
+        needsSignIn: row.balance_status === "needs_sign_in",
+      })),
+    ).skipped.length;
 
     return {
       accounts: Number(accounts[0]?.count ?? 0),
       configured: plaidConfigured(),
       connected: Number(items[0]?.count ?? 0) > 0,
+      duplicateItems,
       environment: plaidEnvironmentLabel(),
       items: Number(items[0]?.count ?? 0),
       lastSyncedAt: lastSync[0]?.last_synced_at?.toISOString() ?? null,
@@ -750,6 +1314,7 @@ export async function getPlaidConnectionStatus(): Promise<PlaidConnectionStatus>
       accounts: 0,
       configured: plaidConfigured(),
       connected: false,
+      duplicateItems: 0,
       environment: plaidEnvironmentLabel(),
       items: 0,
       lastSyncedAt: null,
@@ -825,6 +1390,7 @@ async function loadPlaidBankAccounts() {
         balance_status: string | null;
         balance_status_message: string | null;
         item_live_checked_at: Date | string | null;
+        connected_at: Date | string | null;
       }
     >
   >`
@@ -851,14 +1417,15 @@ async function loadPlaidBankAccounts() {
       i.balance_status,
       i.balance_status_message,
       i.live_checked_at as item_live_checked_at,
-      i.bank_updated_at
+      i.bank_updated_at,
+      i.connected_at
     from plaid_accounts a
     left join plaid_items i
       on i.item_id = a.item_id
     order by a.name
   `;
 
-  return rows.map((row): PlaidBankAccount => {
+  const mapped = rows.map((row): PlaidBankAccount & { itemConnectedAt: string | null } => {
     const balance = freshestBalance(row);
     const accountLiveAt = isoTimestamp(row.live_checked_at);
     const itemLiveAt = isoTimestamp(row.item_live_checked_at);
@@ -885,7 +1452,24 @@ async function loadPlaidBankAccounts() {
       reportedByBank: !itemLiveAt || (accountLiveAt !== null && accountLiveAt >= itemLiveAt),
       connectionStatus: connectionHealth(row.balance_status),
       connectionMessage: row.balance_status_message,
+      itemConnectedAt: isoTimestamp(row.connected_at),
     };
+  });
+
+  return dedupePlaidAccounts(
+    mapped.map((account) => ({
+      ...account,
+      institutionKey: account.institutionId ?? account.institutionName,
+      linked: Boolean(account.qboBankAccountId || account.houseName),
+    })),
+  ).map((account) => {
+    const { institutionKey, linked, itemConnectedAt, ...rest } = account;
+
+    void institutionKey;
+    void linked;
+    void itemConnectedAt;
+
+    return rest;
   });
 }
 
@@ -962,20 +1546,28 @@ export async function readPlaidBankAccountsForExport(): Promise<PlaidBankAccount
     const rows = await sql()<
       Array<
         FreshnessColumns & {
+          plaid_account_id: string;
           name: string;
           official_name: string | null;
           mask: string | null;
+          account_type: string | null;
           iso_currency_code: string | null;
           house_name: string | null;
           qbo_bank_account_id: string | null;
+          updated_at: Date | string;
+          institution_id: string | null;
+          institution_name: string | null;
+          connected_at: Date | string | null;
           last_synced_at: Date | string | null;
         }
       >
     >`
       select
+        a.plaid_account_id,
         a.name,
         a.official_name,
         a.mask,
+        a.account_type,
         a.current_balance,
         a.available_balance,
         to_jsonb(a) ->> 'live_current_balance' as live_current_balance,
@@ -985,32 +1577,50 @@ export async function readPlaidBankAccountsForExport(): Promise<PlaidBankAccount
         a.iso_currency_code,
         a.house_name,
         a.qbo_bank_account_id,
+        a.updated_at,
+        i.institution_id,
+        i.institution_name,
+        i.connected_at,
         i.last_synced_at
       from plaid_accounts a
       left join plaid_items i
         on i.item_id = a.item_id
       order by a.name
     `;
-
-    return {
-      available: true,
-      accounts: rows.map((row) => {
+    const deduped = dedupePlaidAccounts(
+      rows.map((row) => {
         const balance = freshestBalance(row);
 
         return {
-          name: row.name,
-          official_name: row.official_name,
+          row,
+          balance,
+          id: row.plaid_account_id,
           mask: row.mask,
-          current_balance: balance.current,
-          available_balance: balance.available,
-          currency: row.iso_currency_code,
-          linked_house_name: row.house_name,
-          linked_qbo_bank_account_id: row.qbo_bank_account_id,
-          last_synced_at: isoTimestamp(row.last_synced_at),
-          balance_as_of: balance.asOf,
-          balance_source: balance.source,
+          institutionKey: row.institution_id ?? row.institution_name,
+          type: row.account_type,
+          balanceAsOf: balance.asOf,
+          updatedAt: isoTimestamp(row.updated_at) ?? "",
+          linked: Boolean(row.qbo_bank_account_id || row.house_name),
+          itemConnectedAt: isoTimestamp(row.connected_at),
         };
       }),
+    );
+
+    return {
+      available: true,
+      accounts: deduped.map(({ row, balance }) => ({
+        name: row.name,
+        official_name: row.official_name,
+        mask: row.mask,
+        current_balance: balance.current,
+        available_balance: balance.available,
+        currency: row.iso_currency_code,
+        linked_house_name: row.house_name,
+        linked_qbo_bank_account_id: row.qbo_bank_account_id,
+        last_synced_at: isoTimestamp(row.last_synced_at),
+        balance_as_of: balance.asOf,
+        balance_source: balance.source,
+      })),
     };
   } catch {
     return {

@@ -246,6 +246,28 @@ async function acceptedReadOnlyBearer(request: Request) {
   return "none" as const;
 }
 
+export function authorizeCronSecret(request: Request) {
+  const secret = process.env.CRON_SECRET;
+
+  if (!secret) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ message: "CRON_SECRET is not configured." }, { status: 503 }),
+    };
+  }
+
+  const provided = request.headers.get("x-cron-secret") ?? "";
+
+  if (!provided || !safeEqualText(provided, secret)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ message: "Missing or invalid cron secret." }, { status: 401 }),
+    };
+  }
+
+  return { ok: true as const };
+}
+
 export async function authorizeReadOnlyKey(request: Request) {
   const token = bearerToken(request);
   const apiKey = token ? await verifyApiKey(token).catch(() => null) : null;

@@ -32,6 +32,7 @@ export type HouseDashboardSummary = {
   actualBankAvailableBalance: number | null;
   actualBankAccountName: string | null;
   actualBankLastSyncedAt: string | null;
+  actualBankBalanceAsOf: string | null;
   city: string | null;
   soldPrice: number | null;
   squareFootage: number | null;
@@ -270,6 +271,7 @@ export async function getHouseDashboardSummaries() {
       actualBankAvailableBalance: plaidAccount?.availableBalance ?? null,
       actualBankAccountName: plaidAccount?.name ?? null,
       actualBankLastSyncedAt: plaidAccount?.lastSyncedAt ?? null,
+      actualBankBalanceAsOf: plaidAccount?.balanceAsOf ?? null,
       city: hasContractSource ? row.contract_city : null,
       soldPrice:
         hasContractSource && row.sold_price !== null ? Number(row.sold_price) : null,

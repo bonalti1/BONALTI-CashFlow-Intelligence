@@ -281,7 +281,7 @@ export function ApiKeysPanel({ apiKeys, origin }: { apiKeys: ApiKeyRecord[]; ori
 
   return (
     <Panel
-      description="For Grokbot and other assistants. A key can read projects, Plaid balances, draws and the change history. It can never add, change or delete anything."
+      description="For Grokbot and other assistants. A key can read projects, Plaid balances, bank transactions, draws and the change history. It can refresh stored balances and pull new bank transactions. It cannot link accounts, change projects, or move money."
       title="Read-only keys"
     >
       <form action={formAction} className="flex flex-wrap items-end gap-3">
@@ -312,6 +312,7 @@ export function ApiKeysPanel({ apiKeys, origin }: { apiKeys: ApiKeyRecord[]; ori
         <ul className="mt-2 space-y-1 font-mono text-xs text-[#16294d]">
           <li>{origin}/api/readonly/v1/projects</li>
           <li>{origin}/api/readonly/v1/activity?since=2026-01-01</li>
+          <li>{origin}/api/readonly/v1/plaid/transactions?from=2026-01-01</li>
           <li>{origin}/api/plaid/accounts</li>
           <li>{origin}/api/ai-csuite/finance-export</li>
         </ul>

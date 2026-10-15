@@ -1,0 +1,17 @@
+# Example only. Do not rename this file to render.yaml, and do not apply it from CI.
+# Render cron is UTC. Quote the schedule so YAML does not treat it as a number.
+# CDT (UTC-5), through Sunday 1 November 2026: 4:25 AM and 3:25 PM America/Chicago.
+# CST (UTC-6), 1 November 2026 through Sunday 14 March 2027: change the schedule to "25 10,21 * * 1-6".
+# Set CRON_SECRET on this cron service and on the web service. Do not commit the secret.
+services:
+  - type: cron
+    name: plaid-balance-refresh
+    runtime: node
+    schedule: "25 9,20 * * 1-6"
+    buildCommand: node -e "process.exit(0)"
+    startCommand: node -e "fetch(process.env.PLAID_REFRESH_URL,{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(async (response)=>{if(!response.ok){console.error(response.status);process.exit(1)}}).catch((error)=>{console.error(error instanceof Error ? error.message : 'request failed');process.exit(1)})"
+    envVars:
+      - key: PLAID_REFRESH_URL
+        value: https://bonalti-cashflow-intelligence.onrender.com/api/cron/plaid-refresh
+      - key: CRON_SECRET
+        sync: false
