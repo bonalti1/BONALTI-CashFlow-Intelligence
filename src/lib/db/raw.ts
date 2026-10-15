@@ -1,23 +1,28 @@
 import postgres, { type Sql } from "postgres";
 
-let sqlClient: Sql | null = null;
+const globalForSql = globalThis as typeof globalThis & {
+  __cashflowSql?: Sql;
+};
 
 export function hasDatabaseUrl() {
   return Boolean(process.env.DATABASE_URL);
 }
 
+// One pool for the whole Node process, including copies of this module that
+// Next bundles separately. Do not call postgres() anywhere else.
 export function sql() {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is not configured.");
   }
 
-  sqlClient ??= postgres(process.env.DATABASE_URL, {
+  globalForSql.__cashflowSql ??= postgres(process.env.DATABASE_URL, {
     max: 5,
+    idle_timeout: 20,
     connect_timeout: 8,
     ssl: "require",
   });
 
-  return sqlClient;
+  return globalForSql.__cashflowSql;
 }
 
 function databaseErrorCode(error: unknown) {

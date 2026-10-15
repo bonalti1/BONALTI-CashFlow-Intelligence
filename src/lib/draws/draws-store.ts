@@ -163,9 +163,48 @@ async function initializeDrawTables() {
   await sql()`alter table draw_line_item_statuses add column if not exists received_at timestamptz`;
   await sql()`alter table draw_line_item_statuses add column if not exists notes text`;
   await sql()`alter table draw_line_item_statuses add column if not exists updated_at timestamptz not null default now()`;
+
+  await sql()`
+    create table if not exists cfo_house_phase_actuals (
+      bank_account_qbo_id text not null,
+      house_name text not null,
+      phase_key text not null,
+      phase_label text not null,
+      phase_name text not null,
+      sale_price numeric,
+      square_feet integer,
+      city text,
+      budget_amount numeric,
+      spent_amount numeric not null default 0,
+      transaction_count integer not null default 0,
+      over_budget_amount numeric not null default 0,
+      status text not null,
+      calculated_at timestamptz not null default now(),
+      primary key (bank_account_qbo_id, phase_key)
+    )
+  `;
+  await sql()`
+    create table if not exists cfo_phase_line_items (
+      qbo_account_id text primary key,
+      realm_id text not null,
+      qbo_account_name text not null,
+      qbo_fully_qualified_name text,
+      parent_qbo_id text,
+      phase_key text not null,
+      phase_label text not null,
+      phase_name text not null,
+      line_item_name text not null,
+      mapping_confidence text not null,
+      progress_included boolean not null,
+      is_job_site_overhead boolean not null,
+      active boolean not null default true,
+      raw jsonb not null,
+      updated_at timestamptz not null default now()
+    )
+  `;
 }
 
-function ensureDrawTables() {
+export function ensureDrawTables() {
   drawTablesReady ??= initializeDrawTables().catch((error) => {
     drawTablesReady = null;
     throw error;
@@ -429,25 +468,7 @@ async function loadHousePhaseActuals() {
     return actuals;
   }
 
-  await sql()`
-    create table if not exists cfo_house_phase_actuals (
-      bank_account_qbo_id text not null,
-      house_name text not null,
-      phase_key text not null,
-      phase_label text not null,
-      phase_name text not null,
-      sale_price numeric,
-      square_feet integer,
-      city text,
-      budget_amount numeric,
-      spent_amount numeric not null default 0,
-      transaction_count integer not null default 0,
-      over_budget_amount numeric not null default 0,
-      status text not null,
-      calculated_at timestamptz not null default now(),
-      primary key (bank_account_qbo_id, phase_key)
-    )
-  `;
+  await ensureDrawTables();
 
   const rows = await sql()<
     Array<{
@@ -515,25 +536,7 @@ async function loadPhaseLineItemsByPhase() {
     return lineItems;
   }
 
-  await sql()`
-    create table if not exists cfo_phase_line_items (
-      qbo_account_id text primary key,
-      realm_id text not null,
-      qbo_account_name text not null,
-      qbo_fully_qualified_name text,
-      parent_qbo_id text,
-      phase_key text not null,
-      phase_label text not null,
-      phase_name text not null,
-      line_item_name text not null,
-      mapping_confidence text not null,
-      progress_included boolean not null,
-      is_job_site_overhead boolean not null,
-      active boolean not null default true,
-      raw jsonb not null,
-      updated_at timestamptz not null default now()
-    )
-  `;
+  await ensureDrawTables();
 
   const rows = await sql()<
     Array<{

@@ -26,6 +26,8 @@ let renderCache:
     }
   | null = null;
 
+let rendersInflight: Promise<RenderPayload> | null = null;
+
 function withRenderTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs = 1500) {
   let timeout: NodeJS.Timeout;
   const guarded = promise.catch(() => fallback);
@@ -58,6 +60,29 @@ export async function GET(request: Request) {
     });
   }
 
+  const payload = await loadRenders();
+
+  return NextResponse.json(payload, {
+    headers: {
+      "Cache-Control": "private, max-age=60, stale-while-revalidate=180",
+      "Server-Timing": `draws-renders;dur=${Math.round(performance.now() - startedAt)};desc="miss"`,
+    },
+  });
+}
+
+function loadRenders() {
+  if (rendersInflight) {
+    return rendersInflight;
+  }
+
+  rendersInflight = buildRenders().finally(() => {
+    rendersInflight = null;
+  });
+
+  return rendersInflight;
+}
+
+async function buildRenders(): Promise<RenderPayload> {
   const summaries = await withRenderTimeout(getHouseDashboardSummaries(), []);
   const schedulingVisuals = await withRenderTimeout(
     getSchedulingProjectVisualMap(summaries.map((summary) => ({ house: summary.house }))),
@@ -89,10 +114,5 @@ export async function GET(request: Request) {
     payload,
   };
 
-  return NextResponse.json(payload, {
-    headers: {
-      "Cache-Control": "private, max-age=60, stale-while-revalidate=180",
-      "Server-Timing": `draws-renders;dur=${Math.round(performance.now() - startedAt)};desc="miss"`,
-    },
-  });
+  return payload;
 }

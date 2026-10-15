@@ -526,6 +526,38 @@ function LoadingRows() {
   );
 }
 
+const dashboardRequests = new Map<string, Promise<DrawsDashboardResponse>>();
+
+function loadDashboard(view: HouseListView) {
+  const existing = dashboardRequests.get(view);
+
+  if (existing) {
+    return existing;
+  }
+
+  const request = fetch(`/api/draws-dashboard?view=${view}&force=1`, {
+    cache: "no-store",
+  })
+    .then(async (response) => {
+      const payload = (await response.json()) as DrawsDashboardResponse;
+
+      if (!response.ok || payload.status === "error") {
+        throw new Error(payload.message ?? "Unable to load houses.");
+      }
+
+      return payload;
+    })
+    .finally(() => {
+      if (dashboardRequests.get(view) === request) {
+        dashboardRequests.delete(view);
+      }
+    });
+
+  dashboardRequests.set(view, request);
+
+  return request;
+}
+
 export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
   const [data, setData] = useState<DrawsDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -537,14 +569,7 @@ export function DrawsBudgetHouseLoader({ view }: { view: HouseListView }) {
 
     async function refreshCards() {
       try {
-        const response = await fetch(`/api/draws-dashboard?view=${view}&force=1`, {
-          cache: "no-store",
-        });
-        const payload = (await response.json()) as DrawsDashboardResponse;
-
-        if (!response.ok || payload.status === "error") {
-          throw new Error(payload.message ?? "Unable to load houses.");
-        }
+        const payload = await loadDashboard(view);
 
         if (active) {
           setData(payload);

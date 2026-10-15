@@ -3,8 +3,8 @@ import Link from "next/link";
 import { ArrowLeft, CalendarDays, Landmark, Megaphone, RefreshCcw, WalletCards } from "lucide-react";
 
 import { getPublicAppUrl } from "@/lib/app-url";
-import { getAccountsSnapshot, type QboAccount } from "@/lib/qbo/accounts-store";
-import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
+import { getBankAccounts, type QboAccount } from "@/lib/qbo/accounts-store";
+import { getTransactionsForBankAccounts, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
 import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -186,15 +186,9 @@ export default async function BucketDetailPage({
     );
   }
 
-  const [snapshot, transactionsByBankAccount] = await Promise.all([
-    getAccountsSnapshot().catch(() => null),
-    getTransactionsByBankAccount(),
-  ]);
-  const bankAccounts = snapshot?.accounts.filter((account) => account.AccountType === "Bank") ?? [];
+  const bankAccounts = await getBankAccounts().catch(() => []);
   const accounts = bankAccounts.filter((account) => matchesBucket(account, config.matchers));
-  const transactions = accounts
-    .flatMap((account) => transactionsByBankAccount.get(account.Id) ?? [])
-    .sort((a, b) => String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")));
+  const transactions = await getTransactionsForBankAccounts(accounts.map((account) => account.Id));
   const groups = groupByMonth(transactions);
   const overallPayees = buildPayeeSpendSummaries(transactions);
   const Icon = config.icon;

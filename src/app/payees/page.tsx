@@ -6,20 +6,12 @@ import {
   ReceiptText,
 } from "lucide-react";
 
-import { getTransactionsByBankAccount, type SavedQboTransaction } from "@/lib/qbo/transactions-store";
+import { listPayeeSummaries, type PayeeSummaryRow } from "@/lib/qbo/transactions-store";
 import { requireUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-type PayeeSummary = {
-  name: string;
-  totalPaid: number;
-  paymentCount: number;
-  firstPaymentDate: string | null;
-  lastPaymentDate: string | null;
-  bankAccounts: string[];
-  transactions: SavedQboTransaction[];
-};
+type PayeeSummary = PayeeSummaryRow;
 
 function currency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -29,73 +21,14 @@ function currency(value: number) {
   }).format(value);
 }
 
-function normalizePayeeName(transaction: SavedQboTransaction) {
-  return transaction.payeeName?.trim() || "No payee listed";
-}
-
 function payeeHref(name: string) {
   return `/payees/${encodeURIComponent(name)}`;
-}
-
-function buildPayeeSummaries(transactions: SavedQboTransaction[]) {
-  const summaries = new Map<string, PayeeSummary>();
-
-  for (const transaction of transactions) {
-    const amount = Math.abs(transaction.totalAmount);
-
-    if (amount === 0) {
-      continue;
-    }
-
-    const name = normalizePayeeName(transaction);
-    const existing = summaries.get(name) ?? {
-      name,
-      totalPaid: 0,
-      paymentCount: 0,
-      firstPaymentDate: null,
-      lastPaymentDate: null,
-      bankAccounts: [],
-      transactions: [],
-    };
-
-    existing.totalPaid += amount;
-    existing.paymentCount += 1;
-    existing.transactions.push(transaction);
-
-    if (transaction.bankAccountName && !existing.bankAccounts.includes(transaction.bankAccountName)) {
-      existing.bankAccounts.push(transaction.bankAccountName);
-    }
-
-    if (
-      transaction.txnDate &&
-      (!existing.lastPaymentDate || transaction.txnDate > existing.lastPaymentDate)
-    ) {
-      existing.lastPaymentDate = transaction.txnDate;
-    }
-
-    if (
-      transaction.txnDate &&
-      (!existing.firstPaymentDate || transaction.txnDate < existing.firstPaymentDate)
-    ) {
-      existing.firstPaymentDate = transaction.txnDate;
-    }
-
-    summaries.set(name, existing);
-  }
-
-  return Array.from(summaries.values()).sort(
-    (a, b) => b.totalPaid - a.totalPaid || a.name.localeCompare(b.name),
-  );
 }
 
 export default async function PayeesPage() {
   await requireUser();
 
-  const transactionsByBankAccount = await getTransactionsByBankAccount();
-  const transactions = Array.from(transactionsByBankAccount.values())
-    .flat()
-    .sort((a, b) => String(b.txnDate ?? "").localeCompare(String(a.txnDate ?? "")));
-  const payees = buildPayeeSummaries(transactions);
+  const payees = await listPayeeSummaries();
 
   return (
     <main className="min-h-screen bg-[#f2f1ea] text-[#17213c] [background-image:linear-gradient(rgba(18,29,73,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(18,29,73,0.045)_1px,transparent_1px)] [background-size:32px_32px]">

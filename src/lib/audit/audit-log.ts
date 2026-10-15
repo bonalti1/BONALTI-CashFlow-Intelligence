@@ -61,7 +61,7 @@ async function initializeAuditTable() {
   `;
 }
 
-function ensureAuditTable() {
+export function ensureAuditTable() {
   auditTableReady ??= initializeAuditTable().catch((error) => {
     auditTableReady = null;
     throw error;

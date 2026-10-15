@@ -1,4 +1,5 @@
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { runOnce } from "@/lib/db/run-once";
 
 type QboRef = {
   value?: string;
@@ -125,7 +126,9 @@ export type FinanceObjectsSnapshot = {
   warnings: string[];
 };
 
-async function ensureFinanceObjectTables() {
+const ensureFinanceObjectTables = runOnce(initializeFinanceObjectTables);
+
+async function initializeFinanceObjectTables() {
   await sql()`
     create table if not exists qbo_invoice_snapshots (
       realm_id text primary key,

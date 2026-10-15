@@ -103,7 +103,7 @@ async function initializeHouseDetailsTable() {
   await sql()`alter table house_details add column if not exists holdback_notes text`;
 }
 
-function ensureHouseDetailsTable() {
+export function ensureHouseDetailsTable() {
   houseDetailsTableReady ??= initializeHouseDetailsTable().catch((error) => {
     houseDetailsTableReady = null;
     throw error;
@@ -127,7 +127,7 @@ async function initializeHouseChangeOrdersTable() {
   `;
 }
 
-function ensureHouseChangeOrdersTable() {
+export function ensureHouseChangeOrdersTable() {
   houseChangeOrdersTableReady ??= initializeHouseChangeOrdersTable().catch((error) => {
     houseChangeOrdersTableReady = null;
     throw error;
@@ -156,7 +156,7 @@ async function initializeHouseProjectDocumentsTable() {
   `;
 }
 
-function ensureHouseProjectDocumentsTable() {
+export function ensureHouseProjectDocumentsTable() {
   houseProjectDocumentsTableReady ??= initializeHouseProjectDocumentsTable().catch((error) => {
     houseProjectDocumentsTableReady = null;
     throw error;

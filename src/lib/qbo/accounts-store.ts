@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { hasDatabaseUrl, sql } from "@/lib/db/raw";
+import { runOnce } from "@/lib/db/run-once";
 import { clearTtlCache, readTtlCache } from "@/lib/performance/ttl-cache";
 
 type QboAccount = {
@@ -32,7 +33,13 @@ const accountsPath = path.join(dataDir, "qbo-accounts.json");
 const accountsSnapshotCacheKey = "qbo:accounts-snapshot";
 const accountsSnapshotTtlMs = 60_000;
 
-async function ensureAccountsTables() {
+const ensureAccountsTables = runOnce(initializeAccountsTables);
+
+export function ensureQboAccountTables() {
+  return ensureAccountsTables();
+}
+
+async function initializeAccountsTables() {
   await sql()`
     create table if not exists qbo_account_snapshots (
       realm_id text primary key,
@@ -192,6 +199,71 @@ export async function getAccountsSnapshotStatus() {
   }
 }
 
+type AccountRow = {
+  qbo_id: string;
+  name: string;
+  fully_qualified_name: string | null;
+  account_type: string | null;
+  account_sub_type: string | null;
+  classification: string | null;
+  current_balance: string | null;
+  active: boolean | null;
+  parent_qbo_id: string | null;
+  parent_name: string | null;
+  sub_account: boolean | null;
+};
+
+function accountFromRow(row: AccountRow): QboAccount {
+  const parent =
+    row.parent_qbo_id || row.parent_name
+      ? {
+          value: row.parent_qbo_id ?? undefined,
+          name: row.parent_name ?? undefined,
+        }
+      : undefined;
+
+  return {
+    Id: row.qbo_id,
+    Name: row.name,
+    FullyQualifiedName: row.fully_qualified_name ?? undefined,
+    AccountType: row.account_type ?? undefined,
+    AccountSubType: row.account_sub_type ?? undefined,
+    Classification: row.classification ?? undefined,
+    CurrentBalance:
+      row.current_balance === null ? undefined : Number(row.current_balance),
+    Active: row.active ?? undefined,
+    ParentRef: parent,
+    SubAccount: row.sub_account ?? undefined,
+  };
+}
+
+export async function getBankAccounts() {
+  if (!hasDatabaseUrl()) {
+    return [] as QboAccount[];
+  }
+
+  await ensureAccountsTables();
+  const rows = await sql()<Array<AccountRow>>`
+    select
+      qbo_id,
+      name,
+      fully_qualified_name,
+      account_type,
+      account_sub_type,
+      classification,
+      current_balance,
+      active,
+      parent_qbo_id,
+      parent_name,
+      sub_account
+    from qb_accounts
+    where account_type = 'Bank'
+    order by coalesce(fully_qualified_name, name)
+  `;
+
+  return rows.map(accountFromRow);
+}
+
 async function loadAccountsSnapshot() {
   if (hasDatabaseUrl()) {
     await ensureAccountsTables();
@@ -213,12 +285,19 @@ async function loadAccountsSnapshot() {
       throw new Error("No Chart of Accounts snapshot exists yet.");
     }
 
-    const accounts = await sql()<
-      Array<{
-        raw: QboAccount;
-      }>
-    >`
-      select raw
+    const accounts = await sql()<Array<AccountRow>>`
+      select
+        qbo_id,
+        name,
+        fully_qualified_name,
+        account_type,
+        account_sub_type,
+        classification,
+        current_balance,
+        active,
+        parent_qbo_id,
+        parent_name,
+        sub_account
       from qb_accounts
       where realm_id = ${snapshot.realm_id}
       order by coalesce(fully_qualified_name, name)
@@ -228,7 +307,7 @@ async function loadAccountsSnapshot() {
       realmId: snapshot.realm_id,
       syncedAt: snapshot.synced_at.toISOString(),
       total: snapshot.total,
-      accounts: accounts.map((account) => account.raw),
+      accounts: accounts.map(accountFromRow),
     };
   }
 
